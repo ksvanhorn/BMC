@@ -1,0 +1,6 @@
+The Bayesian Model Compiler is aimed at making it easier to create
+custom Markov Chain Monte Carlo code to do inference for Bayesian
+models, in cases where tools such as OpenBUGS or JAGS are
+inadequate.
+
+This project is just starting up, and does not yet have an initial release.
