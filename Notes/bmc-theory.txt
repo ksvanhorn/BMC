@@ -1,0 +1,45 @@
+Type: xreal (extended reals)
+xplus : xreal -> xreal -> xreal
+finite_val : xreal -> real -> bool
+infinite_val : xreal -> bool
+
+|- finite_val x1 v1 /\ finite_val x2 v2 ==> finite_val (x1 xplus x2) (v1 + v2)
+|- infinite_val x1 ==> infinite_val (x1 xplus x2)
+|- infinite_val x2 ==> infinite_val (x1 xplus x2)
+|- ~infinite_val x = ?v. finite_val x v
+|- finite_val x v1 /\ finite_val x v2 ==> v1 = v2
+(Something about infinite sums)
+
+has_measure : 'a measure -> ('a -> bool) -> xreal -> bool
+
+lebesgue_measurable_fct : ('a -> 'b) -> bool
+random_var : ('a -> 'b) -> 'a measure -> 'b measure
+
+Type: 'a measure
+>>= : 'a measure -> ('a -> 'b measure) -> 'b measure
+  (include possibility of undefined?)
+has_density : 'a measure -> 'a -> real -> bool
+has_decomposition : 'a measure -> ('b -> real) -> ('b -> 'a) -> bool
+
+|- has_decomposition mu d f /\
+   for_almost_all mu (\w. has_decomposition (m w) (d' w) (f' w)) ==>
+   has_decomposition (mu >>= m) (\(x,y). d x * d' (f x) y) (\(x,y). f' (f x) y)
+|- (!x. d x > 0 ==> P (f x)) /\ has_decomposition mu d f ==>
+   for_almost_all mu P
+
+return : 'a -> 'a measure
+|- has_decomposition (return v) (\x:unit. 1) (\x:unit. v)
+
+par : num -> (num -> 'a measure) -> 'a list measure
+|- (!i. i < n ==> has_decomposition (mu i) (d i) (f i)) ==>
+   has_decomposition (par n mu)
+     (\x. prod n (\i. d (x EL i)))
+     (\x. mklist n (\i. f i (x EL i)))
+
+What is the actual name for
+- prod
+- mklist
+- is EL correct?
+
+Need theorems for simplifying cases involving unit
+

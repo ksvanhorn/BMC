@@ -1,0 +1,91 @@
+extra_bool
+formalizeUseful
+subtypeUseful
+subtype : subtypeUseful
+extra_num : extra_bool, formalizeUseful, subtype
+extra_list : extra_num, formalizeUseful
+extra_pred_set : extra_list, extra_num, formalizeUseful
+extra_real : formalizeUseful, subtype, extra_num, extra_pred_set, extra_bool
+measure : formalizeUseful, subtype, extra_pred_set, extra_bool, extra_real, extra_num
+lebesgue : formalizeUseful, extra_bool, extra_pred_set, extra_real, measure, subtype
+
+Note: can use type_abbrev to define type abbreviations
+===========================
+
+lebesgue_measure : ('a set) -> ('a measure)
+prod_measure : ('a measure) ('b measure) -> ('a # 'b) measure
+Axiom:
+  prod_measure (lebesgue_measure x) (lebesgue_measure y) =
+  lebesgue_measure (x CROSS y)
+
+
+
+has_density m f d :
+  distribution d has density f on measure f
+
+has_lebesgue_measure s
+
+lebesgue_measure s :
+  lebesgue measure on set s
+
+full_lebesgue_measure (x: 'a itself) = lebesgue_measure (UNIV : 'a set)
+
+
+From measureScript.sml:
+- sigma_algebra a
+- space a
+- subsets a
+- 
+
+
+
+
+
+
+
+
+
+
+Lebesgue measures needed:
+- real
+- num
+- real^N
+- num^N
+- real^N^N
+
+Need product measures
+
+Need delta fct measures
+
+Measurable fct
+
+Concepts needed:
+- measure_space m
+  - m_space m, measurable_sets m needed to form
+    (m_space m, measurable_sets m), the sigma-algebra of m
+  - m_space m is superset of the support of m
+- sigma_algebra a
+- measurable a b f
+- lists of length n
+- lists of length n, where element i satisfies p i
+
+
+has_length n
+
+array [] (x:real) = T
+array (h::t) (x:real) = F
+array [] (x: 'a list) = F
+array (n::t) (x:'a list) = (length x = n) /\ (!i. i < n ==> array t (x EL i))
+
+ragged_array n p (x: a list) = (length x = n) /\ (!i. i < n ==> p i (x EL i))
+
+ragged_array n (\i.
+  ragged_array (d1 i) (\j.
+    ragged_array (d2 i j) (\k.
+      UNIV))
+
+RUNIV = (UNIV :real set)
+NUNIV = (UNIV :num set)
+
+
+- lebegue_measure on 

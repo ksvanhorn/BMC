@@ -1,0 +1,42 @@
+C++ support library
+- Random number generation
+  - RNG
+  - UniformRandom
+  - NormalRandom
+  - Gamma distribution
+- Linear algebra
+  - Matrices
+  - ArrayND?
+- IOUtils
+  - 
+
+Base class generator
+- (parallel) random number generator
+- support for parallel processing
+- diagnostic traces
+- posterior samples
+- checkpointing / restarting
+- OutputFileManager?
+- iteration control
+  - burnin
+  - results
+  - adaptation
+  - cancellation of estimation or dynamic modification of periods
+  - pausing
+- reporting progress
+- posterior means (and stddevs)
+- adaptation period
+- retrospective burnin
+- convergence diagnostics?
+- (separate?) tools for initialization
+
+BOOM
+
+BLAS
+LAPACK
+ATLAS
+AMD Core Math Library
+  (optimized BLAS and LAPACK for AMD processors)
+Intel Math Kernel Library
+  (optimized BLAS and LAPACK for Intel processors)
+(Mac OS X 10.2 and onwards include optimised versions of BLAS and LAPACK)

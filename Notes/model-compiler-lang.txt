@@ -1,0 +1,696 @@
+Defining a distribution:
+
+DistrDef ::= DistrName Parameters? '=' DistrExpr
+Parameters ::= Variable | '(' Variable (',' Variable)* ')'
+DistrName ::= Variable
+DistrExpr ::= SimpleDistrExpr | DistrBlock
+SimpleDistrExpr ::= Expr 
+  // Of type Distr 'a for some 'a.
+DistrBlock ::= 'distr' '{' DistrAssns? DistrExpr '}'
+DistrAssns ::= DistrAssn (';' DistrAssn)*
+DistrAssn ::= StochasticAssn | DetermAssn | ParAssn
+StochasticAssn ::= Lhs '~' DistrExpr
+DetermAssn ::= Lhs '<-' Expr
+ParAssn ::= 'par' IndexVar LenExpr '{' DistrAssns '}'
+Lhs ::= Variable
+IndexVar ::= Variable
+  // Of type num
+LenExpr ::= Expr
+  // Of type num
+
+Defining the model:
+
+CondDistrDef ::= ModelName Parameters? '=' CondDistrExpr
+ModelName ::= Variable
+CondDistrExpr ::= 'observed' Vars 'in' Vars '~' DistrExpr
+Vars ::= Var | '(' Variable (',' Variable)*
+
+What's missing:
+- type annotations
+- Do we need a terminator for distribution definitions?
+
+
+HOL lexical grammar (subset):
+
+Identifier ::= AlnumIdentifier | SymIdentifier | SpecialForm
+AlnumIdentifier ::= Letter Alphanumeric*
+Alphanumeric ::= Letter | Digit | '_'
+SymIdentifier ::= Symbol+ | NonAggregating
+Symbol ::= (* one of # ? + * / \ = < > & % @ ! : | - ^ ` *)
+NonAggregating ::= (* one of ~ . , - *)
+
+Number ::= Digit+ NumberSuffix?
+NumberSuffix ::= 'n' | 'i' (* maybe add 'r' for real?)
+  // natural number, integer
+
+special identifiers:
+let in and \ . ; => | || : := with updated_by case of
+
+type vars: prime followed by alphanumeric that contains no prime
+
+HOL type grammar:
+HOLType ::= TypeVariable | TypeConstant | CompoundType | '(' HOLType ')'
+CompoundType ::= InfixCompoundType | PostFixCompoundType
+InfixCompoundType ::= HOLType InfixTypeOperator HOLType
+PostfixCompoundType ::= TypeArgs PostfixTypeOperator
+TypeArgs ::= HOLType | '(' HOLType (',' HOLType )* ')'
+// infix type operators bind more weakly than postifx type operators
+// infix type operators have priority levels and associativity
+// associativity may be left, right, or none
+
+HOL term grammar
+$ escapes a special operator (binary, binder, etc.)
+Fixities of constants:
+- Prefix (ordinary constant)
+- binder. <binder> <var1> ... <varn> . <expr> stands for
+  <binder> <var1> . ... <binder> <varn> . <expr>
+  and <binder> <var> . <expr> stands for
+  <binder> (\<var>. <expr>)
+- true prefix (allows binding power less than function app); e.g.
+  ~ x y is parsed as ~ (x y).
+- suffix (none used in standard theory)
+- infix (right associative, left-associative, non-associative)
+- closefix (such as { })
+Precedence:
+- true prefix, infix, and suffix all have precedences
+- possible parses for p t1 i t2 s, where p is prefix, i is infix, and s
+  is suffix:
+  precedence (low to  high)    parsing
+  ------------------------------------
+  p i s                        p (t1 i (t2 s))
+  p s i                        p ((t1 i t2) s)
+  i p s                        (p t1) i (t2 s)
+  etc.
+
+Some type primitives:
+- bool (0)
+- fun (2)
+
+Some infix type ops:
+- ->
+- #
+
+
+
+Special ops:
+- if ... then ... else
+
+Some constants:
+- F : bool
+- T : bool
+
+True prefix:
+- ~ : bool -> bool
+
+Some binary ops:
+- = : 'a -> 'a -> bool
+- ==> : bool -> bool -> bool (right associative)
+- /\ : bool -> bool -> bool
+- \/ : bool -> bool -> bool
+- * : num -> num -> num
+- + : num -> num -> num
+- - : num -> num -> num
+- <= : num -> num -> bool
+- > : num -> num -> bool
+- >= : num -> num -> bool
+- < : num -> num -> bool
+
+Some binders:
+- ! : ('a -> bool) -> bool
+- ? : ('a -> bool) -> bool
+- ?! : ('a -> bool) -> bool
+
+CompoundType1 ::= HolType TypeOperator
+CompoundType2 ::= '(' HolType (',' HolType)* ')' TypeOperator
+// What about infix type operators?
+FunctionType ::= HolType '->' HolType
+
+
+Terms:
+let v = M in N translated to LET (\v.N) M
+if t1 then t2 else t3 translated to COND t1 t2 t3
+
+Theory min:
+- = : 'a -> 'a -> bool (infix)
+- ==> : bool -> bool -> bool (right associative)
+- @ : ('a -> bool) -> 'a (binder)
+
+Theory bool:
+- T : bool
+- F : bool
+- ! : ('a -> bool) -> bool (binder)
+- ? : ('a -> bool) -> bool (binder)
+- /\ : bool -> bool -> bool (infix; associativity?)
+- \/ : bool -> bool -> bool (infix; associativity?)
+- ~ : bool -> bool (true prefix, weakly binding)
+- let v = M in N, translated to LET (\v.N) M
+- if t1 then t2 else t3, translated to COND t1 t2 t3
+- IN : 'a -> ('a -> bool) -> bool (infix)
+- ARB : 'a (means an arbitrary element of the type)
+
+Theory combin:
+- o : ('b -> 'c) -> ('a -> 'b) -> 'a -> 'c (infix; associativity?)
+  (function composition)
+- K = (\x y. x)
+- S = (\f g x. f x (g x))
+- I = (\x. x)
+- C = (\f x y. f y x)
+
+Theory pair:
+- ('a,'b) prod, a.k.a. 'a # 'b (right associative)
+- , : 'a -> 'b -> 'a # 'b
+- FST : 'a # 'b -> 'a
+- SND : 'a # 'b -> 'b
+- CURRY f x y = f (x,y)
+- UNCURRY f (x,y) = f x y
+- (f ## g) (x,y) = (f x, g y)
+- \(x1,x2).t, translated to UNCURRY(\x1 x2. t)
+- \(x1,x2,...,xn).t translated to UNCURRY(\x1.\(x2,...,xn).t)
+- \((x1,...,xn),y1,...,ym).t translated to
+  UNCURRY(\(x1,...,xn).\(y1,...,ym).t)
+- (This pair-matching xform applies to all binders)
+- let f v1 ... vn = t1 in t2  is translated to
+  LET(\f.t2)(\v1 ... vn.t1)
+- let (v1,...,vn) = t1 in t2  is translated to
+  LET(\(v1,...,vn).t2)t1
+- let v1=t1 and ... and vn=tn in t  is translated to
+  LET(...(LET(LET(\v1 ... vn.t)t1)t2) ...)tn
+
+Theory sum:
+- ('a,'b) sum a.k.a. 'a + 'b
+- INL : 'a -> 'a + 'b
+- INR : 'b -> 'a + 'b
+- ISL : 'a + 'b -> bool
+- ISR : 'a + 'b -> bool
+- OUTL : 'a + 'b -> 'a
+- OUTR : 'a + 'b -> 'b
+
+Theory one:
+- type one (a one-element type)
+- term one : one, a.k.a. ()
+
+Theory option:
+- 'a option
+- NONE : 'a option
+- SOME : 'a -> 'a option
+
+Theory num:
+- type num
+- SUC : num -> num
+
+Theory prim_rec:
+- < : num -> num -> bool (infix, prec 450)
+
+Theory arithmetic:
+- + : num -> num -> num (left assoc, prec 500)
+- - : num -> num -> num (left assoc, prec 500)
+- * : num -> num -> num (left assoc, prec 600)
+- EXP : num -> num -> num; a.k.a. ** (right assoc, prec 700)
+- > : num -> num -> bool (infix, prec 450)
+- <= : num -> num -> bool (infix, prec 450)
+- >= : num -> num -> bool (infix, prec 450)
+- DIV : num -> num -> num (left assoc, prec 600)
+- MOD : num -> num -> num (left assoc, prec 650)
+- EVEN : num -> bool
+- ODD : num -> bool
+- MAX : num -> num -> num
+- MIN : num -> num -> num
+- FACT : num -> num
+
+Theory integer (?):
+- type int
+- >=, <=, <, >, +, *, -, ** same as for num
+- ~ : int -> int (true prefix, prec 900)
+- / : int -> int -> int (left assoc, prec 600)
+- % : int -> int -> int (left assoc, prec 650)
+- & : num -> int
+
+Theory real (?):
+- type real
+- >=, <=, >, <, +, -, ~, *, /, & same as for int
+- pow : real -> num -> real (right assoc, prec 700)
+
+Theory trans:
+- exp, sin, cos, ln, root, sqrt, pi, tan, asn, acs, atn
+
+Theory list:
+- type 'a list
+- NIL : 'a list (a.k.a. [])
+- CONS : 'a -> 'a list -> 'a list
+- [t1; t2; ... ; tn] translated into
+  CONS t1 (CONS t2 ... (CONS tn NIL) ...)
+- APPEND : 'a list -> 'a list -> 'a list
+  a.k.a. binary operator ++
+- FLAT : ('a list) list -> 'a list
+- LENGTH : 'a list -> num
+- EL : 'a list -> num -> 'a
+- MAP : ('a -> 'b) -> 'a list -> 'b list
+- MAP2 : ('a1 -> 'a2 -> 'b) -> 'a1 list -> 'a2 list -> 'b list
+
+=============================
+Example 1: Aggregate MNL
+
+mnl u = dcat (map exp u)
+
+mnlregr X mu Sigma = distr {
+  beta ~ mvnorm mu Sigma ;
+  par i (length X) {
+    y ~ mnl (X[i] %*% beta)
+  } ;
+  return (y, beta)
+}
+
+mnlregr_cond (X,mu,Sigma) =
+  observed y in
+  (y, beta) ~ mnlregr X mu Sigma
+
+=============================
+Need
+- definition of distribution
+- >>= operator
+- par, return
+- conditional distribution fct
+- real type
+- list type operator
+- ordered pair type 'a # 'b
+- comma operator for ordered pairs
+- length : 'a list -> num
+- list indexing t1[t2]
+- %*% : (real list) list -> real list -> real list
+  (or should I reserve this for both operands matrices?)
+- map function
+- exp function
+- dcat p distribution (p does not have to sum to 1, but elements must be positive)
+- mvnorm mu Sigma distribution
+
+Questions:
+- partial functions:
+  - dcap p when p is empty or some element is nonpositive
+  - X %*% b when lengths don't match or when X has differing numbers of
+    elements per row.
+  - mvnorm mu Sigma
+    - length of mu doesn't match shape of Sigma
+    - Sigma is not square
+    - Sigma is not positive definite and symmetric
+- How to handle overloading of operators?
+
+============================
+Example 2: Hierarchical MNL
+
+// define vec
+// define <*>
+// define matrix n arr
+// define nrow, ncol
+
+hmnl (B, A, nu, V, Z, X) = distr {
+  Sigma ~ dwish nu V
+  psi ~ mvnorm (vec B) (Sigma <*> (inv A))
+  Theta <- matrix (ncol Sigma) psi
+  par i (nrow Z) {
+    beta0 <- (transp Theta) %*% Z[i]
+    (y, beta) ~ mnlregr X[i] beta0 Sigma
+  }
+  return (y, beta, Theta, Sigma)
+}
+
+hmnl_cond (B,A,nu,V,Z,X) =
+  observed y in
+  (y, rest) ~ hmnl(B, A, nu, V, Z, X)
+
+================
+Need:
+- dwish
+- inv (of matrix)
+
+=============================
+
+
+Types:
+- Primitive: Int, Real, Bool
+- Arrays: P[], P[,], P[,,], ... where P is a primitive type
+- Tuples: T_1 * ... * T_n where each T_i is a primitive type or array type
+
+Special functions:
+- 
+
+Expr ::=
+  Const
+| Var
+| Fct Expr
+| Expr_1 Binop Expr_2
+  // Equivalent to (Binop)(Expr_1, Expr_2)
+| Expr_1 , ... , Expr_n
+  // The Expr_i cannot be of tuple type
+| if BoolExpr then Expr_1 else Expr_2
+  // types of Expr_1 and Expr_2 must be compatible
+| Expr[Slice_1 , ..., Slice_n]
+  // Equivalent to Index(Expr, Slice_1, ..., Slice_n), where if
+  // Slice_i is an empty expression it is equivalent to 1 .. Length(Expr, i)
+| let Var = Expr_1 in Expr_2
+| let Var_1, ..., Var_n = Expr_1 in Expr_2
+| { Expr }
+  // Expr has type P * ... * P for some primitive type P; denots
+  // an array.
+
+Slice ::=
+  Expr // of type Int[]
+| Expr // of type Int
+| Expr // of type Bool[] ... maybe
+| <empty> 
+
+Binary operators:
+- m:n
+
+Special syntactic forms:
+- unary operators
+- binary operators
+- indexing
+- slicing / subranging
+
+Ideas from APL:
+- arithmetic ops extend to arrays, matrices, etc. (R style, so you can
+  add a scalar and vector)
+- iota
+- dimensions of array
+- depth of array
+- catenation of arrays
+- conversion of array to lower dimensionality
+- transpose
+
+=======================================
+Example 1: Aggregate MNL
+
+for k in 1 : K
+  beta[k] ~ Normal(mu[k], sigma[k])
+for s in 1 : S
+  let v = exp(X[s] %*% beta)
+  let p = v / sum v
+  y[s] ~ Multinomial(p, n[s])
+
+OR
+
+AggrMNL(y, beta | mu, sigma, n, X) =
+  for k in 1 .. len beta
+    beta[k] ~ Normal(mu[k], sigma[k])
+  for s in 1 .. len y
+    let v = exp(X[s] %*% beta)
+    let p = v / sum v
+    y[s] ~ Multinomial(p, n[s])
+
+OR 
+
+replace "let v = exp(X[s] %*% beta)" with
+  let z = X[s] %*% beta
+  let v = exp(z - max z)
+
+OR
+
+AMNL(y | beta, n, X) =
+  # len y = len n
+  for s in 1 .. len n
+    let v = exp(X[s] %*% beta)
+    let p = v / sum v
+    y[s] ~ Multinomial(p, n[s])
+
+AggrMNL(y, beta | mu, sigma, n, X) =
+  # len beta = len mu
+  for k in 1 .. len mu
+    beta[k] ~ Normal(mu[k], sigma[k])
+  y ~ AMNL(y | beta, n, X)
+
+Example 2: Hierachical MNL with fully conjugate prior
+
+Sigma ~ InvWishart(nu, V)
+vec(Theta) ~ MvNormal(vec(Theta.mean), A [*] Sigma)
+for r in 1 : R
+  mu[r] = Theta %*% Z[r]
+  beta[r] ~ MvNormal(mu[r], Sigma)
+  let v = version[r]
+  for s in 1 : nscen[v]
+    let u = exp(X[v][s] %*% beta)
+    let p = u / sum u
+    y[r][s] ~ dcat(p)
+
+OR
+
+HierMNL(y, beta, Theta, Sigma | nu, V, A, ThetaMean, version, nscen, X, Z) =
+  Sigma ~ InvWishart(nu, V)
+  vec(Theta) ~ MvNormal(vec(ThetaMean), A [*] Sigma)
+  for r in 1 .. len y
+    let mu = Theta %*% Z[r,]
+    beta[r,] ~ MvNormal(mu, Sigma)
+    let v = version[r]
+    for s in 1 .. nscen[r]
+      let u = exp(X[v][s] %*% beta)
+      let p = u / sum u
+      y[r][s] ~ dcat(p)
+
+augmented 
+condition
+
+
+========================================
+Binary operators: +, *, -, /
+Unary operators: -
+
+Link functions: log, logit, cloglog, probit
+
+Indexing:
+- on LHS the expression must evaluate to a fixed value given the data
+- n : m represents n, n+1, ..., m
+- x[] represents all values of vector x
+- y[, 3] indicates all values of the third column of the 2D array y.
+- Functions defined on arrays must be over equally spaced nodes within an
+  array,
+
+Scalar functions:
+- abs, arccos, arccosh, arcsin, arcsinh, arctan, arctanh,
+  cloglog, cos, cosh, equals(x,y), exp, gammap(s1, s2), log, logfact,
+  loggam, logit, max(x,y), min(x,y), phi, pow(x,y), probit, round,
+  sin, sinh, sqrt, step, tan, tanh, trunc
+- Note: cloglog(x) = ln(-ln(1-x))
+- Note: gammap(s1, s2) is partial (incomplete) gamma function, value of
+  standard gamma density with parameter s1 integrated up to s2.
+- Note: logfact(x) = log(x!)
+- Note: loggam(x) = log(gamma function of x)
+- Note: phi is standard normal CDF
+- Note: probit is inverse of phi
+- Note: step(x) = (x >= 0)
+- Note: trunc appears to actually be floor...
+
+Vector/Array functions:
+- inprod(v1, v2), interp.line(x, v1, v2), inverse, logdet, mean,
+  eigen.vals, prod, rank(v, s), ranked(v, s), sd, sort, sum,
+
+- Note: for interp.line(x, v1, v2), v1 gives the sample points in ascending
+  order and v2 the values at those sample points.
+- Note: inverse is matrix inverse
+- Note: rank(v, s) is number of components of v <= s.
+- Note: ranked(v, s) is the s-th smallest component of v.
+- Note: sd(v) is sample standard deviation of vector v (using n-1)
+
+Weird scalar functions:
+- cumulative(s1, s2): tail area of distr s1 up to the value of s2; s1
+  must be stochastic; s1 and s2 can be the same
+- cut(x): prevents any child of cut(x) from being used for inference about x
+- density(s1, s2): density of distr s1 at value of s2; s1 must be stochastic;
+  s1 and s2 can be the same
+- deviance(s1, s2): deviance of distribution s1 at value of s2; s1 must be
+  stochastic; s1 and s2 can be the same
+- integral(F(s), s1, s2, s3): definite integral of F(s) between s=s1 and
+  s=s2 to accuracy s3.
+- post.p.value(s): s must be a stochastic node; returns one if a sample from
+  the prior is less than the value of s. (???)
+- prior.p.value(s): s must be a stochastic node; returns one if a sample from
+  the prior after resampling its stochastic parents is less than the value of
+  s.
+- replicate.post(s): replicate from distribution of s; s must be stochastic
+  (???)
+- replicate.prior(s): replicate from distribution of s after replicating from
+  its parents if they are stochastic; s must be stochastic.
+  (???)
+- solution(F(s), s1, s2, s3): a solution of equation F(s)=0 lying between s=s1
+  and s=s2 to accuracy s3.
+
+Weird vector/array functions:
+- ode(v1, v2, D(v3, s1), s2, s3): solution of system of ODEs at grid of
+  points v2 given initial values v1 at time s2 solved to accuracy s3.  v3 is a
+  vector of components of the system of ODE and s1 is the time var.
+- p.valueM(v): v must be a multivariate stochastic node; returns a vector of
+  ones and zeroes depending on if a sample from the prior is less than the
+  value of the corresponding component of v.
+- replicate.postM(v): replicate from multivariate distribution of v; v must be
+  stochastic and multivariate.
+
+Discrete univariate distributions:
+- dbern(p), dbin(p, n), dcat(p[]), dnegbin(p, r), dpois,
+- Note: dnegbin(p, r) is negative binomial; support is nonnegative integers, p
+  is probability of success, r is number of successes, distribution is number
+  of failures before r successes.
+
+Discrete multivariate
+- dmulti(p[], N)
+
+Continuous univariate distributions:
+- dbeta(a, b), dchisqr(k), ddexp(mu, tau), dexp(lambda), dflat(),
+  dgamma(alpha, beta), dgev(mu, sigma, eta), dggamma(r, mu, beta),
+  dgpar(mu, sigma, eta), dloglik(z), dlnorm(mu, tau), dlogis(mu, tau),
+  dnorm(mu, tau), dpar(alpha, c), dt(mu, tau, k), dunif(a, b),
+  dweib(v, lambda)
+- Note: ddexp is double exponenential, a.k.a. Laplacian, with tau the rate
+  parameter.
+- Note: dgev is generalized extreme value
+- Note: dggamma is generalized gamma
+- Note: dgpar is generalized pareto
+- Note: x ~ dloglik(z) is a trick when you can compute the density of
+  a distribution but it's not in the standard set.  You define a dummy node x,
+  set it to 0, and compute the log likelihood z.
+- Note: dlogis is the logistic distribution
+- Note: dpar is the Pareto distribution
+- Note: dt is Student-t
+- Note: dweib is Weibull
+
+Continuous multivariate:
+- ddirch(alpha[]) { Dirichlet }
+- dmnorm(mu[], T[,])
+- dmt(mu[], T[,], k) { multivariate Student-t }
+- dwish(R[,], k) { Wishart }
+
+Other:
+- Censoring: distribution(parms) C(lower_bound, upper_bound)
+- Truncation: distribution(parms) T(lower_bound, upper_bound)
+
+
+Signatures:
+- operator: Real * Real -> Real 
+- operator: Int * Int -> Int
+- operator: bool * bool -> bool
+- operator: Real -> Real
+- operator: Int -> Int
+- operator: bool -> bool
+- operator: Real * Real -> bool (e.g. equality)
+- operator: Int * Int -> bool (e.g. equality)
+- Real -> Real
+- Real * Real -> Real
+- Real[] * Real[] -> Real
+- Real * Real[] * Real[] -> Real
+- Real[,] -> Real[,]
+- Real[,] -> Real
+- Real[] -> Real
+- Real[] -> Real[]
+- density: Distribution -> Real -> Real
+
+Signatures for distributions:
+- Real -> Int
+- Real * Int -> Int
+- Real [] -> Int
+- Real [] * Int -> Int[]
+- Real -> Real
+- Real * Real -> Real
+- Real * Real * Real -> Real
+- Real[] -> Real
+- Real[] * Real[,] -> Real[]
+- Real[] * Real[,] * Real -> Real[]
+- Real[,] * Real -> Real[,]
+
+Info needed for distribution:
+- Types of paramaters
+- Type of sample space
+- Means of generating variates
+- Computation of density
+- How to censor (tail probabilities)
+- How to truncate (how truncation affects norm const)
+- Perhaps other facts, such as conjugate forms
+
+Tasks:
+- MAP estimation
+  - EM algorithm...
+- Computation of Hessian
+- Computation of starting points for BGR
+- Laplace approximation (importance sampling and computation of
+  marginal likelihood)
+- Computation of D-efficiency of a design
+- Design optimization
+- Expectations from posterior
+
+==============================================
+
+Stories:
+- Parse models and create descriptions of distributions
+- Generate random draws from model
+  - For aggregate logit
+  - For hierarchical multinomial logit
+  - For hierarchical multinomial probit
+- MAP estimation
+- Estimation using Laplacian approximation
+- Computing D-efficiency of a design
+
+========================
+
+Monads for probability:
+
+return x
+certainly x  // same as return x?
+fail
+d >>= f is essentially the distribution of y in
+  x ~ d
+  y ~ f x
+
+A ?? d is P(A(x) | x ~ d)
+joinWith f d1 d2 is the distribution
+  x1 ~ d1
+  x2 ~ d2
+  return f x y
+prod = joinWith (,)
+
+// array of independently generated values
+par n f = par1 0 f where
+  par1 n f = return []
+  par1 k f | k < n = do
+    x ~ f k
+    y ~ par1 (inc k) f
+    return (x:y)
+
+(f >@> g) x = f x >>= g
+sequ lst = foldl (>@>) return lst
+
+mapD :: (a -> b) -> Dist a -> Dist b
+liftM :: (Monad m) => (a -> b) -> m a -> m b
+join :: (Monad m) => m (m a) -> m a
+
+[27,8]
+
+Another approach
+
+INTEGRAL mu f is integral of f w.r.t. measure mu.
+
+(return x) A = (x in A)
+INTEGRAL (return x) f = f x
+(d >>= k) A = INTEGRAL d (\x. k x A)
+
+Some properties:
+- INTEGRAL (d >>= k) g = INTEGRAL d (\x. INTEGRAL (k x) g)
+- If f is a nonnegative, Lebesgue integrable function and mu is a bounded
+  measure, then nu A = INTEGRAL mu (\x. (f x) * (x in A)) is also a measure.
+
+==============
+
+D ::= Dprim | 'distr' '{' (Stmt (';' Stmt)*)? D '}'
+Dprim ::= return Expr | 'normal' Expr Expr | ...
+Stmt ::=
+  Lhs '~' D |
+  Lhs '<-' Expr |
+  'par' IndexVar Expr { Stmt (';' Stmt)* }
+Lhs ::= Var | Lhs $ IndexVar
+
+par k K
+  beta $ k ~ Normal (mu $ k) (sigma $ k)
+par s S
+  y $ s ~ distr
+            v <- map exp ((X $ s) %*% beta)
+            u <- v / sum v
+            Multinomial p (n$s)
+return (beta, y)
+
+
+cond A d

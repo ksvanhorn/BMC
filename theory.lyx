@@ -1,0 +1,1790 @@
+#LyX 1.6.9 created this file. For more info see http://www.lyx.org/
+\lyxformat 345
+\begin_document
+\begin_header
+\textclass article
+\use_default_options true
+\begin_modules
+theorems-ams
+\end_modules
+\language english
+\inputencoding auto
+\font_roman default
+\font_sans default
+\font_typewriter default
+\font_default_family default
+\font_sc false
+\font_osf false
+\font_sf_scale 100
+\font_tt_scale 100
+
+\graphics default
+\paperfontsize default
+\spacing single
+\use_hyperref false
+\papersize default
+\use_geometry false
+\use_amsmath 1
+\use_esint 1
+\cite_engine basic
+\use_bibtopic false
+\paperorientation portrait
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation indent
+\defskip medskip
+\quotes_language english
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\author "" 
+\end_header
+
+\begin_body
+
+\begin_layout Title
+BMC Theoretical Foundations
+\end_layout
+
+\begin_layout Section
+Measure spaces
+\end_layout
+
+\begin_layout Definition
+
+\emph on
+Sigma algebra.
+
+\emph default
+ 
+\begin_inset Formula $\mathcal{A}$
+\end_inset
+
+ is a sigma algebra on a nonempty set 
+\begin_inset Formula $X$
+\end_inset
+
+ iff all of the following are true:
+\end_layout
+
+\begin_deeper
+\begin_layout Itemize
+\begin_inset Formula $\mathcal{A}$
+\end_inset
+
+ is a set of subsets of 
+\begin_inset Formula $X$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $\emptyset\in\mathcal{A}$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $X\setminus s\in\mathcal{A}$
+\end_inset
+
+ for all 
+\begin_inset Formula $s\in\mathcal{A}$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $\bigcup C\in\mathcal{A}$
+\end_inset
+
+ for any countable subset 
+\begin_inset Formula $C$
+\end_inset
+
+ of 
+\begin_inset Formula $\mathcal{A}$
+\end_inset
+
+.
+\end_layout
+
+\end_deeper
+\begin_layout Remark
+\begin_inset Formula $\{\emptyset,X\}$
+\end_inset
+
+ is the smallest sigma algebra on 
+\begin_inset Formula $X$
+\end_inset
+
+, and 
+\begin_inset Formula $\mathcal{P}(X)$
+\end_inset
+
+ (the powerset of 
+\begin_inset Formula $X$
+\end_inset
+
+) is the largest sigma algebra on 
+\begin_inset Formula $X$
+\end_inset
+
+.
+ The intersection of any collection of sigma algebras on 
+\begin_inset Formula $X$
+\end_inset
+
+ is itself a sigma algebra on 
+\begin_inset Formula $X$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Definition
+
+\emph on
+Measurable space
+\emph default
+.
+ 
+\begin_inset Formula $(X,\mathcal{A})$
+\end_inset
+
+ is a measurable space iff 
+\begin_inset Formula $X$
+\end_inset
+
+ is a nonempty set and 
+\begin_inset Formula $\mathcal{A}$
+\end_inset
+
+ is a sigma algebra on 
+\begin_inset Formula $X$
+\end_inset
+
+.
+ The elements of 
+\begin_inset Formula $\mathcal{A}$
+\end_inset
+
+ are called the measurable sets.
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status collapsed
+
+\begin_layout Plain Layout
+
+{}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Definition
+
+\emph on
+Measure space.
+
+\emph default
+ A measure on a 
+\begin_inset Formula $ $
+\end_inset
+
+measurable space 
+\begin_inset Formula $(X,\mathcal{A})$
+\end_inset
+
+ is a function 
+\begin_inset Formula $\mu:\mathcal{A}\rightarrow\mathbb{R}\cup\{\infty\}$
+\end_inset
+
+ such that
+\end_layout
+
+\begin_deeper
+\begin_layout Itemize
+\begin_inset Formula $\mu(s)\geq0$
+\end_inset
+
+ for all 
+\begin_inset Formula $s\in\mathcal{A}$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $\mu(\emptyset)=0$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $\mu$
+\end_inset
+
+ is countably additive, that is, if 
+\begin_inset Formula $\mathcal{I}$
+\end_inset
+
+ is countable and 
+\begin_inset Formula $s_{i}\in\mathcal{A}$
+\end_inset
+
+ and 
+\begin_inset Formula $s_{i}\cap s_{j}=\emptyset$
+\end_inset
+
+ for all 
+\begin_inset Formula $i\neq j$
+\end_inset
+
+, 
+\begin_inset Formula $i,j\in\mathcal{I}$
+\end_inset
+
+, then 
+\begin_inset Formula \[
+\mu\left(\bigcup_{i\in\mathcal{I}}s_{i}\right)=\sum_{i\in\mathcal{I}}\mu(s_{i}).\]
+
+\end_inset
+
+
+\end_layout
+
+\end_deeper
+\begin_layout Definition
+A measure space is a triple 
+\begin_inset Formula $(X,\mathcal{A},\mu)$
+\end_inset
+
+ such that 
+\begin_inset Formula $(X,\mathcal{A})$
+\end_inset
+
+ is a measurable space and 
+\begin_inset Formula $\mu$
+\end_inset
+
+ is a measure on 
+\begin_inset Formula $(X,\mathcal{A})$
+\end_inset
+
+.
+ 
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status collapsed
+
+\begin_layout Plain Layout
+
+{}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Definition
+
+\emph on
+Generated sigma algebra.
+
+\emph default
+ If 
+\begin_inset Formula $X$
+\end_inset
+
+ is a nonempty set and 
+\begin_inset Formula $G$
+\end_inset
+
+ is a set of subsets of 
+\begin_inset Formula $X$
+\end_inset
+
+, then 
+\begin_inset Formula $\sigma(X,G)$
+\end_inset
+
+, the sigma algebra generated by 
+\begin_inset Formula $G$
+\end_inset
+
+, is the smallest sigma algebra 
+\begin_inset Formula $\mathcal{A}$
+\end_inset
+
+ on 
+\begin_inset Formula $X$
+\end_inset
+
+ for which 
+\begin_inset Formula $G\subseteq\mathcal{A}$
+\end_inset
+
+.
+ Specifically, 
+\begin_inset Formula $\sigma(X,G)$
+\end_inset
+
+ is the intersection of all sigma algebras 
+\begin_inset Formula $\mathcal{A}$
+\end_inset
+
+ on 
+\begin_inset Formula $X$
+\end_inset
+
+ for which 
+\begin_inset Formula $G\subseteq\mathcal{A}$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status collapsed
+
+\begin_layout Plain Layout
+
+{}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Definition
+
+\emph on
+\begin_inset Formula $\sigma$
+\end_inset
+
+-finite.
+
+\emph default
+ A measure 
+\begin_inset Formula $\mu$
+\end_inset
+
+ on a measurable space 
+\begin_inset Formula $(X,\mathcal{A})$
+\end_inset
+
+ is 
+\begin_inset Formula $\sigma$
+\end_inset
+
+-finite iff there exists a countable set 
+\begin_inset Formula $C\subseteq\mathcal{A}$
+\end_inset
+
+ such that 
+\begin_inset Formula $X=\bigcup C$
+\end_inset
+
+ and 
+\begin_inset Formula $\mu(s)<\infty$
+\end_inset
+
+ for all 
+\begin_inset Formula $s\in C$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status collapsed
+
+\begin_layout Plain Layout
+
+{}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Definition
+
+\emph on
+Complete measure space.
+
+\emph default
+ A measure space 
+\begin_inset Formula $(X,\mathcal{A},\mu)$
+\end_inset
+
+ is complete iff 
+\begin_inset Formula $\mathcal{A}$
+\end_inset
+
+ contains every subset of any measure-zero set; that is, for all 
+\begin_inset Formula $s\in\mathcal{A}$
+\end_inset
+
+ such that 
+\begin_inset Formula $\mu(s)=0$
+\end_inset
+
+, we have 
+\begin_inset Formula $s'\in\mathcal{A}$
+\end_inset
+
+ for every 
+\begin_inset Formula $s'\subseteq s$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status collapsed
+
+\begin_layout Plain Layout
+
+{}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Definition
+
+\emph on
+Completion.
+
+\emph default
+ The completion of a measure space 
+\begin_inset Formula $(X,\mathcal{A},\mu)$
+\end_inset
+
+ is the measure space 
+\begin_inset Formula $(X,\mathcal{A}',\mu')$
+\end_inset
+
+, where
+\end_layout
+
+\begin_deeper
+\begin_layout Itemize
+\begin_inset Formula $\mathcal{A}'=\sigma(X,\mathcal{A}\cup Z)$
+\end_inset
+
+ and 
+\begin_inset Formula $Z$
+\end_inset
+
+ is 
+\begin_inset Formula $\{z\mid\exists s\in\mathcal{A}.\,\mu(s)=0\wedge z\subseteq s\}$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $\mu'$
+\end_inset
+
+ is the unique measure on 
+\begin_inset Formula $\mathcal{A}'$
+\end_inset
+
+ such that 
+\begin_inset Formula $\mu'(s)=\mu(s)$
+\end_inset
+
+ for 
+\begin_inset Formula $s\in\mathcal{A}$
+\end_inset
+
+.
+ (See Wikipedia article 
+\begin_inset Quotes eld
+\end_inset
+
+Complete measure
+\begin_inset Quotes erd
+\end_inset
+
+ for existence and uniqueness of this measure.)
+\end_layout
+
+\end_deeper
+\begin_layout Remark
+The completion of a 
+\begin_inset Formula $\sigma$
+\end_inset
+
+-finite measure space is also 
+\begin_inset Formula $\sigma$
+\end_inset
+
+-finite.
+\end_layout
+
+\begin_layout Definition
+
+\emph on
+Product measure.
+
+\emph default
+ The product measure of two 
+\begin_inset Formula $\sigma$
+\end_inset
+
+-finite measure spaces 
+\begin_inset Formula $S_{1}=\left(X_{1},\mathcal{A}_{1},\mu_{1}\right)$
+\end_inset
+
+ and 
+\begin_inset Formula $S_{2}=(X_{2},\mathcal{A}_{2},\mu_{2})$
+\end_inset
+
+ is the measure space 
+\begin_inset Formula $S_{1}\times S_{2}=(X,\mathcal{A},\mu)$
+\end_inset
+
+, where
+\end_layout
+
+\begin_deeper
+\begin_layout Itemize
+\begin_inset Formula $X=X_{1}\times X_{2}$
+\end_inset
+
+;
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $\mathcal{A}=\sigma(X,\mathcal{A}')$
+\end_inset
+
+ with 
+\begin_inset Formula $\mathcal{A}'=\{s_{1}\times s_{2}\mid s_{1}\in\mathcal{A}_{1},s_{2}\in\mathcal{A}_{2}\}$
+\end_inset
+
+;
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $\mu$
+\end_inset
+
+ is the unique measure satisfying 
+\begin_inset Formula $\mu(s_{1}\times s_{2})=\mu_{1}(s_{1})\mu_{2}(s_{2})$
+\end_inset
+
+.
+ (See Wikipedia article 
+\begin_inset Quotes eld
+\end_inset
+
+Product measure
+\begin_inset Quotes erd
+\end_inset
+
+ for existence and uniqueness of this measure.)
+\end_layout
+
+\end_deeper
+\begin_layout Theorem
+The product of two 
+\begin_inset Formula $\sigma$
+\end_inset
+
+-finite measure spaces is itself 
+\begin_inset Formula $\sigma$
+\end_inset
+
+-finite.
+\end_layout
+
+\begin_layout Proof
+Let 
+\begin_inset Formula $X_{i}=\bigcup C_{i}$
+\end_inset
+
+ with 
+\begin_inset Formula $\mu_{i}(s)<\infty$
+\end_inset
+
+ for all 
+\begin_inset Formula $s\in C_{i}$
+\end_inset
+
+, and 
+\begin_inset Formula $C_{i}$
+\end_inset
+
+ a countable set, for 
+\begin_inset Formula $i=1,2$
+\end_inset
+
+.
+ Define 
+\begin_inset Formula \[
+C=\{s_{1}\times s_{2}\mid s_{1}\in C_{1}\wedge s_{2}\in C_{2}\}.\]
+
+\end_inset
+
+Then 
+\begin_inset Formula \begin{eqnarray*}
+X_{1}\times X_{2} & = & \left(\bigcup C_{1}\right)\times\left(\bigcup C_{2}\right)\\
+ & = & \{(x_{1},x_{2})\mid(\exists s_{1}\in C_{1}.\, x_{1}\in s_{1})\wedge(\exists s_{2}\in C_{2}.\, x_{2}\in s_{2})\}\\
+ & = & \{(x_{1},x_{2})\mid\exists s\in C.\,(x_{1},x_{2})\in s\}\\
+ & = & \bigcup C.\end{eqnarray*}
+
+\end_inset
+
+Since 
+\begin_inset Formula $C_{1}$
+\end_inset
+
+ and 
+\begin_inset Formula $C_{2}$
+\end_inset
+
+ are countable, so is 
+\begin_inset Formula $C$
+\end_inset
+
+.
+ Furthermore, if 
+\begin_inset Formula $s\in C$
+\end_inset
+
+ then 
+\begin_inset Formula $s=s_{1}\times s_{2}$
+\end_inset
+
+ for some 
+\begin_inset Formula $s_{1}\in C_{1}$
+\end_inset
+
+ and 
+\begin_inset Formula $s_{2}\in C_{2}$
+\end_inset
+
+, and we have 
+\begin_inset Formula $\mu(s)=\mu(s_{1})\mu(s_{2})<\infty$
+\end_inset
+
+.
+ 
+\end_layout
+
+\begin_layout Definition
+
+\emph on
+Iterated product measure.
+
+\emph default
+ If 
+\begin_inset Formula $S$
+\end_inset
+
+ is a measure space and 
+\begin_inset Formula $n\in\mathbb{N}$
+\end_inset
+
+ then 
+\begin_inset Formula $S^{n}$
+\end_inset
+
+ is the measure space 
+\begin_inset Formula \[
+\underbrace{S\times\cdots\times S}_{n}.\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status collapsed
+
+\begin_layout Plain Layout
+
+{}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Definition
+
+\emph on
+Disjoint union space.
+
+\emph default
+ Let 
+\begin_inset Formula $\mathcal{I}$
+\end_inset
+
+ be a countable set and 
+\begin_inset Formula $S_{i}=(X_{i},\mathcal{A}_{i},\mu_{i})$
+\end_inset
+
+ be a measure space for all 
+\begin_inset Formula $i\in\mathcal{I}$
+\end_inset
+
+, with 
+\begin_inset Formula $X_{i}\cap X_{j}=\emptyset$
+\end_inset
+
+ for 
+\begin_inset Formula $i\neq j$
+\end_inset
+
+.
+ Then the disjoint union of the measures spaces 
+\begin_inset Formula $S_{i}$
+\end_inset
+
+ is
+\begin_inset Formula \begin{eqnarray*}
+\biguplus_{i\in\mathcal{I}}S_{i} & = & \left(X,\mathcal{A},\mu\right)\\
+X & = & \bigcup_{i\in\mathcal{I}}X_{i}\\
+\mathcal{A} & = & \left\{ \bigcup_{i\in\mathcal{I}}s_{i}\;\middle|\; s_{i}\in\mathcal{A}_{i}\mbox{ for all }i\in\mathcal{I}\right\} \\
+\mu\left(\bigcup_{i\in\mathcal{I}}s_{i}\right) & = & \sum_{i\in\mathcal{I}}\mu_{i}(s_{i})\end{eqnarray*}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Theorem
+The disjoint union 
+\begin_inset Formula $S=(X,\mathcal{A},\mu)$
+\end_inset
+
+ defined above is a measure space.
+ If each 
+\begin_inset Formula $S_{i}$
+\end_inset
+
+ is 
+\begin_inset Formula $\sigma$
+\end_inset
+
+-finite, then so is 
+\begin_inset Formula $S$
+\end_inset
+
+.
+ If each 
+\begin_inset Formula $S_{i}$
+\end_inset
+
+ is complete, then so is 
+\begin_inset Formula $S$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Proof
+First we show that 
+\begin_inset Formula $(X,\mathcal{A})$
+\end_inset
+
+ is a measurable space.
+ 
+\begin_inset Formula $X$
+\end_inset
+
+ is clearly a nonempty set, so we need only show that 
+\begin_inset Formula $\mathcal{A}$
+\end_inset
+
+ is a sigma algebra on 
+\begin_inset Formula $X$
+\end_inset
+
+.
+\end_layout
+
+\begin_deeper
+\begin_layout Itemize
+If 
+\begin_inset Formula $s\in\mathcal{A}$
+\end_inset
+
+ then there exist 
+\begin_inset Formula $s_{i}\in\mathcal{A}_{i}$
+\end_inset
+
+ for all 
+\begin_inset Formula $i\in\mathcal{I}$
+\end_inset
+
+ with 
+\begin_inset Formula $s=\bigcup_{i\in\mathcal{I}}s_{i}$
+\end_inset
+
+.
+\end_layout
+
+\begin_deeper
+\begin_layout Itemize
+\begin_inset Formula $s\subseteq X$
+\end_inset
+
+.
+ Since each 
+\begin_inset Formula $s_{i}\subseteq X_{i}$
+\end_inset
+
+ we have 
+\begin_inset Formula \[
+s=\bigcup_{i}s_{i}\subseteq\bigcup_{i}X_{i}=X.\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $X\setminus s\in\mathcal{A}$
+\end_inset
+
+.
+ Since 
+\begin_inset Formula $X_{i}\setminus s_{i}\in\mathcal{A}_{i}$
+\end_inset
+
+ and 
+\begin_inset Formula $s_{j}\cap X_{i}=\emptyset$
+\end_inset
+
+ for 
+\begin_inset Formula $j\neq i$
+\end_inset
+
+, we have
+\begin_inset Formula \begin{eqnarray*}
+X\setminus s & = & \left(\bigcup_{i}X_{i}\right)\setminus\left(\bigcup_{i}s_{i}\right)\\
+ & = & \bigcup_{i}\left(X_{i}\setminus\bigcup_{j}s_{j}\right)\\
+ & = & \bigcup_{i}\left(X_{i}\setminus s_{i}\right)\\
+ & \in & \mathcal{A}.\end{eqnarray*}
+
+\end_inset
+
+
+\end_layout
+
+\end_deeper
+\begin_layout Itemize
+\begin_inset Formula $\emptyset\in\mathcal{A}$
+\end_inset
+
+.
+ Since 
+\begin_inset Formula $\emptyset\in\mathcal{A}_{i}$
+\end_inset
+
+ for all 
+\begin_inset Formula $i$
+\end_inset
+
+ we have 
+\begin_inset Formula $\emptyset=\bigcup_{i}\emptyset\in\mathcal{A}$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $\bigcup_{j}t_{j}\in\mathcal{A}$
+\end_inset
+
+ if 
+\begin_inset Formula $t{}_{j}\in\mathcal{A}$
+\end_inset
+
+ for all 
+\begin_inset Formula $j$
+\end_inset
+
+.
+ Let 
+\begin_inset Formula $\mathcal{J}$
+\end_inset
+
+ be a countable set with 
+\begin_inset Formula $t_{j}\in\mathcal{A}$
+\end_inset
+
+ for all 
+\begin_inset Formula $j\in\mathcal{J}$
+\end_inset
+
+, and let 
+\begin_inset Formula $t_{j}=\bigcup_{i\in\mathcal{I}}s_{ji}$
+\end_inset
+
+ where 
+\begin_inset Formula $s_{ji}\in\mathcal{A}_{i}$
+\end_inset
+
+ for all 
+\begin_inset Formula $i\in\mathcal{I},j\in\mathcal{J}$
+\end_inset
+
+.
+ Then 
+\begin_inset Formula \begin{eqnarray*}
+\bigcup_{j\in\mathcal{J}}t_{j} & = & \bigcup_{j\in\mathcal{J}}\bigcup_{i\in\mathcal{I}}s_{ji}\\
+ & = & \bigcup_{i\in\mathcal{I}}\bigcup_{j\in\mathcal{J}}s_{ji}\\
+ & = & \bigcup_{i\in\mathcal{I}}s'_{i}\end{eqnarray*}
+
+\end_inset
+
+where 
+\begin_inset Formula $s'_{i}=\bigcup_{j\in\mathcal{J}}s_{ji}\in\mathcal{A}_{i}$
+\end_inset
+
+ for all 
+\begin_inset Formula $i\in\mathcal{I}$
+\end_inset
+
+.
+ Hence 
+\begin_inset Formula $\bigcup_{j\in\mathcal{J}}t_{j}\in\mathcal{A}$
+\end_inset
+
+.
+\end_layout
+
+\end_deeper
+\begin_layout Proof
+Next we show that 
+\begin_inset Formula $\mu$
+\end_inset
+
+ is a measure on 
+\begin_inset Formula $\mathcal{A}$
+\end_inset
+
+:
+\end_layout
+
+\begin_deeper
+\begin_layout Itemize
+For 
+\begin_inset Formula $s\in\mathcal{A}$
+\end_inset
+
+ there exist 
+\begin_inset Formula $s_{i}\in\mathcal{A}$
+\end_inset
+
+ for all 
+\begin_inset Formula $i\in\mathcal{I}$
+\end_inset
+
+ with 
+\begin_inset Formula $s=\bigcup_{i\in\mathcal{I}}s_{i}$
+\end_inset
+
+.
+ Then
+\end_layout
+
+\begin_deeper
+\begin_layout Itemize
+\begin_inset Formula $\mu(s)=\sum_{i\in\mathcal{I}}\mu_{i}(s_{i})\geq0$
+\end_inset
+
+ because each 
+\begin_inset Formula $\mu_{i}(s_{i})\geq0$
+\end_inset
+
+;
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $\mu(\emptyset)=\sum_{i\in\mathcal{I}}\mu(\emptyset)=\sum_{i\in\mathcal{I}}0=0$
+\end_inset
+
+.
+\end_layout
+
+\end_deeper
+\begin_layout Itemize
+Let 
+\begin_inset Formula $\mathcal{J}$
+\end_inset
+
+ be a countable set and 
+\begin_inset Formula $t_{j}\in\mathcal{A}$
+\end_inset
+
+ for all 
+\begin_inset Formula $j$
+\end_inset
+
+.
+ Let 
+\begin_inset Formula $t_{j}=\bigcup_{i\in\mathcal{I}}s_{ji}$
+\end_inset
+
+, where 
+\begin_inset Formula $s_{ji}\in\mathcal{A}_{i}$
+\end_inset
+
+.
+ Then 
+\begin_inset Formula \begin{eqnarray*}
+\mu\left(\bigcup_{j\in\mathcal{J}}t_{j}\right) & = & \mu\left(\bigcup_{j\in\mathcal{J}}\bigcup_{i\in\mathcal{I}}s_{ji}\right)\\
+ & = & \mu\left(\bigcup_{i\in\mathcal{I}}\bigcup_{j\in\mathcal{J}}s_{ji}\right)\\
+ & = & \sum_{i\in\mathcal{I}}\mu_{i}\left(\bigcup_{j\in\mathcal{J}}s_{ji}\right)\\
+ & = & \sum_{i\in\mathcal{I}}\sum_{j\in\mathcal{J}}\mu_{i}\left(s_{ji}\right)\\
+ & = & \sum_{j\in\mathcal{J}}\sum_{i\in\mathcal{I}}\mu_{i}\left(s_{ji}\right)\\
+ & = & \sum_{j\in\mathcal{J}}\mu\left(\bigcup_{i\in\mathcal{I}}s_{ji}\right)\\
+ & =\sum_{j\in\mathcal{J}} & \mu\left(t_{j}\right).\end{eqnarray*}
+
+\end_inset
+
+
+\end_layout
+
+\end_deeper
+\begin_layout Proof
+Next, suppose that each 
+\begin_inset Formula $S_{i}$
+\end_inset
+
+ is 
+\begin_inset Formula $\sigma$
+\end_inset
+
+-finite.
+ Then for each 
+\begin_inset Formula $i\in\mathcal{I}$
+\end_inset
+
+ there is a countable set 
+\begin_inset Formula $C_{i}\subseteq\mathcal{A}_{i}$
+\end_inset
+
+ with 
+\begin_inset Formula $X_{i}=\bigcup C_{i}$
+\end_inset
+
+ and 
+\begin_inset Formula $\mu_{i}(s)<\infty$
+\end_inset
+
+ for all 
+\begin_inset Formula $s\in C_{i}$
+\end_inset
+
+.
+ Note that 
+\begin_inset Formula $\mathcal{A}_{i}\subseteq\mathcal{A}$
+\end_inset
+
+ and 
+\begin_inset Formula $\mu(s)=\mu_{i}(s)$
+\end_inset
+
+ for all 
+\begin_inset Formula $i\in\mathcal{I}$
+\end_inset
+
+ and 
+\begin_inset Formula $s\in\mathcal{A}_{i}$
+\end_inset
+
+.
+ Define 
+\begin_inset Formula $C=\bigcup_{i\in\mathcal{I}}C_{i}$
+\end_inset
+
+, which is a countable set of subsets of 
+\begin_inset Formula $\mathcal{A}$
+\end_inset
+
+.
+ Then 
+\begin_inset Formula \[
+X=\bigcup_{i\in\mathcal{I}}X_{i}=\bigcup_{i\in\mathcal{I}}\bigcup C_{i}=\bigcup\bigcup_{i\in\mathcal{I}}C_{i}=\bigcup C.\]
+
+\end_inset
+
+Furthermore, if 
+\begin_inset Formula $s\in C$
+\end_inset
+
+ then 
+\begin_inset Formula $s\in C_{i}$
+\end_inset
+
+ for some 
+\begin_inset Formula $i\in\mathcal{I}$
+\end_inset
+
+, hence 
+\begin_inset Formula $\mu(s)=\mu_{i}(s)<\infty$
+\end_inset
+
+.
+ Thus 
+\begin_inset Formula $S$
+\end_inset
+
+ is 
+\begin_inset Formula $\sigma$
+\end_inset
+
+-finite.
+ 
+\end_layout
+
+\begin_layout Proof
+Finally, suppose that each 
+\begin_inset Formula $S_{i}$
+\end_inset
+
+ is complete.
+ If 
+\begin_inset Formula $s\in\mathcal{A}$
+\end_inset
+
+ and 
+\begin_inset Formula $\mu(s)=0$
+\end_inset
+
+, then there exist 
+\begin_inset Formula $s_{i}\in\mathcal{A}_{i}$
+\end_inset
+
+ for each 
+\begin_inset Formula $i\in\mathcal{I}$
+\end_inset
+
+ with 
+\begin_inset Formula $s=\bigcup_{i\in\mathcal{I}}s_{i}$
+\end_inset
+
+.
+ But 
+\begin_inset Formula \[
+0=\mu(s)=\sum_{i\in\mathcal{I}}\mu(s_{i})=\sum_{i\in\mathcal{I}}\mu_{i}(s_{i})\]
+
+\end_inset
+
+and so 
+\begin_inset Formula $\mu_{i}(s_{i})=0$
+\end_inset
+
+ for each 
+\begin_inset Formula $i$
+\end_inset
+
+.
+ If 
+\begin_inset Formula $t\subseteq s$
+\end_inset
+
+ then 
+\begin_inset Formula \[
+t=t\cap s=t\cap\bigcup_{i\in\mathcal{I}}s_{i}=\bigcup_{i\in\mathcal{I}}\left(t\cap s_{i}\right)\]
+
+\end_inset
+
+and since 
+\begin_inset Formula $t\cap s_{i}\subseteq s_{i}$
+\end_inset
+
+ we have 
+\begin_inset Formula $t\cap s_{i}\in\mathcal{A}_{i}$
+\end_inset
+
+, hence 
+\begin_inset Formula $t\in\mathcal{A}$
+\end_inset
+
+.
+ Therefore 
+\begin_inset Formula $S$
+\end_inset
+
+ is complete.
+\end_layout
+
+\begin_layout Definition
+
+\emph on
+Sequence space.
+
+\emph default
+ If 
+\begin_inset Formula $S$
+\end_inset
+
+ is a measurable space then 
+\begin_inset Formula $S^{*}$
+\end_inset
+
+ is the measurable space 
+\begin_inset Formula $\bigcup_{n\in\mathbb{N}}S^{n}$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Section
+Some ways of constructing measure spaces
+\end_layout
+
+\begin_layout Definition
+
+\emph on
+Borel sigma algebra
+\emph default
+.
+ The Borel sigma algebra 
+\begin_inset Formula $\mathcal{B}$
+\end_inset
+
+ on 
+\begin_inset Formula $\mathbb{R}$
+\end_inset
+
+ is 
+\begin_inset Formula $\sigma(\mathbb{R},G)$
+\end_inset
+
+ where 
+\begin_inset Formula $G=\{(-\infty,a]\mid a\in\mathbb{R}\}$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Remark
+The Borel sigma algebra on 
+\begin_inset Formula $\mathbb{R}$
+\end_inset
+
+ includes all singleton sets 
+\begin_inset Formula $\{x\}$
+\end_inset
+
+ where 
+\begin_inset Formula $x\in\mathbb{R}$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Definition
+
+\emph on
+Lebesgue measure.
+
+\emph default
+ The Lebesgue measure 
+\begin_inset Formula $\mathcal{L}^{0}$
+\end_inset
+
+ on 
+\begin_inset Formula $\mathbb{R}$
+\end_inset
+
+ is the completion of the Borel measure 
+\begin_inset Formula $(\mathbb{R},\mathcal{B},\mu)$
+\end_inset
+
+, where 
+\begin_inset Formula $\mu$
+\end_inset
+
+ is the unique measure on 
+\begin_inset Formula $\mathcal{B}$
+\end_inset
+
+ satisfying 
+\begin_inset Formula $\mu([a,b])=b-a$
+\end_inset
+
+ for 
+\begin_inset Formula $a<b$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Remark
+The Lebesgue measure is 
+\begin_inset Formula $\sigma$
+\end_inset
+
+-finite, and is complete by construction.
+\end_layout
+
+\begin_layout Definition
+
+\emph on
+Generalization of Lebesgue measure.
+
+\emph default
+ The Lebesgue measure 
+\begin_inset Formula $\mathcal{L}[X]$
+\end_inset
+
+ on set 
+\begin_inset Formula $X$
+\end_inset
+
+ is recursively defined as follows:
+\end_layout
+
+\begin_deeper
+\begin_layout Itemize
+\begin_inset Formula $\mathcal{L}[\mathbb{R}]=\mathcal{L}^{0}$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $\mathcal{L}[\mathbb{N}]=(\mathbb{N},\mathcal{P}(\mathbb{N}),\mu)$
+\end_inset
+
+, where 
+\begin_inset Formula $\mu(s)$
+\end_inset
+
+ is the cardinality of set 
+\begin_inset Formula $s$
+\end_inset
+
+.
+ (This is trivially 
+\begin_inset Formula $\sigma$
+\end_inset
+
+-finite and complete.)
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $\mathcal{L}[X\times Y]$
+\end_inset
+
+ is the completion of 
+\begin_inset Formula $\mathcal{L}[X]\times\mathcal{L}[Y]$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $\mathcal{L}[X^{n}]$
+\end_inset
+
+ is the completion of 
+\begin_inset Formula $\mathcal{L}[X]^{n}$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $\mathcal{L}\left[\bigcup_{i\in\mathcal{I}}X_{i}\right]=\biguplus_{i\in\mathcal{I}}\mathcal{L}\left[X_{i}\right]$
+\end_inset
+
+ if 
+\begin_inset Formula $\mathcal{I}$
+\end_inset
+
+ is countable and 
+\begin_inset Formula $X_{i}\cap X_{j}=\emptyset$
+\end_inset
+
+ for 
+\begin_inset Formula $i\neq j$
+\end_inset
+
+.
+\end_layout
+
+\end_deeper
+\begin_layout Remark
+We see from the above that the Lebesgue measure of any set 
+\begin_inset Formula $X$
+\end_inset
+
+ built up from 
+\begin_inset Formula $\mathbb{R}$
+\end_inset
+
+ and 
+\begin_inset Formula $\mathbb{N}$
+\end_inset
+
+ using the product, iterated product, and/or disjoint union operations,
+ is both 
+\begin_inset Formula $\sigma$
+\end_inset
+
+-finite and complete.
+ Furthermore, the singleton set 
+\begin_inset Formula $\{x\}$
+\end_inset
+
+ is measurable for any 
+\begin_inset Formula $x\in X$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+{}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Remark
+If 
+\begin_inset Formula $X^{*}$
+\end_inset
+
+ is the set of all sequences of elements from 
+\begin_inset Formula $X$
+\end_inset
+
+, then we see that 
+\begin_inset Formula $\mathcal{L}[X^{*}]=\biguplus_{n\in\mathbb{N}}\mathcal{L}[X^{n}]$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Definition
+
+\emph on
+Point measure.
+
+\emph default
+ Given a nonempty set 
+\begin_inset Formula $X$
+\end_inset
+
+ and some 
+\begin_inset Formula $x\in X$
+\end_inset
+
+, we define the point measure on 
+\begin_inset Formula $X$
+\end_inset
+
+ at 
+\begin_inset Formula $x$
+\end_inset
+
+ to be 
+\begin_inset Formula $\mbox{point}(x,X)=(X,\mathcal{A},\mu)$
+\end_inset
+
+, where 
+\begin_inset Formula $\mathcal{A}=\{\emptyset,X,\{x\},X\setminus\{x\}\}$
+\end_inset
+
+, 
+\begin_inset Formula $\mu(\{x\})=1$
+\end_inset
+
+, and 
+\begin_inset Formula $\mu(X\setminus\{x\})=0$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+{}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Definition
+
+\emph on
+Measurable function.
+
+\emph default
+ Given two measurable spaces 
+\begin_inset Formula $S_{1}=(X_{1},\mathcal{A}_{1})$
+\end_inset
+
+ and 
+\begin_inset Formula $S_{2}=(X_{2},\mathcal{A}_{2})$
+\end_inset
+
+, the triple 
+\begin_inset Formula $(S_{1}.S_{2},f)$
+\end_inset
+
+ is called a measurable function if 
+\begin_inset Formula $f:X_{1}\rightarrow X_{2}$
+\end_inset
+
+ and 
+\begin_inset Formula $f^{-1}(s)\in\mathcal{A}_{1}$
+\end_inset
+
+ for all 
+\begin_inset Formula $s\in\mathcal{A}_{2}$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+{}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Definition
+???.
+ Given measure space 
+\begin_inset Formula $S=(X_{1},\mathcal{A}_{1},\mu_{1})$
+\end_inset
+
+ and measurable function 
+\begin_inset Formula $(S,(X_{2},\mathcal{A}_{2}),f)$
+\end_inset
+
+, the measure space 
+\begin_inset Formula $S\triangleright f$
+\end_inset
+
+ is 
+\begin_inset Formula $(X_{2},\mathcal{A}_{2},\mu_{2})$
+\end_inset
+
+, where 
+\begin_inset Formula $\mu_{2}(s)=\mu_{1}(f^{-1}(s))$
+\end_inset
+
+ for all 
+\begin_inset Formula $s\in\mathcal{A}_{2}$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Remark
+We have 
+\begin_inset Formula \[
+\int_{X_{2}}(g\, x)\; d\mu_{2}(x)=\int_{X_{1}}(g(f\, y))\; d\mu_{1}(y)\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+{}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Definition
+Given measure space 
+\begin_inset Formula $S=(X_{1},\mathcal{A}_{1},\mu_{1})$
+\end_inset
+
+, measurable space 
+\begin_inset Formula $(X_{2},\mathcal{A}_{2})$
+\end_inset
+
+ and function 
+\begin_inset Formula $m$
+\end_inset
+
+ such that 
+\begin_inset Formula $m(x)$
+\end_inset
+
+ is a measure space on 
+\begin_inset Formula $(X_{2},\mathcal{A}_{2})$
+\end_inset
+
+ for almost all 
+\begin_inset Formula $x\in\mathcal{A}_{1}$
+\end_inset
+
+, define 
+\begin_inset Formula $S>\!>\!=m$
+\end_inset
+
+ to be the measure space 
+\begin_inset Formula $(X_{2},\mathcal{A}_{2},\mu_{2})$
+\end_inset
+
+ such that 
+\begin_inset Formula \[
+\mu_{2}(s)=\int_{X_{1}}(m\, x\, s)\; d\mu_{1}(x)\]
+
+\end_inset
+
+for all 
+\begin_inset Formula $s\in\mathcal{A}_{2}$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Proposition
+\begin_inset Formula $(S\triangleright f)>\!>\!=m$
+\end_inset
+
+ is equal to 
+\begin_inset Formula $S>\!>\!=(m\circ f)$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Proof
+Let 
+\begin_inset Formula $S=(X_{1},\mathcal{A}_{1},\mu)$
+\end_inset
+
+ and let 
+\begin_inset Formula $m\, x$
+\end_inset
+
+ be a measure space on 
+\begin_inset Formula $(X_{2},\mathcal{A}_{2})$
+\end_inset
+
+ for almost all 
+\begin_inset Formula $x\in\mathcal{A}_{1}$
+\end_inset
+
+.
+ For all 
+\begin_inset Formula $s\in\mathcal{A}_{2}$
+\end_inset
+
+, 
+\begin_inset Formula \begin{eqnarray*}
+((S\triangleright f)>\!>\!=m)\, s & = & \int_{X_{1}}(m\,(f\, x_{1})\, s)\; d\mu(x_{1})\\
+ & = & \int_{X_{1}}((m\circ f)\, x_{1}\, s)\; d\mu(x_{1})\\
+ & = & (S>\!>\!=(m\circ f))\, s.\end{eqnarray*}
+
+\end_inset
+
+ 
+\begin_inset Formula \begin{eqnarray*}
+\\\end{eqnarray*}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Section
+The Lebesgue integral
+\end_layout
+
+\begin_layout Definition
+Measurable function.
+ Let 
+\begin_inset Formula $(X_{i},\mathcal{A}_{i})$
+\end_inset
+
+, 
+\begin_inset Formula $i=1,2$
+\end_inset
+
+, be measurable spaces.
+ A function 
+\begin_inset Formula $f:X_{1}\rightarrow X_{2}$
+\end_inset
+
+ is measurable with respect to 
+\begin_inset Formula $(\mathcal{A}_{1},\mathcal{A}_{2})$
+\end_inset
+
+ iff 
+\begin_inset Formula $f^{-1}(s)\in\mathcal{A}_{1}$
+\end_inset
+
+ for all 
+\begin_inset Formula $s\in\mathcal{A}_{2}$
+\end_inset
+
+.
+\end_layout
+
+\end_body
+\end_document
