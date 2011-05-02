@@ -1,0 +1,93 @@
+Types:
+  'a distribution
+  'a dist
+    (synonymm for 'a distribution option)
+  'a ~> 'b
+    (synonym for 'a -> 'b option)
+
+Definitions:
+
+prob mu A = (the probability of set A according to distribution mu)
+INT mu f = (the Lebesgue integral of f over measure mu)
+(lam x. e) = SOME (\x. e)
+
+lift0 y = SOME y
+lift1 f = SOME (\x. SOME (f x))
+        = SOME (lift0 o f)
+lift2 f = SOME (\x. SOME (\y. SOME (f x y)))
+        = SOME (\x. lift1 (f x))
+        = SOME (lift1 o f)
+lift3 f = SOME (\x. SOME (\y. SOME (\z. SOME (f x y z))))
+        = SOME (\x. lift2 (f x))
+        = SOME (lift2 o f)
+
+Notes from HOL:
+
+THE (SOME x) = x
+THE NONE is undefined
+
+Operations:
+
+>>= : 'a dist -> ('a -> 'b dist) -> 'b dist
+Def:
+  (NONE >>= m) = NONE
+  if prob mu (IS_NONE o m) > 0
+    then (SOME mu >>= m) = NONE
+    else (SOME mu >> m) = SOME nu where
+      prob nu A = INT mu (THE (m x) A)
+
+return : 'a -> 'a dist
+Def:
+  return x = SOME mu, where prob mu A = (x in A)
+
+par : num -> (num -> 'a dist) -> 'a list dist
+Def:
+  if (?i. i < n /\ f i = NONE)
+    then par n f = NONE
+    else par n f = SOME (the product measure of THE (f i) for 0 <= i < n)
+
+require : bool -> 'a option -> 'a option
+Def:
+  require T x = x
+  require F x = NONE
+
+req : bool -> 'a -> 'a option
+Def:
+  req T x = SOME x
+  req F x = NONE
+
+Definitions:
+
+[[ v ~ d1; d2 ]] == [[ d1 ]] >>= (\v. [[ d2 ]]) 
+[[ v <- e; d ]] == 
+  let x = [[ e ]] in
+  require (IS_SOME x) ((\v. [[ d ]]) (THE x))
+# x is a new variable
+[[ for v e body ]] ==
+  let n = [[ e ]] in
+  require (IS_SOME n) (par (THE n) (\v. [[ body ]]))
+# n is a new variable
+[[ return e ]] =
+  let x = [[ e ]] in
+  require (IS_SOME x) (return (THE x))
+[[ e1 e2 ]] =
+  let x1 = [[ e1 ]] in
+  let x2 = [[ e2 ]] in
+  require (IS_SOME x1 /\ IS_SOME x2) ((THE x1) (THE x2))
+
+NEXT: Define some distributions and functions
+
+[[ exp ]] = (lam x. SOME (exp x))
+[[ map ]] = (lam f. (lam xs. SOME (map f xs)))
+[[ dcat ]] = (lam p0.
+               let denom = sum p0 in
+               let n = length p0 in
+               let p = map (\x. x / denom) p0 in
+               req (denom > 0 /\ (!i. i < n ==> (p0 EL i) >= 0))
+                   (dcat p))
+[[ mvnorm ]] = (lam mu. lam Sigma.
+                 let n = length mu in
+                 req (is_matrix n n Sigma /\
+                      (is_symmetric Sigma) /\ (is_positive_definite Sigma))
+                     (mvnorm mu Sigma))
+[[ length ]] = lam xs. SOME (length xs)

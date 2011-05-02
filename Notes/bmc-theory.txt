@@ -15,9 +15,25 @@ has_measure : 'a measure -> ('a -> bool) -> xreal -> bool
 lebesgue_measurable_fct : ('a -> 'b) -> bool
 random_var : ('a -> 'b) -> 'a measure -> 'b measure
 
-Type: 'a measure
->>= : 'a measure -> ('a -> 'b measure) -> 'b measure
-  (include possibility of undefined?)
+Type: 'a distribution
+Type synonym: 'a dist means 'a distribution option
+>>= : 'a dist -> ('a -> 'b dist) -> 'b dist
+return : 'a -> 'a dist
+par : num -> (num -> 'a dist) -> 'a list dist
+precond : bool -> 'a -> 'a option
+
+
+
+
+
+prob (mu >>= m) A = 
+  case mu of
+     NONE -> NONE
+  || SOME mudef ->
+       if prob mudef (\x. IS_NONE (m x)) = 0
+       then INT mudef (\x. prob (THE (m x) A))
+
+
 has_density : 'a measure -> 'a -> real -> bool
 has_decomposition : 'a measure -> ('b -> real) -> ('b -> 'a) -> bool
 
@@ -26,6 +42,10 @@ has_decomposition : 'a measure -> ('b -> real) -> ('b -> 'a) -> bool
    has_decomposition (mu >>= m) (\(x,y). d x * d' (f x) y) (\(x,y). f' (f x) y)
 |- (!x. d x > 0 ==> P (f x)) /\ has_decomposition mu d f ==>
    for_almost_all mu P
+
+|- has_decomposition mu (d:unit # 'a -> real) f ==>
+   has_decomposition mu (\y. d ((), y)) (\y. f((), y))
+  [Do I really need this? Or just use Fubini?]
 
 return : 'a -> 'a measure
 |- has_decomposition (return v) (\x:unit. 1) (\x:unit. v)
@@ -43,3 +63,7 @@ What is the actual name for
 
 Need theorems for simplifying cases involving unit
 
+has_decomposition mu d f
+d:'a -> real
+f:'a -> 'b
+g:'s

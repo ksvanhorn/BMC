@@ -254,9 +254,7 @@ mnl u = dcat (map exp u)
 
 mnlregr X mu Sigma = distr {
   beta ~ mvnorm mu Sigma ;
-  par i (length X) {
-    y ~ mnl (X[i] %*% beta)
-  } ;
+  y ~ for i (length X) (mnl (X[i] %*% beta)) ;
   return (y, beta)
 }
 
