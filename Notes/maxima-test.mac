@@ -1,0 +1,201 @@
+infix("~", 180, 20);
+infix("<-", 180, 20);
+
+scale_usage_mode: '(
+  model(
+    inp(
+      # cutpoints
+      [nlevels,
+        integer(nlevels) and nlevels >= 2],
+      [cp,
+        is_arr(cp, realx, [nlevels + 1])
+        and cp[1] = -inf
+        and cp[nlevels + 1] = inf
+        and for_all(i, 1, nlevels, cp[i] < cp[i+1])],
+      [mu.nu,
+        is_arr(mu.nu, real, [3])],
+      [sigma.nu,
+        is_arr(sigma.nu, realp, [3])],
+      [nvars,
+        integerp(nvars)],
+      [nresp,
+        integerp(nresp)],
+      [mu.z,
+        is_arr(mu.z, real, [nvars])],
+      [Sigma.z,
+        is_pdmat(Sigma.z, nvars)],
+    var(
+      [data,
+        is_arr(data, any, [nresp, nvars])],
+      [c,
+        is_arr(c, any, [nlevels + 1])],
+      [tau,
+        is_arr(tau, any, [nresp])],
+      [sigma,
+        is_arr(sigma, any, [nresp])],
+      [eta.tls,
+         is_arr(eta.tls, any, [2])],
+      [S,
+         is_arr(S, any, [2,2])],
+      [nu],
+      [z,
+        is_arr(z, any, [nresp, nvars])]),
+    [ 
+      for (h, 1, 3,
+        nu[h] ~ N(mu.nu[i], sigma.nu[i]^2)),
+      S[1,1] <- exp(nu[1]),
+      S[2,2] <- exp(nu[2]),
+      S[1,2] <- exp((nu[1] + nu[2])/2) * tanh(nu[3]),
+      S[2,1] <- S[1,2],
+      eta.tls <- [0, -S[2,2]/2],
+      for(i, 1, nresp, [
+        [tau[i], log(sigma[i])] ~ MVN(eta.tls, S),
+        for(k, 1, nlevels + 1,
+          c[i,k] <- (cp[k] - tau[i]) / sigma[i]),
+        z[i,] ~ MVN(mu.z, Sigma.z)
+        for(j, 1, nvars,
+          data[i,j] <- cutp(z[i,j], c[i,]])])]))
+
+Assumptions:
+  integer(nlevels) and nlevels >= 2
+  and is_arr(cp, realx, [nlevels + 1])
+  and cp[1] = -inf
+  and cp[nlevels + 1] = inf
+  and for_all(i, 1, nlevels, cp[i] < cp[i+1])]
+  and is_arr(mu.nu, real, [3])
+  and is_arr(sigma.nu, realp, [3])
+  and integerp(nvars)
+  and integerp(nresp)
+  and is_arr(mu.z, real, [nvars])
+  and is_pdmat(Sigma.z, nvars)
+  and is_arr(data, any, [nresp, nvars]),
+  and is_arr(c, any, [nlevels + 1])
+  and is_arr(tau, any, [nresp])
+  and is_arr(sigma, any, [nresp])
+  and is_arr(eta.tls, any, [2])
+  and is_arr(S, any, [2,2])
+  and is_arr(z, any, [nresp, nvars])
+
+Inferred:
+  for_all(h, 1, 3, real(nu[h]))                     # from ~
+  and S[1,1] = exp(nu[1])                           # from <-
+  and S[2,2] = exp(nu[2])                           # from <-
+  and S[1,2] = exp((nu[1] + nu[2])/2) * tanh(nu[3]) # from <-
+  and S[2,1] = S[1,2]                               # from <-
+  and is_pdmat(S, 2)                                # inference
+  and is_arr(S, real, [2,2])                        # inference
+  and is_arr(eta.tls, real, [2])                    # <-, inference
+  and is_arr(tau, real, [nresp])                    # ~
+  and is_arr(sigma, realp, [nresp])                 # ~
+  and is_arr(cp, realx, [nlevel + 1])               # inference
+  and for_all(i, 1, nresp,
+        for_all(k, 1, nlevels,
+          c[i,k] = (cp[k] - tau[i]) / sigma[i]))    # <-
+  and is_arr(c, realx, [nresp, nlevel + 1])         # inference
+  and for_all(i, 1, nresp, c[i,1] = -inf)           # inference
+  and for_all(i, 1, nresp, c[i, nlevel+1] = inf)    # inference
+  and is_arr(z, real, [nresp, nvars])               # ~, inference
+  and for_all(i, 1, nresp,
+        for_all(j, 1, nvars,
+          data[i,j] = cutp(z[i,j], c[i,])))         # <-
+  and is_arr(data, integerp, [nresp, nvars])        # inference
+  and for_all(i, 1, nresp,
+        for_all(j, 1, nvars,
+          data[i,j] <= nlevels))                    # inference
+  and for_all(i, 1, nresp,
+        for_all(j, 1, nvars,
+          c[i, data[i,j]] <= z[i,j] < c[i, data[i,j]])) # inference
+
+PDF:
+  prod(h, 1, 3, N(nu[j], m.nu[i], sigma.nu[i]^2))
+  * prod(i, 1, nresp,
+      MVN([tau[i], log(sigma[i])], eta.tls, S)
+      * MVN(z[i,], mu.z, Sigma.z)
+      * prod(j, 1, nvars,
+          (let k = data[i,j] in (c[i,k] <= z[i,j] < c[i,k]))))
+
+
+
+
+
+halo_model: '(
+  model(
+    inp(
+      # cutpoints
+      [nlevels,
+        integer(nlevels) and nlevels >= 2],
+      [cp,
+        is_arr(cp, realx, [nlevels + 1])
+        and cp[1] = -inf
+        and cp[nlevels + 1] = inf
+        and for_all(i, 1, nlevels, cp[i] < cp[i+1])],
+      [mu.nu,
+        is_arr(mu.nu, real, [3])],
+      [sigma.nu,
+        is_arr(sigma.nu, realp, [3])],
+
+      # haloing
+      [nx,
+        integer(nx) and nx >= 1],
+      [mu.gamma,
+        is_arr(mu.gamma, real, [nx + 1])],
+      [sigma.gamma,
+        is_arr(sigma.gamma, realp, [nx + 1])],
+      [mu.mu.h,
+        is_arr(mu.mu.h, real, [nx + 1])],
+      [sigma.mu.h,
+        is_arr(sigma.mu.h, real, [nx + 1])],
+
+      # forming
+      [mu.mu.f.y,
+        real(mu.mu.f.y)],
+      [sigma.mu.f.y,
+        realp(sigma.mu.f.y)],
+      [mu.beta,
+        is_arr(mu.beta, real, [nx])],
+      [sigma.beta,
+        is_arr(sigma.beta, realp, [nx])],
+      [alpha.sigma.y,
+        realp(alpha.sigma.y)],
+      [beta.sigma.y,
+        realp(beta.sigma.y)],
+      [mu.mu.f.x,
+        is_arr(mu.mu.f.x, real, [nx])],
+      [sigma.mu.f.x,
+        is_arr(sigma.mu.f.x, real, [nx])],
+      [nu.Sigma.f.x,
+        real(nu.Sigma.f.x) and nu.Sigma.f.x > nx - 1],
+      [V.Sigma.f.x,
+        is_pdmat(V.Sigma.f.x, nx)],
+
+      # straight-lining
+      [mu.mu.s,
+        is_arr(mu.mu.s, real, [nx+1])],
+      [sigma.mu.s,
+        is_arr(sigma.mu.s, realp, [nx+1])],
+      [alpha.Psi.s,
+        is_arr(alpha.Psi.s, realp, [nx+1])],
+      [beta.Psi.s,
+        is_arr(beta.Psi.s, realp, [nx+1])],
+
+      [nresp,
+        integerp(nresp)],
+      [ncov,
+        integerp(ncov)],
+      [mu.delta,
+        is_arr(mu.delta, real, [3, ncov])],
+      [Sigma.delta,
+        is_arr(Sigma.delta, realp, [3, ncov, ncov])
+        and for_all(h, 1, 3, is_pdmat(Sigma.delta[h]))],
+      [u,
+        is_arr(u, real, ),
+
+    def(
+      forming = 0,
+      haloing = 1,
+      straight.line = 2),
+      
+      
+    var(
+      
+  ))

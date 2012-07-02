@@ -40,6 +40,7 @@ theorems-ams
 \tracking_changes false
 \output_changes false
 \author "" 
+\author "" 
 \end_header
 
 \begin_body
@@ -1606,15 +1607,27 @@ status open
 \begin_layout Definition
 ???.
  Given measure space 
-\begin_inset Formula $S=(X_{1},\mathcal{A}_{1},\mu_{1})$
+\begin_inset Formula $M=(X_{1},\mathcal{A}_{1},\mu_{1})$
 \end_inset
 
- and measurable function 
-\begin_inset Formula $(S,(X_{2},\mathcal{A}_{2}),f)$
+, a measurable space 
+\begin_inset Formula $S=(X_{2},\mathcal{A}_{2})$
+\end_inset
+
+, and measurable function 
+\begin_inset Formula $f$
+\end_inset
+
+ from 
+\begin_inset Formula $(X_{1},\mathcal{A}_{1})$
+\end_inset
+
+ to 
+\begin_inset Formula $S$
 \end_inset
 
 , the measure space 
-\begin_inset Formula $S\triangleright f$
+\begin_inset Formula $M\triangleright(f,S)$
 \end_inset
 
  is 
@@ -1669,7 +1682,7 @@ Given measure space
 \begin_inset Formula $m$
 \end_inset
 
- such that 
+ such that (1) 
 \begin_inset Formula $m(x)$
 \end_inset
 
@@ -1679,6 +1692,14 @@ Given measure space
 
  for almost all 
 \begin_inset Formula $x\in\mathcal{A}_{1}$
+\end_inset
+
+, and (2) 
+\begin_inset Formula $\lambda x.m\, x\, s$
+\end_inset
+
+ is a measureable function for all 
+\begin_inset Formula $s\in\mathcal{A}_{2}$
 \end_inset
 
 , define 
@@ -1752,6 +1773,10 @@ Let
 
 \end_layout
 
+\begin_layout Standard
+fff
+\end_layout
+
 \begin_layout Section
 The Lebesgue integral
 \end_layout
@@ -1784,6 +1809,10 @@ Measurable function.
 \end_inset
 
 .
+\end_layout
+
+\begin_layout Section
+Musings
 \end_layout
 
 \end_body

@@ -1,0 +1,375 @@
+SYNTAX
+------
+
+File ::= Empty | VarStmt? DataStmt? ModelStmt
+Empty ::=
+
+VarStmt ::= "var" DecList ";"?
+DecList ::= (NodeDec ",")* NodeDec
+NodeDec ::= Name ("[" DimList "]")?
+DimList ::= (Expr ",")* Expr
+  // Exprs must be constant integer-valued 
+
+DataStmt ::= "data" "{" RelationList "}"
+
+ModelStmt ::= "model" "{" RelationList "}"
+
+RelationList ::= Relation+
+Relation ::= StochRelation ";"? | DetermRelation ";"? | ForLoop
+ForLoop ::= Counter Relations
+Counter ::= "for" "(" Name "in" RangeElement ")"
+Relations ::= "{" RelationList "}"
+DetermRelation ::= Var "<-" Expr | Func "(" Var ")" "<-" Expr
+Func ::= Identifier
+StochRelation ::= Var "~" Distribution (Truncated | Interval)?
+
+Expr ::= Var | Double | "length" "(" Var ")" | Func "(" ExprList ")" |
+         Product | Sum | Expr "/" Expr | Expr "-" Expr | "-" Expr |
+         Expr Compare Expr | Expr "&&" Expr | Expr "||" Expr |
+         Expr Power Expr | Expr Special Expr | "(" Expr ")"
+Product ::= Expr "*" Expr
+Sum ::= Expr "+" Expr
+Compare ::= ">" | ">=" | "<" | "<=" | "==" | "!="
+Special ::= operator within "%%"
+Power ::= "^" | "**" // same meaning
+ExprList ::= (Expr ",")* Expr
+
+RangeElement ::= Empty | Expr | Expr ":" Expr
+RangeList ::= (RangeElement ",")* RangeElement
+Distribution ::= Func "(" ExprList? ")"
+Truncated ::= "T" "(" Expr? "," Expr? ")"
+Interval ::= "I" "(" Expr? "," Expr? ")"
+
+Var ::= Name ("[" RangeList "]")?
+
+Restrictions:
+- Nodes must form a directed acyclic graph
+- Top-level nodes are constant nodes defined in the model definition or in the
+  data file.
+- Scalars are considered to be vectors of length 1
+- Array declarations presumably must declare an array only once and
+  must be consistent with the defined relations.
+- Undeclared arrays: dimensions determed by
+  - data file
+  - using maximal index values on LHS of relation
+  - using dimensions of the parents
+- Data file may contain missing values, but no partially missing values for
+  multivariate nodes.
+- Data file defines parameters (unobserved nodes) of the model by
+  omission.
+
+Functions:
+- %*% : matrix multiplication
+- t() : transpose
+- base operators:
+  ||, &&, !, >, >=, <, <=, ==, +, -, *, /, %special%, - (unary), ^
+- Scalar functions:
+  +abs, +arccos, arccosh, +arcsin, arcinh, +arctan, arctanh,
+  +cos, cosh, cloglog, +equals(x,y), +exp, icloglog, ilogit,
+  +log, logfact, loggam, logit, phi, +pow(x,z), probit, round,
+  +sin, sinh, +sqrt, step, +tan, tanh, trunc
+- Aliases: acos, acosh, asin, asinh, atan
+- Link functions: cloglog, log, logit, probit
+- pdf, cdf, and quantile functions for a variety of distributions:
+  Bernoulli, Beta, Binomial, Chi-Square, Double exponential,
+  Exponential, F, Gamma, Generalized Gamma, ...
+- Scalar-valued, vector/array args:
+  inprod(x1,x2) : x1 and x2 have conforming dimensions
+  interp.line(e, v1, v2): R x R^n x R^n -> R
+  logdet: R^n^n -> R
+  max: any number of scalar, vector, or array args, returning scalar
+  min: ditto
+  mean : single general argument
+  prod : single general argument
+  sum : single general argument
+  sd : single general argument
+- Vector- and array-valued functions:
+  inverse: takes a symmetric p.d. matrix
+  mexp : takes a square matrix
+  rank : takes a vector
+  sort : takes a vector
+  %*% : conforming vectors or matrices
+- scalar functions taking scalar args are automatically vectorized;
+they can also be called when the args are arrays with conforming
+dimensions, or scalars (like in R).
+- length() returns the number of elements in a node array.
+- dim() returns a vector containing the dimensions of a node array.  This
+value can only be used after it is stored in an array, hence calls to
+the dim() function must always be in a data block.
+- msm module defines mexp (matrix exponential function)
+
+Distributions:
+- univariate continuous distributions
+  dbeta, dchisqr, ddexp, dexp, dgamma, dgen.gamma, dlnorm, ...
+- univariate discrete distributions
+  dbetabin, dbern, dbin, ...
+  some have args that must be integers
+- multivariate continuous distributions
+  vector arg, matrix arg
+- Aliases: dbinom, dchisq, dnbinom, dweibull, ddirich
+- mix module defines dnormmix(mu, tau, pi), a mixture of normals.
+- msm module defines dmstate: multi-state distribution describing
+transitions between observed states in continuous-time multi-state
+Markov transition models. (???)
+
+Notes:
+- Dirichlet distribution ddirch(alpha) can have some (not all)
+elements of alpha 0.
+- dmulti and dcat can take unnormalized probability vectors.
+- Logical nodes are not observable.
+- x ~ dinterval(t, c) says that x is a discretization of t defined by
+the cutpoints c. (Not a function, so as to allow x to be observable.)
+- y ~ dsum(x1, ..., xn) says that y is the sum of x1, ..., xn. (Not a
+function, so as to allow x to be observable.)
+- Data transformations take place in the data block. You may carry out
+transformations on the observed data here.
+- The data block may also contain stochastic relations.
+- Data block values are forward-sampled once and then values read back
+into data table.
+- Every node on LHS of relation in data statement will be considered
+observed data in the model statement.
+- T(L, U) indicates prior truncation of a distribution.
+- I(L, U) permitted as a synonym for T(L, U) when L and U are
+constants and the parameters of the distribution are also constants,
+for compatibility with OpenBUGS.
+
+-------------
+
+We need to add some extra things:
+- indication of what is the input
+- indication of what is the data
+
+distribution foo(v1 : t1, v2 : t2, ... vn : tn) =
+
+inputs
+  v1 : t1, v2 : t2, ... vn : tn;
+vars
+  u1 : tt1, u2 : tt2, ..., um : ttm;
+relations
+
+Type ::= PrimitiveType ("[" Dimensions "]")?
+PrimitiveType ::= "real" | "int" | "bool"
+
+-----------------
+HOL
+---
+
+transc
+powser
+lim
+seq
+nets
+topology
+real
+realax
+hreal
+hrat
+-quotient_list
+-quotient_option
+-quotient_pair
+-quotient_sum
+
+trans:
+- acs (arccos)
+- asn (arcsin)
+- atn (arctan)
+- cos
+- division (defines a sequence of points that partition an interval)
+- dsize (number of parts in a division)
+- exp
+- ln
+- pi
+- root (n-th roots)
+- rpow (real powers)
+- sin
+- sqrt
+- tan
+
+real:
+- clg (ceiling)
+- flr (floor)
+- sum (m,n) f (sum from i=m to i=m+n-1 of f i)
+- sumc n m f (sum from i=n to i=n+m-1 of f i)
+- abs
+- inf (infimum; set version of min)
+- sup (supremum; set version of max)
+- max x y
+- min x y
+- pos (thresholding function: pos x = 0 if x < 0, otherwise pos x = x)
+- pow (nonnegative integral powers of real numbers)
+- /
+- >=, >, <=
+- & (conversion from natural number to real)
+- - (subtraction)
+
+realax:
+- real_0, real_1
+- +
+- inv (inverse of real number)
+- <
+- *
+- - (unary negation)
+
+integer:
+- ABS (integer abs)
+- int_divides
+- int_max x y (integer max)
+- int_min x y (integer min)
+- $LEAST_INT P (min of integer set)
+- Num (conversion from int to num)
+- int_0, int_1
+- +, / (integer division), ** (integer to num power), 
+  % (int mod), *, - (unary), - (binary), quot, rem
+- >=, >, <=, <, 
+
+bool:
+- T, F
+- x /\ y
+- COND (if-then-else)
+- LET
+- ~ x
+- x \/ y
+
+list:
+- ++ (append)
+- DROP n lst
+- EL n lst
+- EVERY P lst (AND of P x for all x in lst)
+- EXISTS P lst (OR of P x for all x in lst)
+- FLAT lst (flatten a list of lists)
+- FOLDL, FOLDR
+- LENGTH
+- SUM (only of num?)
+
+rich_list:
+- AND_EL lst (AND of elements of lst)
+- OR_EL lst (OR of elements of lst)
+- REPLICATE n x (list of n x's)
+
+
+Need: a theory of arrays
+- array A 
+- matrix m n A : A is an m-by-n matrix
+- transpose
+- matrix-matrix multiplication
+- matrix-vector multiplation
+- inner product of vectors
+- determinant of matrix
+- lifting a scalar or lower-order array to a higher-order
+- range indexing
+
+HOL notes:
+- load (bring in already-established logical context)
+- Hol_datatype, Define, Hol_reln (define new concepts)
+- open <thyname>Theory;
+- val my_def = Define `fct arg1 ... argn = expr`;
+- set_fixity
+- help "<thyname>Theory" to look up defs and theorems and
+  proof procedures
+- Also DB.match and DB.find
+- new_axiom, new_definition, new_specification, new_type,
+  new_constant, new_type_definition
+- current_theory()
+- ancestry : string -> string list
+  ancestry "-" is dependencies of current theory
+- Turning a script into a theory:
+  - <hol-dir>/examples/euclid.sml is an example; see discussion
+    starting at end of p. 70 of tutorial
+  - Add "open HolKernel boolLib Parse bossLib" to beginning of script
+    (the modules on which this script depends)
+  - add val _ = new_theory <theory name>;
+  - replace any bare expressions with val _ = <expr>
+  - end with val _ = export_theory();
+  - use Holmake to compile the script.
+
+val twopi_def = Define `pi2 = 2 * pi`;
+
+val ind_def = Define `ind x = if x then &1 else &0`;
+
+val dnorm_def = Define
+  `dnorm mu tau x = exp(-tau / 2 * (x - mu) pow 2) * sqrt(tau / pi2)`;
+
+val dexp_def = Define
+  `dexp lambda x = ind (x >= 0) * lambda * exp(-lambda * x)`;
+
+val dbern_def = Define
+  `dbern p x = if x then p else &1-p`;
+
+val _ = new_constant("Gamma", ``:real -> real``);
+
+val Gamma_domain_range =
+  new_axiom("Gamma_domain_range", ``!x. x > 0 ==> Gamma x > 0``);
+
+(* remove this later *)
+set_fixity "rpow" (Infix(RIGHT, 700));
+val rpow_def = Define `x rpow y = exp(y * ln x)`;
+
+val dbeta_def = Define
+  `dbeta a b p = ind (0 < p /\ p < 1)
+                 * p rpow (a - 1) * (1 - p) rpow (b - 1)
+                 * (Gamma (a + b) / (Gamma a * Gamma b))`;
+
+val rfact_def = Define `RFACT n = & (FACT n)`;
+
+val dbin_def = Define
+  `dbin p n r = ind (0 <= r /\ r <= n) 
+                * p pow r * (1 - p) pow (n - r)
+                * (RFACT n / (RFACT r * RFACT(n - r)))`;
+
+val dunif_def = Define `dunif a b x = ind (a < x /\ x < b) / (a - b)`;
+
+val dgamma_def = Define
+  `dgamma a b x = ind (x > 0 ) * x rpow (a - 1) * exp(-b * x)
+                  * (b rpow a / Gamma a)`;
+
+val rsum_def = Define `RSUM lst = FOLDL $+ 0 lst`;
+
+val dcat_def = Define
+  `dcat pvec r = ind (r < LENGTH pvec) * EL r pvec / RSUM pvec`;
+
+val dlnorm_def = Define
+  `dlnorm mu tau x = ind (x > 0) / x * exp(-tau / 2 * (ln x - mu) pow 2)
+                     * sqrt(tau / pi2)`;
+
+val prodc_def = Define
+  `(prodc n 0 f = 1) /\ (prodc n (SUC m) f = (prodc n m f) * f(n + m))`;
+
+val ddirch_def = Define
+  `ddirch a p = ind ((LENGTH p = LENGTH a) /\ EVERY (\x. 0 < x /\ x < 1) p)
+                * prodc 0 (LENGTH p) (\i. (EL i p) rpow (EL i a - 1))
+                * (Gamma (RSUM a) / prodc 0 (LENGTH a) (\i. Gamma(EL i a)))`;
+
+val dmulti_def = Define
+  `dmulti p n x = let k = LENGTH p in
+                  ind ((LENGTH x = k) /\ (SUM x = n) /\ EVERY (\xi. xi >= 0) x)
+                  * prodc 0 k (\i. ((EL i p) / RSUM p) pow (EL i x))
+                  * (RFACT n / prodc 0 k (\i. RFACT (EL i x)))`;
+
+val genvec_def = Define `genvec n f = GENLIST f n`;
+set_fixity "%" (Infix(LEFT, 600));
+val scalar_mult_def = Define `x % lst = MAP (\y. x * y) lst`;
+val rowmat_def = Define `rowmat v = [v]`;
+val colmat_def = Define `colmat v = MAP (\x. [x]) v`;
+val is_matrix_def = Define
+  `is_matrix m n A = (LENGTH A = m) /\ EVERY (\row. LENGTH row = n) A`;
+val transpose_def = Define
+  `transp A = @B. ?m n. is_matrix m n A /\ B = 
+set_fixity "%*%" (Infix(LEFT, 600));
+val matmult_def = Define
+  `A %*% B =
+    let m = LENGTH A in
+    let n = 
+
+
+val det_def = Define
+  `det A = ...`;
+
+val dmnorm_def = Define
+  `dmnorm mu T x = let n in LENGTH mu in
+                   ind (LENGTH x = n)
+                   * sqrt(det T / pi2 pow n)
+                   * exp(
+
+
+(* To do: dmnorm, dwish *)
+

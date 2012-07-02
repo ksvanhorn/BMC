@@ -1,0 +1,2 @@
+Throw::nocatch: Uncaught Throw[Assertion failed: Catch[model[σ ∶ preal, x ∶ real, x ∼ dnorm[0, σ], x ← 3]] === "Multiple definitions for x:\n  ∼ dnorm[0, σ]\n  ← 3"] returned to top level.
+Hold[Throw["Assertion failed: Catch[model[σ ∶ preal, x ∶ real, x ∼ dnorm[0, σ], x ← 3]] === \"Multiple definitions for x:\\n  ∼ dnorm[0, σ]\\n  ← 3\""]]

@@ -1,0 +1,190 @@
+%{
+open AST;
+%}
+
+%token <string> NAME
+%token <bool> BOOL_LIT
+%token <int> INT_LIT
+%token <AST.real_struct> REAL_LIT
+%token <string> SPECIAL
+%token INPUTS VARS BODY
+%token TILDE LEFTARROW TRUNC FOR IN
+%token COMMA COLON END EOF
+%token LBRACK RBRACK LCURLY RCURLY LPAREN RPAREN
+%token REAL INT BOOL
+%token OR AND NOT EQUALS NOTEQUAL LESSEQ LESS GREATEREQ GREATER
+%token PLUS MINUS TIMES DIVIDE DIV MOD SPECIAL POWER
+
+%left OR
+%left AND
+%right NOT
+%nonassoc EQUALS NOTEQUAL LESSEQ LESS GREATEREQ GREATER
+%left PLUS MINUS
+%left TIMES DIVIDE DIV MOD
+%left SPECIAL
+%right NEG
+%right POWER
+
+%start Model
+%start Expr0
+%start Relation0
+%type <AST.expr> Expr0
+%type <AST.relation> Relation0
+%type <AST.model> Model
+%type <AST.decl list> InputStmt
+%type <AST.decl list> VarStmt
+%type <AST.decl list> DeclList
+%type <AST.decl list> DeclListR
+%type <AST.decl> Decl
+%type <AST.model_type> Type
+%type <AST.primitive_model_type> AtomicType
+%type <AST.expr list> DimList
+%type <AST.expr list> DimListR
+%type <AST.expr> Expr
+%type <AST.expr list> ExprList
+%type <AST.expr list> ExprListR
+%type <AST.var> Var
+%type <AST.range list> RangeList
+%type <AST.range list> RangeListR
+%type <AST.range> Range
+%type <AST.relation list> Body
+%type <AST.relation list> RelationListR
+%type <AST.relation list> RelationList
+%type <AST.relation> Relation
+%type <AST.relation> StochRelation
+%type <AST.distribution> Distribution
+%type <AST.relation> DetermRelation
+%type <AST.relation> ForLoop
+
+%%
+
+Expr0: Expr EOF { $1 }
+;
+Relation0: Relation EOF { $1 }
+;
+
+Model:
+  InputStmt VarStmt Body EOF { { inp = $1, var = $2, rel = $3 } }
+;
+InputStmt:
+  INPUTS DeclList     { $2 }
+;
+VarStmt:
+  VARS DeclList     { $2 }
+;
+DeclList:
+  DeclListR      { rev $1 }
+| DeclListR END  { rev $1 }
+;
+DeclListR:
+  Decl                 { [ $1 ] }
+| DeclListR Decl       { $2 :: $1 }
+| DeclListR COMMA Decl { $3 :: $1 }
+;
+Decl:
+  NAME COLON Type { { name = $1, typ = $3 } }
+;
+Type:
+  AtomicType                       { PrimitiveType $1 }
+| AtomicType LBRACK DimList RBRACK { ArrayType($1, $3) }
+;
+AtomicType:
+  REAL { Real }
+| INT  { Int }
+| BOOL { Bool }
+;  
+DimList:
+  DimListR { rev $1 }
+;
+DimListR:
+  Expr                { [ $1 ] }
+| DimListR COMMA Expr { $3 :: $1 }
+;
+Expr:
+  BOOL_LIT                    { BoolLiteral $1 }
+| INT_LIT                     { IntLiteral $1 }
+| REAL_LIT                    { RealLiteral $1 }
+| Var                         { VarExpr $1 }
+| NAME LPAREN ExprList RPAREN { ApplyFunc($1, $3) }
+| LPAREN Expr RPAREN          { $2 }
+| Expr POWER Expr             { ApplyFunc("^", [$1, $3]) }
+| Expr TIMES Expr             { ApplyFunc("*", [$1, $3]) }
+| Expr DIVIDE Expr            { ApplyFunc("/", [$1, $3]) }
+| Expr DIV Expr               { ApplyFunc("DIV", [$1, $3]) }
+| Expr MOD Expr               { ApplyFunc("MOD", [$1, $3]) }
+| Expr PLUS Expr              { ApplyFunc("+", [$1, $3]) }
+| Expr MINUS Expr             { ApplyFunc("-", [$1, $3]) }
+| Expr EQUALS Expr            { ApplyFunc("=", [$1, $3]) }
+| Expr NOTEQUAL Expr          { ApplyFunc("!=", [$1, $3]) }
+| Expr LESSEQ Expr            { ApplyFunc("<=", [$1, $3]) }
+| Expr LESS Expr              { ApplyFunc("<", [$1, $3]) }
+| Expr GREATEREQ Expr         { ApplyFunc(">=", [$1, $3]) }
+| Expr GREATER Expr           { ApplyFunc(">", [$1, $3]) }
+| Expr AND Expr               { ApplyFunc("AND", [$1, $3]) }
+| Expr OR Expr                { ApplyFunc("OR", [$1, $3]) }
+| NOT Expr                    { ApplyFunc("NOT", [$2]) }
+| MINUS Expr %prec NEG        { ApplyFunc("MINUS", [$2]) }
+| Expr SPECIAL Expr           { ApplyFunc($2, [$1, $3]) }
+;
+ExprList:
+  ExprListR { rev $1 }
+;
+ExprListR:
+                       { [ ] }
+| Expr                 { [ $1 ] }
+| ExprListR COMMA Expr { $3 :: $1 }
+;
+Var:
+  NAME                         { Var $1 }
+| NAME LBRACK RangeList RBRACK { ArrayVar($1, $3) }
+;
+RangeList:
+  RangeListR { rev $1 }
+;
+RangeListR:
+  Range                   { [ $1 ] }
+| RangeListR COMMA Range  { $3 :: $1 }
+;
+Range:
+                   { FullRange }
+| Expr             { PointRange $1 }
+| Expr COLON Expr  { Range($1, $3) }
+;
+Body:
+  BODY RelationList { $2 }
+;
+RelationList:
+  RelationListR { rev $1 }
+;
+RelationListR:
+  Relation               { [ $1 ] }
+| RelationListR Relation { $2 :: $1 }
+;
+Relation:
+  StochRelation      { $1 }
+| StochRelation END  { $1 }
+| DetermRelation     { $1 }
+| DetermRelation END { $1 }
+| ForLoop            { $1 }
+;
+StochRelation:
+  Var TILDE Distribution { StochRelation($1, $3) }
+;
+Distribution:
+  Distribution TRUNC LPAREN Expr COMMA Expr RPAREN
+    { TruncDistr($1, SOME $4, SOME $6) }
+| Distribution TRUNC LPAREN Expr COMMA RPAREN
+    { TruncDistr($1, SOME $4, NONE) }
+| Distribution TRUNC LPAREN COMMA Expr RPAREN
+    { TruncDistr($1, NONE, SOME $5) }
+| NAME LPAREN ExprList RPAREN
+    { Distr($1, $3) }
+;
+DetermRelation:
+  Var LEFTARROW Expr                     { DetermRelation($1,$3) }
+| NAME LPAREN Var RPAREN LEFTARROW Expr  { DetermLinkRelation($1,$3,$6) }
+;
+ForLoop:
+  FOR LPAREN NAME IN Expr COLON Expr RPAREN LCURLY RelationList RCURLY
+    { ForLoop($3, $5, $7, $10) }
+;

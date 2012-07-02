@@ -1,0 +1,2616 @@
+   0  $accept : %entry% $end
+
+   1  Main : InputStmt VarStmt Body EOF
+
+   2  InputStmt : INPUTS DeclList
+
+   3  VarStmt : VARS DeclList
+
+   4  DeclList : DeclListR
+   5           | DeclListR END
+
+   6  DeclListR : Decl
+   7            | DeclListR Decl
+   8            | DeclListR COMMA Decl
+
+   9  Decl : NAME COLON Type
+
+  10  Type : AtomicType
+  11       | AtomicType LBRACK DimList RBRACK
+
+  12  AtomicType : REAL
+  13             | INT
+  14             | BOOL
+
+  15  DimList : DimListR
+
+  16  DimListR : Expr
+  17           | DimListR COMMA Expr
+
+  18  Expr : BOOL_LIT
+  19       | INT_LIT
+  20       | REAL_LIT
+  21       | Var
+  22       | NAME LPAREN ExprList RPAREN
+  23       | LPAREN Expr RPAREN
+  24       | Expr POWER Expr
+  25       | Expr TIMES Expr
+  26       | Expr DIVIDE Expr
+  27       | Expr DIV Expr
+  28       | Expr MOD Expr
+  29       | Expr PLUS Expr
+  30       | Expr MINUS Expr
+  31       | Expr EQUALS Expr
+  32       | Expr NOTEQUAL Expr
+  33       | Expr LESSEQ Expr
+  34       | Expr LESS Expr
+  35       | Expr GREATEREQ Expr
+  36       | Expr GREATER Expr
+  37       | Expr AND Expr
+  38       | Expr OR Expr
+  39       | NOT Expr
+  40       | MINUS Expr
+  41       | Expr SPECIAL Expr
+
+  42  ExprList : ExprListR
+
+  43  ExprListR : Expr
+  44            | ExprListR COMMA Expr
+
+  45  Var : NAME
+  46      | NAME LBRACK RangeList RBRACK
+
+  47  RangeList : RangeListR
+
+  48  RangeListR : Range
+  49             | RangeListR COMMA Range
+
+  50  Range :
+  51        | Expr
+  52        | Expr COLON Expr
+
+  53  Body : MODEL RelationList
+
+  54  RelationList : RelationListR
+
+  55  RelationListR : Relation
+  56                | RelationListR Relation
+
+  57  Relation : StochRelation
+  58           | StochRelation END
+  59           | DetermRelation
+  60           | DetermRelation END
+  61           | ForLoop
+
+  62  StochRelation : Var TILDE Distribution
+
+  63  Distribution : Distribution TRUNC LPAREN Expr COMMA Expr RPAREN
+  64               | Distribution TRUNC LPAREN Expr COMMA RPAREN
+  65               | Distribution TRUNC LPAREN COMMA Expr RPAREN
+  66               | NAME LPAREN ExprList RPAREN
+
+  67  DetermRelation : Var LEFTARROW Expr
+  68                 | NAME LPAREN Var RPAREN LEFTARROW Expr
+
+  69  ForLoop : FOR LPAREN NAME IN Expr COLON Expr RPAREN LCURLY RelationList RCURLY
+
+  70  %entry% : '\001' Main
+
+state 0
+	$accept : . %entry% $end  (0)
+
+	'\001'  shift 1
+	.  error
+
+	%entry%  goto 2
+
+
+state 1
+	%entry% : '\001' . Main  (70)
+
+	INPUTS  shift 3
+	.  error
+
+	Main  goto 4
+	InputStmt  goto 5
+
+
+state 2
+	$accept : %entry% . $end  (0)
+
+	$end  accept
+
+
+state 3
+	InputStmt : INPUTS . DeclList  (2)
+
+	NAME  shift 6
+	.  error
+
+	DeclList  goto 7
+	DeclListR  goto 8
+	Decl  goto 9
+
+
+state 4
+	%entry% : '\001' Main .  (70)
+
+	.  reduce 70
+
+
+state 5
+	Main : InputStmt . VarStmt Body EOF  (1)
+
+	VARS  shift 10
+	.  error
+
+	VarStmt  goto 11
+
+
+state 6
+	Decl : NAME . COLON Type  (9)
+
+	COLON  shift 12
+	.  error
+
+
+state 7
+	InputStmt : INPUTS DeclList .  (2)
+
+	.  reduce 2
+
+
+state 8
+	DeclList : DeclListR .  (4)
+	DeclList : DeclListR . END  (5)
+	DeclListR : DeclListR . Decl  (7)
+	DeclListR : DeclListR . COMMA Decl  (8)
+
+	COMMA  shift 13
+	END  shift 14
+	NAME  shift 6
+	MODEL  reduce 4
+	VARS  reduce 4
+
+	Decl  goto 15
+
+
+state 9
+	DeclListR : Decl .  (6)
+
+	.  reduce 6
+
+
+state 10
+	VarStmt : VARS . DeclList  (3)
+
+	NAME  shift 6
+	.  error
+
+	DeclList  goto 16
+	DeclListR  goto 8
+	Decl  goto 9
+
+
+state 11
+	Main : InputStmt VarStmt . Body EOF  (1)
+
+	MODEL  shift 17
+	.  error
+
+	Body  goto 18
+
+
+state 12
+	Decl : NAME COLON . Type  (9)
+
+	BOOL  shift 19
+	INT  shift 20
+	REAL  shift 21
+	.  error
+
+	Type  goto 22
+	AtomicType  goto 23
+
+
+state 13
+	DeclListR : DeclListR COMMA . Decl  (8)
+
+	NAME  shift 6
+	.  error
+
+	Decl  goto 24
+
+
+state 14
+	DeclList : DeclListR END .  (5)
+
+	.  reduce 5
+
+
+state 15
+	DeclListR : DeclListR Decl .  (7)
+
+	.  reduce 7
+
+
+state 16
+	VarStmt : VARS DeclList .  (3)
+
+	.  reduce 3
+
+
+state 17
+	Body : MODEL . RelationList  (53)
+
+	FOR  shift 25
+	NAME  shift 26
+	.  error
+
+	Var  goto 27
+	RelationListR  goto 28
+	RelationList  goto 29
+	Relation  goto 30
+	StochRelation  goto 31
+	DetermRelation  goto 32
+	ForLoop  goto 33
+
+
+state 18
+	Main : InputStmt VarStmt Body . EOF  (1)
+
+	EOF  shift 34
+	.  error
+
+
+state 19
+	AtomicType : BOOL .  (14)
+
+	.  reduce 14
+
+
+state 20
+	AtomicType : INT .  (13)
+
+	.  reduce 13
+
+
+state 21
+	AtomicType : REAL .  (12)
+
+	.  reduce 12
+
+
+state 22
+	Decl : NAME COLON Type .  (9)
+
+	.  reduce 9
+
+
+state 23
+	Type : AtomicType .  (10)
+	Type : AtomicType . LBRACK DimList RBRACK  (11)
+
+	LBRACK  shift 35
+	COMMA  reduce 10
+	END  reduce 10
+	MODEL  reduce 10
+	NAME  reduce 10
+	VARS  reduce 10
+
+
+state 24
+	DeclListR : DeclListR COMMA Decl .  (8)
+
+	.  reduce 8
+
+
+state 25
+	ForLoop : FOR . LPAREN NAME IN Expr COLON Expr RPAREN LCURLY RelationList RCURLY  (69)
+
+	LPAREN  shift 36
+	.  error
+
+
+state 26
+	Var : NAME .  (45)
+	Var : NAME . LBRACK RangeList RBRACK  (46)
+	DetermRelation : NAME . LPAREN Var RPAREN LEFTARROW Expr  (68)
+
+	LBRACK  shift 37
+	LPAREN  shift 38
+	LEFTARROW  reduce 45
+	TILDE  reduce 45
+
+
+state 27
+	StochRelation : Var . TILDE Distribution  (62)
+	DetermRelation : Var . LEFTARROW Expr  (67)
+
+	LEFTARROW  shift 39
+	TILDE  shift 40
+	.  error
+
+
+state 28
+	RelationList : RelationListR .  (54)
+	RelationListR : RelationListR . Relation  (56)
+
+	FOR  shift 25
+	NAME  shift 26
+	EOF  reduce 54
+	RCURLY  reduce 54
+
+	Var  goto 27
+	Relation  goto 41
+	StochRelation  goto 31
+	DetermRelation  goto 32
+	ForLoop  goto 33
+
+
+state 29
+	Body : MODEL RelationList .  (53)
+
+	.  reduce 53
+
+
+state 30
+	RelationListR : Relation .  (55)
+
+	.  reduce 55
+
+
+state 31
+	Relation : StochRelation .  (57)
+	Relation : StochRelation . END  (58)
+
+	END  shift 42
+	EOF  reduce 57
+	FOR  reduce 57
+	NAME  reduce 57
+	RCURLY  reduce 57
+
+
+state 32
+	Relation : DetermRelation .  (59)
+	Relation : DetermRelation . END  (60)
+
+	END  shift 43
+	EOF  reduce 59
+	FOR  reduce 59
+	NAME  reduce 59
+	RCURLY  reduce 59
+
+
+state 33
+	Relation : ForLoop .  (61)
+
+	.  reduce 61
+
+
+state 34
+	Main : InputStmt VarStmt Body EOF .  (1)
+
+	.  reduce 1
+
+
+state 35
+	Type : AtomicType LBRACK . DimList RBRACK  (11)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	DimList  goto 51
+	DimListR  goto 52
+	Expr  goto 53
+	Var  goto 54
+
+
+state 36
+	ForLoop : FOR LPAREN . NAME IN Expr COLON Expr RPAREN LCURLY RelationList RCURLY  (69)
+
+	NAME  shift 55
+	.  error
+
+
+state 37
+	Var : NAME LBRACK . RangeList RBRACK  (46)
+	Range : .  (50)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	COMMA  reduce 50
+	RBRACK  reduce 50
+
+	Expr  goto 56
+	Var  goto 54
+	RangeList  goto 57
+	RangeListR  goto 58
+	Range  goto 59
+
+
+state 38
+	DetermRelation : NAME LPAREN . Var RPAREN LEFTARROW Expr  (68)
+
+	NAME  shift 60
+	.  error
+
+	Var  goto 61
+
+
+state 39
+	DetermRelation : Var LEFTARROW . Expr  (67)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 62
+	Var  goto 54
+
+
+state 40
+	StochRelation : Var TILDE . Distribution  (62)
+
+	NAME  shift 63
+	.  error
+
+	Distribution  goto 64
+
+
+state 41
+	RelationListR : RelationListR Relation .  (56)
+
+	.  reduce 56
+
+
+state 42
+	Relation : StochRelation END .  (58)
+
+	.  reduce 58
+
+
+state 43
+	Relation : DetermRelation END .  (60)
+
+	.  reduce 60
+
+
+state 44
+	Expr : BOOL_LIT .  (18)
+
+	.  reduce 18
+
+
+state 45
+	Expr : INT_LIT .  (19)
+
+	.  reduce 19
+
+
+state 46
+	Expr : LPAREN . Expr RPAREN  (23)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 65
+	Var  goto 54
+
+
+state 47
+	Expr : NAME . LPAREN ExprList RPAREN  (22)
+	Var : NAME .  (45)
+	Var : NAME . LBRACK RangeList RBRACK  (46)
+
+	LBRACK  shift 37
+	LPAREN  shift 66
+	COLON  reduce 45
+	COMMA  reduce 45
+	END  reduce 45
+	EOF  reduce 45
+	FOR  reduce 45
+	NAME  reduce 45
+	RBRACK  reduce 45
+	RCURLY  reduce 45
+	RPAREN  reduce 45
+	SPECIAL  reduce 45
+	OR  reduce 45
+	AND  reduce 45
+	EQUALS  reduce 45
+	NOTEQUAL  reduce 45
+	LESSEQ  reduce 45
+	LESS  reduce 45
+	GREATEREQ  reduce 45
+	GREATER  reduce 45
+	PLUS  reduce 45
+	MINUS  reduce 45
+	TIMES  reduce 45
+	DIVIDE  reduce 45
+	DIV  reduce 45
+	MOD  reduce 45
+	POWER  reduce 45
+
+
+state 48
+	Expr : REAL_LIT .  (20)
+
+	.  reduce 20
+
+
+state 49
+	Expr : NOT . Expr  (39)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 67
+	Var  goto 54
+
+
+state 50
+	Expr : MINUS . Expr  (40)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 68
+	Var  goto 54
+
+
+state 51
+	Type : AtomicType LBRACK DimList . RBRACK  (11)
+
+	RBRACK  shift 69
+	.  error
+
+
+state 52
+	DimList : DimListR .  (15)
+	DimListR : DimListR . COMMA Expr  (17)
+
+	COMMA  shift 70
+	RBRACK  reduce 15
+
+
+state 53
+	DimListR : Expr .  (16)
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : Expr . SPECIAL Expr  (41)
+
+	SPECIAL  shift 71
+	OR  shift 72
+	AND  shift 73
+	EQUALS  shift 74
+	NOTEQUAL  shift 75
+	LESSEQ  shift 76
+	LESS  shift 77
+	GREATEREQ  shift 78
+	GREATER  shift 79
+	PLUS  shift 80
+	MINUS  shift 81
+	TIMES  shift 82
+	DIVIDE  shift 83
+	DIV  shift 84
+	MOD  shift 85
+	POWER  shift 86
+	COMMA  reduce 16
+	RBRACK  reduce 16
+
+
+state 54
+	Expr : Var .  (21)
+
+	.  reduce 21
+
+
+state 55
+	ForLoop : FOR LPAREN NAME . IN Expr COLON Expr RPAREN LCURLY RelationList RCURLY  (69)
+
+	IN  shift 87
+	.  error
+
+
+state 56
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : Expr . SPECIAL Expr  (41)
+	Range : Expr .  (51)
+	Range : Expr . COLON Expr  (52)
+
+	COLON  shift 88
+	SPECIAL  shift 71
+	OR  shift 72
+	AND  shift 73
+	EQUALS  shift 74
+	NOTEQUAL  shift 75
+	LESSEQ  shift 76
+	LESS  shift 77
+	GREATEREQ  shift 78
+	GREATER  shift 79
+	PLUS  shift 80
+	MINUS  shift 81
+	TIMES  shift 82
+	DIVIDE  shift 83
+	DIV  shift 84
+	MOD  shift 85
+	POWER  shift 86
+	COMMA  reduce 51
+	RBRACK  reduce 51
+
+
+state 57
+	Var : NAME LBRACK RangeList . RBRACK  (46)
+
+	RBRACK  shift 89
+	.  error
+
+
+state 58
+	RangeList : RangeListR .  (47)
+	RangeListR : RangeListR . COMMA Range  (49)
+
+	COMMA  shift 90
+	RBRACK  reduce 47
+
+
+state 59
+	RangeListR : Range .  (48)
+
+	.  reduce 48
+
+
+state 60
+	Var : NAME .  (45)
+	Var : NAME . LBRACK RangeList RBRACK  (46)
+
+	LBRACK  shift 37
+	RPAREN  reduce 45
+
+
+state 61
+	DetermRelation : NAME LPAREN Var . RPAREN LEFTARROW Expr  (68)
+
+	RPAREN  shift 91
+	.  error
+
+
+state 62
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : Expr . SPECIAL Expr  (41)
+	DetermRelation : Var LEFTARROW Expr .  (67)
+
+	SPECIAL  shift 71
+	OR  shift 72
+	AND  shift 73
+	EQUALS  shift 74
+	NOTEQUAL  shift 75
+	LESSEQ  shift 76
+	LESS  shift 77
+	GREATEREQ  shift 78
+	GREATER  shift 79
+	PLUS  shift 80
+	MINUS  shift 81
+	TIMES  shift 82
+	DIVIDE  shift 83
+	DIV  shift 84
+	MOD  shift 85
+	POWER  shift 86
+	END  reduce 67
+	EOF  reduce 67
+	FOR  reduce 67
+	NAME  reduce 67
+	RCURLY  reduce 67
+
+
+state 63
+	Distribution : NAME . LPAREN ExprList RPAREN  (66)
+
+	LPAREN  shift 92
+	.  error
+
+
+state 64
+	StochRelation : Var TILDE Distribution .  (62)
+	Distribution : Distribution . TRUNC LPAREN Expr COMMA Expr RPAREN  (63)
+	Distribution : Distribution . TRUNC LPAREN Expr COMMA RPAREN  (64)
+	Distribution : Distribution . TRUNC LPAREN COMMA Expr RPAREN  (65)
+
+	TRUNC  shift 93
+	END  reduce 62
+	EOF  reduce 62
+	FOR  reduce 62
+	NAME  reduce 62
+	RCURLY  reduce 62
+
+
+state 65
+	Expr : LPAREN Expr . RPAREN  (23)
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : Expr . SPECIAL Expr  (41)
+
+	RPAREN  shift 94
+	SPECIAL  shift 71
+	OR  shift 72
+	AND  shift 73
+	EQUALS  shift 74
+	NOTEQUAL  shift 75
+	LESSEQ  shift 76
+	LESS  shift 77
+	GREATEREQ  shift 78
+	GREATER  shift 79
+	PLUS  shift 80
+	MINUS  shift 81
+	TIMES  shift 82
+	DIVIDE  shift 83
+	DIV  shift 84
+	MOD  shift 85
+	POWER  shift 86
+	.  error
+
+
+state 66
+	Expr : NAME LPAREN . ExprList RPAREN  (22)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 95
+	ExprList  goto 96
+	ExprListR  goto 97
+	Var  goto 54
+
+
+state 67
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : NOT Expr .  (39)
+	Expr : Expr . SPECIAL Expr  (41)
+
+	SPECIAL  shift 71
+	EQUALS  shift 74
+	NOTEQUAL  shift 75
+	LESSEQ  shift 76
+	LESS  shift 77
+	GREATEREQ  shift 78
+	GREATER  shift 79
+	PLUS  shift 80
+	MINUS  shift 81
+	TIMES  shift 82
+	DIVIDE  shift 83
+	DIV  shift 84
+	MOD  shift 85
+	POWER  shift 86
+	COLON  reduce 39
+	COMMA  reduce 39
+	END  reduce 39
+	EOF  reduce 39
+	FOR  reduce 39
+	NAME  reduce 39
+	RBRACK  reduce 39
+	RCURLY  reduce 39
+	RPAREN  reduce 39
+	OR  reduce 39
+	AND  reduce 39
+
+
+state 68
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : MINUS Expr .  (40)
+	Expr : Expr . SPECIAL Expr  (41)
+
+	POWER  shift 86
+	COLON  reduce 40
+	COMMA  reduce 40
+	END  reduce 40
+	EOF  reduce 40
+	FOR  reduce 40
+	NAME  reduce 40
+	RBRACK  reduce 40
+	RCURLY  reduce 40
+	RPAREN  reduce 40
+	SPECIAL  reduce 40
+	OR  reduce 40
+	AND  reduce 40
+	EQUALS  reduce 40
+	NOTEQUAL  reduce 40
+	LESSEQ  reduce 40
+	LESS  reduce 40
+	GREATEREQ  reduce 40
+	GREATER  reduce 40
+	PLUS  reduce 40
+	MINUS  reduce 40
+	TIMES  reduce 40
+	DIVIDE  reduce 40
+	DIV  reduce 40
+	MOD  reduce 40
+
+
+state 69
+	Type : AtomicType LBRACK DimList RBRACK .  (11)
+
+	.  reduce 11
+
+
+state 70
+	DimListR : DimListR COMMA . Expr  (17)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 98
+	Var  goto 54
+
+
+state 71
+	Expr : Expr SPECIAL . Expr  (41)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 99
+	Var  goto 54
+
+
+state 72
+	Expr : Expr OR . Expr  (38)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 100
+	Var  goto 54
+
+
+state 73
+	Expr : Expr AND . Expr  (37)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 101
+	Var  goto 54
+
+
+state 74
+	Expr : Expr EQUALS . Expr  (31)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 102
+	Var  goto 54
+
+
+state 75
+	Expr : Expr NOTEQUAL . Expr  (32)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 103
+	Var  goto 54
+
+
+state 76
+	Expr : Expr LESSEQ . Expr  (33)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 104
+	Var  goto 54
+
+
+state 77
+	Expr : Expr LESS . Expr  (34)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 105
+	Var  goto 54
+
+
+state 78
+	Expr : Expr GREATEREQ . Expr  (35)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 106
+	Var  goto 54
+
+
+state 79
+	Expr : Expr GREATER . Expr  (36)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 107
+	Var  goto 54
+
+
+state 80
+	Expr : Expr PLUS . Expr  (29)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 108
+	Var  goto 54
+
+
+state 81
+	Expr : Expr MINUS . Expr  (30)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 109
+	Var  goto 54
+
+
+state 82
+	Expr : Expr TIMES . Expr  (25)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 110
+	Var  goto 54
+
+
+state 83
+	Expr : Expr DIVIDE . Expr  (26)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 111
+	Var  goto 54
+
+
+state 84
+	Expr : Expr DIV . Expr  (27)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 112
+	Var  goto 54
+
+
+state 85
+	Expr : Expr MOD . Expr  (28)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 113
+	Var  goto 54
+
+
+state 86
+	Expr : Expr POWER . Expr  (24)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 114
+	Var  goto 54
+
+
+state 87
+	ForLoop : FOR LPAREN NAME IN . Expr COLON Expr RPAREN LCURLY RelationList RCURLY  (69)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 115
+	Var  goto 54
+
+
+state 88
+	Range : Expr COLON . Expr  (52)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 116
+	Var  goto 54
+
+
+state 89
+	Var : NAME LBRACK RangeList RBRACK .  (46)
+
+	.  reduce 46
+
+
+state 90
+	RangeListR : RangeListR COMMA . Range  (49)
+	Range : .  (50)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	COMMA  reduce 50
+	RBRACK  reduce 50
+
+	Expr  goto 56
+	Var  goto 54
+	Range  goto 117
+
+
+state 91
+	DetermRelation : NAME LPAREN Var RPAREN . LEFTARROW Expr  (68)
+
+	LEFTARROW  shift 118
+	.  error
+
+
+state 92
+	Distribution : NAME LPAREN . ExprList RPAREN  (66)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 95
+	ExprList  goto 119
+	ExprListR  goto 97
+	Var  goto 54
+
+
+state 93
+	Distribution : Distribution TRUNC . LPAREN Expr COMMA Expr RPAREN  (63)
+	Distribution : Distribution TRUNC . LPAREN Expr COMMA RPAREN  (64)
+	Distribution : Distribution TRUNC . LPAREN COMMA Expr RPAREN  (65)
+
+	LPAREN  shift 120
+	.  error
+
+
+state 94
+	Expr : LPAREN Expr RPAREN .  (23)
+
+	.  reduce 23
+
+
+state 95
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : Expr . SPECIAL Expr  (41)
+	ExprListR : Expr .  (43)
+
+	SPECIAL  shift 71
+	OR  shift 72
+	AND  shift 73
+	EQUALS  shift 74
+	NOTEQUAL  shift 75
+	LESSEQ  shift 76
+	LESS  shift 77
+	GREATEREQ  shift 78
+	GREATER  shift 79
+	PLUS  shift 80
+	MINUS  shift 81
+	TIMES  shift 82
+	DIVIDE  shift 83
+	DIV  shift 84
+	MOD  shift 85
+	POWER  shift 86
+	COMMA  reduce 43
+	RPAREN  reduce 43
+
+
+state 96
+	Expr : NAME LPAREN ExprList . RPAREN  (22)
+
+	RPAREN  shift 121
+	.  error
+
+
+state 97
+	ExprList : ExprListR .  (42)
+	ExprListR : ExprListR . COMMA Expr  (44)
+
+	COMMA  shift 122
+	RPAREN  reduce 42
+
+
+state 98
+	DimListR : DimListR COMMA Expr .  (17)
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : Expr . SPECIAL Expr  (41)
+
+	SPECIAL  shift 71
+	OR  shift 72
+	AND  shift 73
+	EQUALS  shift 74
+	NOTEQUAL  shift 75
+	LESSEQ  shift 76
+	LESS  shift 77
+	GREATEREQ  shift 78
+	GREATER  shift 79
+	PLUS  shift 80
+	MINUS  shift 81
+	TIMES  shift 82
+	DIVIDE  shift 83
+	DIV  shift 84
+	MOD  shift 85
+	POWER  shift 86
+	COMMA  reduce 17
+	RBRACK  reduce 17
+
+
+state 99
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : Expr . SPECIAL Expr  (41)
+	Expr : Expr SPECIAL Expr .  (41)
+
+	POWER  shift 86
+	COLON  reduce 41
+	COMMA  reduce 41
+	END  reduce 41
+	EOF  reduce 41
+	FOR  reduce 41
+	NAME  reduce 41
+	RBRACK  reduce 41
+	RCURLY  reduce 41
+	RPAREN  reduce 41
+	SPECIAL  reduce 41
+	OR  reduce 41
+	AND  reduce 41
+	EQUALS  reduce 41
+	NOTEQUAL  reduce 41
+	LESSEQ  reduce 41
+	LESS  reduce 41
+	GREATEREQ  reduce 41
+	GREATER  reduce 41
+	PLUS  reduce 41
+	MINUS  reduce 41
+	TIMES  reduce 41
+	DIVIDE  reduce 41
+	DIV  reduce 41
+	MOD  reduce 41
+
+
+state 100
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : Expr OR Expr .  (38)
+	Expr : Expr . SPECIAL Expr  (41)
+
+	SPECIAL  shift 71
+	AND  shift 73
+	EQUALS  shift 74
+	NOTEQUAL  shift 75
+	LESSEQ  shift 76
+	LESS  shift 77
+	GREATEREQ  shift 78
+	GREATER  shift 79
+	PLUS  shift 80
+	MINUS  shift 81
+	TIMES  shift 82
+	DIVIDE  shift 83
+	DIV  shift 84
+	MOD  shift 85
+	POWER  shift 86
+	COLON  reduce 38
+	COMMA  reduce 38
+	END  reduce 38
+	EOF  reduce 38
+	FOR  reduce 38
+	NAME  reduce 38
+	RBRACK  reduce 38
+	RCURLY  reduce 38
+	RPAREN  reduce 38
+	OR  reduce 38
+
+
+state 101
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr AND Expr .  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : Expr . SPECIAL Expr  (41)
+
+	SPECIAL  shift 71
+	EQUALS  shift 74
+	NOTEQUAL  shift 75
+	LESSEQ  shift 76
+	LESS  shift 77
+	GREATEREQ  shift 78
+	GREATER  shift 79
+	PLUS  shift 80
+	MINUS  shift 81
+	TIMES  shift 82
+	DIVIDE  shift 83
+	DIV  shift 84
+	MOD  shift 85
+	POWER  shift 86
+	COLON  reduce 37
+	COMMA  reduce 37
+	END  reduce 37
+	EOF  reduce 37
+	FOR  reduce 37
+	NAME  reduce 37
+	RBRACK  reduce 37
+	RCURLY  reduce 37
+	RPAREN  reduce 37
+	OR  reduce 37
+	AND  reduce 37
+
+
+state 102
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr EQUALS Expr .  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : Expr . SPECIAL Expr  (41)
+
+	SPECIAL  shift 71
+	PLUS  shift 80
+	MINUS  shift 81
+	TIMES  shift 82
+	DIVIDE  shift 83
+	DIV  shift 84
+	MOD  shift 85
+	POWER  shift 86
+	COLON  reduce 31
+	COMMA  reduce 31
+	END  reduce 31
+	EOF  reduce 31
+	FOR  reduce 31
+	NAME  reduce 31
+	RBRACK  reduce 31
+	RCURLY  reduce 31
+	RPAREN  reduce 31
+	OR  reduce 31
+	AND  reduce 31
+
+
+state 103
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr NOTEQUAL Expr .  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : Expr . SPECIAL Expr  (41)
+
+	SPECIAL  shift 71
+	PLUS  shift 80
+	MINUS  shift 81
+	TIMES  shift 82
+	DIVIDE  shift 83
+	DIV  shift 84
+	MOD  shift 85
+	POWER  shift 86
+	COLON  reduce 32
+	COMMA  reduce 32
+	END  reduce 32
+	EOF  reduce 32
+	FOR  reduce 32
+	NAME  reduce 32
+	RBRACK  reduce 32
+	RCURLY  reduce 32
+	RPAREN  reduce 32
+	OR  reduce 32
+	AND  reduce 32
+
+
+state 104
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr LESSEQ Expr .  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : Expr . SPECIAL Expr  (41)
+
+	SPECIAL  shift 71
+	PLUS  shift 80
+	MINUS  shift 81
+	TIMES  shift 82
+	DIVIDE  shift 83
+	DIV  shift 84
+	MOD  shift 85
+	POWER  shift 86
+	COLON  reduce 33
+	COMMA  reduce 33
+	END  reduce 33
+	EOF  reduce 33
+	FOR  reduce 33
+	NAME  reduce 33
+	RBRACK  reduce 33
+	RCURLY  reduce 33
+	RPAREN  reduce 33
+	OR  reduce 33
+	AND  reduce 33
+
+
+state 105
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr LESS Expr .  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : Expr . SPECIAL Expr  (41)
+
+	SPECIAL  shift 71
+	PLUS  shift 80
+	MINUS  shift 81
+	TIMES  shift 82
+	DIVIDE  shift 83
+	DIV  shift 84
+	MOD  shift 85
+	POWER  shift 86
+	COLON  reduce 34
+	COMMA  reduce 34
+	END  reduce 34
+	EOF  reduce 34
+	FOR  reduce 34
+	NAME  reduce 34
+	RBRACK  reduce 34
+	RCURLY  reduce 34
+	RPAREN  reduce 34
+	OR  reduce 34
+	AND  reduce 34
+
+
+state 106
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr GREATEREQ Expr .  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : Expr . SPECIAL Expr  (41)
+
+	SPECIAL  shift 71
+	PLUS  shift 80
+	MINUS  shift 81
+	TIMES  shift 82
+	DIVIDE  shift 83
+	DIV  shift 84
+	MOD  shift 85
+	POWER  shift 86
+	COLON  reduce 35
+	COMMA  reduce 35
+	END  reduce 35
+	EOF  reduce 35
+	FOR  reduce 35
+	NAME  reduce 35
+	RBRACK  reduce 35
+	RCURLY  reduce 35
+	RPAREN  reduce 35
+	OR  reduce 35
+	AND  reduce 35
+
+
+state 107
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr GREATER Expr .  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : Expr . SPECIAL Expr  (41)
+
+	SPECIAL  shift 71
+	PLUS  shift 80
+	MINUS  shift 81
+	TIMES  shift 82
+	DIVIDE  shift 83
+	DIV  shift 84
+	MOD  shift 85
+	POWER  shift 86
+	COLON  reduce 36
+	COMMA  reduce 36
+	END  reduce 36
+	EOF  reduce 36
+	FOR  reduce 36
+	NAME  reduce 36
+	RBRACK  reduce 36
+	RCURLY  reduce 36
+	RPAREN  reduce 36
+	OR  reduce 36
+	AND  reduce 36
+
+
+state 108
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr PLUS Expr .  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : Expr . SPECIAL Expr  (41)
+
+	SPECIAL  shift 71
+	TIMES  shift 82
+	DIVIDE  shift 83
+	DIV  shift 84
+	MOD  shift 85
+	POWER  shift 86
+	COLON  reduce 29
+	COMMA  reduce 29
+	END  reduce 29
+	EOF  reduce 29
+	FOR  reduce 29
+	NAME  reduce 29
+	RBRACK  reduce 29
+	RCURLY  reduce 29
+	RPAREN  reduce 29
+	OR  reduce 29
+	AND  reduce 29
+	EQUALS  reduce 29
+	NOTEQUAL  reduce 29
+	LESSEQ  reduce 29
+	LESS  reduce 29
+	GREATEREQ  reduce 29
+	GREATER  reduce 29
+	PLUS  reduce 29
+	MINUS  reduce 29
+
+
+state 109
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr MINUS Expr .  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : Expr . SPECIAL Expr  (41)
+
+	SPECIAL  shift 71
+	TIMES  shift 82
+	DIVIDE  shift 83
+	DIV  shift 84
+	MOD  shift 85
+	POWER  shift 86
+	COLON  reduce 30
+	COMMA  reduce 30
+	END  reduce 30
+	EOF  reduce 30
+	FOR  reduce 30
+	NAME  reduce 30
+	RBRACK  reduce 30
+	RCURLY  reduce 30
+	RPAREN  reduce 30
+	OR  reduce 30
+	AND  reduce 30
+	EQUALS  reduce 30
+	NOTEQUAL  reduce 30
+	LESSEQ  reduce 30
+	LESS  reduce 30
+	GREATEREQ  reduce 30
+	GREATER  reduce 30
+	PLUS  reduce 30
+	MINUS  reduce 30
+
+
+state 110
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr TIMES Expr .  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : Expr . SPECIAL Expr  (41)
+
+	SPECIAL  shift 71
+	POWER  shift 86
+	COLON  reduce 25
+	COMMA  reduce 25
+	END  reduce 25
+	EOF  reduce 25
+	FOR  reduce 25
+	NAME  reduce 25
+	RBRACK  reduce 25
+	RCURLY  reduce 25
+	RPAREN  reduce 25
+	OR  reduce 25
+	AND  reduce 25
+	EQUALS  reduce 25
+	NOTEQUAL  reduce 25
+	LESSEQ  reduce 25
+	LESS  reduce 25
+	GREATEREQ  reduce 25
+	GREATER  reduce 25
+	PLUS  reduce 25
+	MINUS  reduce 25
+	TIMES  reduce 25
+	DIVIDE  reduce 25
+	DIV  reduce 25
+	MOD  reduce 25
+
+
+state 111
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr DIVIDE Expr .  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : Expr . SPECIAL Expr  (41)
+
+	SPECIAL  shift 71
+	POWER  shift 86
+	COLON  reduce 26
+	COMMA  reduce 26
+	END  reduce 26
+	EOF  reduce 26
+	FOR  reduce 26
+	NAME  reduce 26
+	RBRACK  reduce 26
+	RCURLY  reduce 26
+	RPAREN  reduce 26
+	OR  reduce 26
+	AND  reduce 26
+	EQUALS  reduce 26
+	NOTEQUAL  reduce 26
+	LESSEQ  reduce 26
+	LESS  reduce 26
+	GREATEREQ  reduce 26
+	GREATER  reduce 26
+	PLUS  reduce 26
+	MINUS  reduce 26
+	TIMES  reduce 26
+	DIVIDE  reduce 26
+	DIV  reduce 26
+	MOD  reduce 26
+
+
+state 112
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr DIV Expr .  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : Expr . SPECIAL Expr  (41)
+
+	SPECIAL  shift 71
+	POWER  shift 86
+	COLON  reduce 27
+	COMMA  reduce 27
+	END  reduce 27
+	EOF  reduce 27
+	FOR  reduce 27
+	NAME  reduce 27
+	RBRACK  reduce 27
+	RCURLY  reduce 27
+	RPAREN  reduce 27
+	OR  reduce 27
+	AND  reduce 27
+	EQUALS  reduce 27
+	NOTEQUAL  reduce 27
+	LESSEQ  reduce 27
+	LESS  reduce 27
+	GREATEREQ  reduce 27
+	GREATER  reduce 27
+	PLUS  reduce 27
+	MINUS  reduce 27
+	TIMES  reduce 27
+	DIVIDE  reduce 27
+	DIV  reduce 27
+	MOD  reduce 27
+
+
+state 113
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr MOD Expr .  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : Expr . SPECIAL Expr  (41)
+
+	SPECIAL  shift 71
+	POWER  shift 86
+	COLON  reduce 28
+	COMMA  reduce 28
+	END  reduce 28
+	EOF  reduce 28
+	FOR  reduce 28
+	NAME  reduce 28
+	RBRACK  reduce 28
+	RCURLY  reduce 28
+	RPAREN  reduce 28
+	OR  reduce 28
+	AND  reduce 28
+	EQUALS  reduce 28
+	NOTEQUAL  reduce 28
+	LESSEQ  reduce 28
+	LESS  reduce 28
+	GREATEREQ  reduce 28
+	GREATER  reduce 28
+	PLUS  reduce 28
+	MINUS  reduce 28
+	TIMES  reduce 28
+	DIVIDE  reduce 28
+	DIV  reduce 28
+	MOD  reduce 28
+
+
+state 114
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr POWER Expr .  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : Expr . SPECIAL Expr  (41)
+
+	COLON  reduce 24
+	COMMA  reduce 24
+	END  reduce 24
+	EOF  reduce 24
+	FOR  reduce 24
+	NAME  reduce 24
+	RBRACK  reduce 24
+	RCURLY  reduce 24
+	RPAREN  reduce 24
+	SPECIAL  reduce 24
+	OR  reduce 24
+	AND  reduce 24
+	EQUALS  reduce 24
+	NOTEQUAL  reduce 24
+	LESSEQ  reduce 24
+	LESS  reduce 24
+	GREATEREQ  reduce 24
+	GREATER  reduce 24
+	PLUS  reduce 24
+	MINUS  reduce 24
+	TIMES  reduce 24
+	DIVIDE  reduce 24
+	DIV  reduce 24
+	MOD  reduce 24
+	POWER  reduce 24
+
+
+state 115
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : Expr . SPECIAL Expr  (41)
+	ForLoop : FOR LPAREN NAME IN Expr . COLON Expr RPAREN LCURLY RelationList RCURLY  (69)
+
+	COLON  shift 123
+	SPECIAL  shift 71
+	OR  shift 72
+	AND  shift 73
+	EQUALS  shift 74
+	NOTEQUAL  shift 75
+	LESSEQ  shift 76
+	LESS  shift 77
+	GREATEREQ  shift 78
+	GREATER  shift 79
+	PLUS  shift 80
+	MINUS  shift 81
+	TIMES  shift 82
+	DIVIDE  shift 83
+	DIV  shift 84
+	MOD  shift 85
+	POWER  shift 86
+	.  error
+
+
+state 116
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : Expr . SPECIAL Expr  (41)
+	Range : Expr COLON Expr .  (52)
+
+	SPECIAL  shift 71
+	OR  shift 72
+	AND  shift 73
+	EQUALS  shift 74
+	NOTEQUAL  shift 75
+	LESSEQ  shift 76
+	LESS  shift 77
+	GREATEREQ  shift 78
+	GREATER  shift 79
+	PLUS  shift 80
+	MINUS  shift 81
+	TIMES  shift 82
+	DIVIDE  shift 83
+	DIV  shift 84
+	MOD  shift 85
+	POWER  shift 86
+	COMMA  reduce 52
+	RBRACK  reduce 52
+
+
+state 117
+	RangeListR : RangeListR COMMA Range .  (49)
+
+	.  reduce 49
+
+
+state 118
+	DetermRelation : NAME LPAREN Var RPAREN LEFTARROW . Expr  (68)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 124
+	Var  goto 54
+
+
+state 119
+	Distribution : NAME LPAREN ExprList . RPAREN  (66)
+
+	RPAREN  shift 125
+	.  error
+
+
+state 120
+	Distribution : Distribution TRUNC LPAREN . Expr COMMA Expr RPAREN  (63)
+	Distribution : Distribution TRUNC LPAREN . Expr COMMA RPAREN  (64)
+	Distribution : Distribution TRUNC LPAREN . COMMA Expr RPAREN  (65)
+
+	BOOL_LIT  shift 44
+	COMMA  shift 126
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 127
+	Var  goto 54
+
+
+state 121
+	Expr : NAME LPAREN ExprList RPAREN .  (22)
+
+	.  reduce 22
+
+
+state 122
+	ExprListR : ExprListR COMMA . Expr  (44)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 128
+	Var  goto 54
+
+
+state 123
+	ForLoop : FOR LPAREN NAME IN Expr COLON . Expr RPAREN LCURLY RelationList RCURLY  (69)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 129
+	Var  goto 54
+
+
+state 124
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : Expr . SPECIAL Expr  (41)
+	DetermRelation : NAME LPAREN Var RPAREN LEFTARROW Expr .  (68)
+
+	SPECIAL  shift 71
+	OR  shift 72
+	AND  shift 73
+	EQUALS  shift 74
+	NOTEQUAL  shift 75
+	LESSEQ  shift 76
+	LESS  shift 77
+	GREATEREQ  shift 78
+	GREATER  shift 79
+	PLUS  shift 80
+	MINUS  shift 81
+	TIMES  shift 82
+	DIVIDE  shift 83
+	DIV  shift 84
+	MOD  shift 85
+	POWER  shift 86
+	END  reduce 68
+	EOF  reduce 68
+	FOR  reduce 68
+	NAME  reduce 68
+	RCURLY  reduce 68
+
+
+state 125
+	Distribution : NAME LPAREN ExprList RPAREN .  (66)
+
+	.  reduce 66
+
+
+state 126
+	Distribution : Distribution TRUNC LPAREN COMMA . Expr RPAREN  (65)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 130
+	Var  goto 54
+
+
+state 127
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : Expr . SPECIAL Expr  (41)
+	Distribution : Distribution TRUNC LPAREN Expr . COMMA Expr RPAREN  (63)
+	Distribution : Distribution TRUNC LPAREN Expr . COMMA RPAREN  (64)
+
+	COMMA  shift 131
+	SPECIAL  shift 71
+	OR  shift 72
+	AND  shift 73
+	EQUALS  shift 74
+	NOTEQUAL  shift 75
+	LESSEQ  shift 76
+	LESS  shift 77
+	GREATEREQ  shift 78
+	GREATER  shift 79
+	PLUS  shift 80
+	MINUS  shift 81
+	TIMES  shift 82
+	DIVIDE  shift 83
+	DIV  shift 84
+	MOD  shift 85
+	POWER  shift 86
+	.  error
+
+
+state 128
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : Expr . SPECIAL Expr  (41)
+	ExprListR : ExprListR COMMA Expr .  (44)
+
+	SPECIAL  shift 71
+	OR  shift 72
+	AND  shift 73
+	EQUALS  shift 74
+	NOTEQUAL  shift 75
+	LESSEQ  shift 76
+	LESS  shift 77
+	GREATEREQ  shift 78
+	GREATER  shift 79
+	PLUS  shift 80
+	MINUS  shift 81
+	TIMES  shift 82
+	DIVIDE  shift 83
+	DIV  shift 84
+	MOD  shift 85
+	POWER  shift 86
+	COMMA  reduce 44
+	RPAREN  reduce 44
+
+
+state 129
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : Expr . SPECIAL Expr  (41)
+	ForLoop : FOR LPAREN NAME IN Expr COLON Expr . RPAREN LCURLY RelationList RCURLY  (69)
+
+	RPAREN  shift 132
+	SPECIAL  shift 71
+	OR  shift 72
+	AND  shift 73
+	EQUALS  shift 74
+	NOTEQUAL  shift 75
+	LESSEQ  shift 76
+	LESS  shift 77
+	GREATEREQ  shift 78
+	GREATER  shift 79
+	PLUS  shift 80
+	MINUS  shift 81
+	TIMES  shift 82
+	DIVIDE  shift 83
+	DIV  shift 84
+	MOD  shift 85
+	POWER  shift 86
+	.  error
+
+
+state 130
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : Expr . SPECIAL Expr  (41)
+	Distribution : Distribution TRUNC LPAREN COMMA Expr . RPAREN  (65)
+
+	RPAREN  shift 133
+	SPECIAL  shift 71
+	OR  shift 72
+	AND  shift 73
+	EQUALS  shift 74
+	NOTEQUAL  shift 75
+	LESSEQ  shift 76
+	LESS  shift 77
+	GREATEREQ  shift 78
+	GREATER  shift 79
+	PLUS  shift 80
+	MINUS  shift 81
+	TIMES  shift 82
+	DIVIDE  shift 83
+	DIV  shift 84
+	MOD  shift 85
+	POWER  shift 86
+	.  error
+
+
+state 131
+	Distribution : Distribution TRUNC LPAREN Expr COMMA . Expr RPAREN  (63)
+	Distribution : Distribution TRUNC LPAREN Expr COMMA . RPAREN  (64)
+
+	BOOL_LIT  shift 44
+	INT_LIT  shift 45
+	LPAREN  shift 46
+	NAME  shift 47
+	REAL_LIT  shift 48
+	RPAREN  shift 134
+	NOT  shift 49
+	MINUS  shift 50
+	.  error
+
+	Expr  goto 135
+	Var  goto 54
+
+
+state 132
+	ForLoop : FOR LPAREN NAME IN Expr COLON Expr RPAREN . LCURLY RelationList RCURLY  (69)
+
+	LCURLY  shift 136
+	.  error
+
+
+state 133
+	Distribution : Distribution TRUNC LPAREN COMMA Expr RPAREN .  (65)
+
+	.  reduce 65
+
+
+state 134
+	Distribution : Distribution TRUNC LPAREN Expr COMMA RPAREN .  (64)
+
+	.  reduce 64
+
+
+state 135
+	Expr : Expr . POWER Expr  (24)
+	Expr : Expr . TIMES Expr  (25)
+	Expr : Expr . DIVIDE Expr  (26)
+	Expr : Expr . DIV Expr  (27)
+	Expr : Expr . MOD Expr  (28)
+	Expr : Expr . PLUS Expr  (29)
+	Expr : Expr . MINUS Expr  (30)
+	Expr : Expr . EQUALS Expr  (31)
+	Expr : Expr . NOTEQUAL Expr  (32)
+	Expr : Expr . LESSEQ Expr  (33)
+	Expr : Expr . LESS Expr  (34)
+	Expr : Expr . GREATEREQ Expr  (35)
+	Expr : Expr . GREATER Expr  (36)
+	Expr : Expr . AND Expr  (37)
+	Expr : Expr . OR Expr  (38)
+	Expr : Expr . SPECIAL Expr  (41)
+	Distribution : Distribution TRUNC LPAREN Expr COMMA Expr . RPAREN  (63)
+
+	RPAREN  shift 137
+	SPECIAL  shift 71
+	OR  shift 72
+	AND  shift 73
+	EQUALS  shift 74
+	NOTEQUAL  shift 75
+	LESSEQ  shift 76
+	LESS  shift 77
+	GREATEREQ  shift 78
+	GREATER  shift 79
+	PLUS  shift 80
+	MINUS  shift 81
+	TIMES  shift 82
+	DIVIDE  shift 83
+	DIV  shift 84
+	MOD  shift 85
+	POWER  shift 86
+	.  error
+
+
+state 136
+	ForLoop : FOR LPAREN NAME IN Expr COLON Expr RPAREN LCURLY . RelationList RCURLY  (69)
+
+	FOR  shift 25
+	NAME  shift 26
+	.  error
+
+	Var  goto 27
+	RelationListR  goto 28
+	RelationList  goto 138
+	Relation  goto 30
+	StochRelation  goto 31
+	DetermRelation  goto 32
+	ForLoop  goto 33
+
+
+state 137
+	Distribution : Distribution TRUNC LPAREN Expr COMMA Expr RPAREN .  (63)
+
+	.  reduce 63
+
+
+state 138
+	ForLoop : FOR LPAREN NAME IN Expr COLON Expr RPAREN LCURLY RelationList . RCURLY  (69)
+
+	RCURLY  shift 139
+	.  error
+
+
+state 139
+	ForLoop : FOR LPAREN NAME IN Expr COLON Expr RPAREN LCURLY RelationList RCURLY .  (69)
+
+	.  reduce 69
+
+
+46 terminals, 27 nonterminals
+71 grammar rules, 140 states
