@@ -1,0 +1,156 @@
+val is_arr1_rep_def = Define
+  `is_arr1_rep (f, n:num) = !i. i >= n ==> (f i = ARB)`;
+
+val exists_is_arr1_rep = prove(
+  ``?x. is_arr1_rep x``,
+  EXISTS_TAC ``((\i:num. ARB), 0:num)`` THEN
+  RW_TAC arith_ss [is_arr1_rep_def]
+);
+
+val arr1_TY_DEF = new_type_definition("arr1", exists_is_arr1_rep);
+
+val arr1_ISO_DEF = define_new_type_bijections {
+  name = "arr1_ISO_DEF", ABS = "ABS_arr1", REP = "REP_arr1", tyax = arr1_TY_DEF
+};
+
+val arr1_R_11   = prove_rep_fn_one_one arr1_ISO_DEF
+and arr1_R_ONTO = prove_rep_fn_onto    arr1_ISO_DEF
+and arr1_A_11   = prove_abs_fn_one_one arr1_ISO_DEF
+and arr1_A_ONTO = prove_abs_fn_onto    arr1_ISO_DEF;
+
+
+val is_arr2_rep_def = Define
+  `is_arr2_rep (f, n1:num, n2:num) = 
+     !i1 i2. i1 >= n1 \/ i2 >= n2 ==> (f (i1, i2) = ARB)`;
+
+val exists_is_arr2_rep = prove(
+  ``?x. is_arr2_rep x``,
+  EXISTS_TAC ``((\i:num # num. ARB), 0:num, 0:num)`` THEN
+  RW_TAC arith_ss [is_arr2_rep_def]
+);
+
+val arr2_TY_DEF = new_type_definition("arr2", exists_is_arr2_rep);
+
+val arr2_ISO_DEF = define_new_type_bijections {
+  name = "arr2_ISO_DEF", ABS = "ABS_arr2", REP = "REP_arr2", tyax = arr2_TY_DEF
+};
+
+val arr2_R_11   = prove_rep_fn_one_one arr2_ISO_DEF
+and arr2_R_ONTO = prove_rep_fn_onto    arr2_ISO_DEF
+and arr2_A_11   = prove_abs_fn_one_one arr2_ISO_DEF
+and arr2_A_ONTO = prove_abs_fn_onto    arr2_ISO_DEF;
+
+
+val is_arr3_rep_def = Define
+  `is_arr3_rep (f, n1:num, n2:num, n3:num) =
+     !i1 i2 i3. i1 >= n1 \/ i2 >= n2 \/ i3 >= n3 ==> (f (i1, i2, i3) = ARB)`;
+
+val exists_is_arr3_rep = prove(
+  ``?x. is_arr3_rep x``,
+  EXISTS_TAC ``((\i:num # num # num. ARB), 0:num, 0:num, 0:num)`` THEN
+  RW_TAC arith_ss [is_arr3_rep_def]
+);
+
+val arr3_TY_DEF = new_type_definition("arr3", exists_is_arr3_rep);
+
+val arr3_ISO_DEF = define_new_type_bijections {
+  name = "arr3_ISO_DEF", ABS = "ABS_arr3", REP = "REP_arr3", tyax = arr3_TY_DEF
+};
+
+val arr3_R_11   = prove_rep_fn_one_one arr3_ISO_DEF
+and arr3_R_ONTO = prove_rep_fn_onto    arr3_ISO_DEF
+and arr3_A_11   = prove_abs_fn_one_one arr3_ISO_DEF
+and arr3_A_ONTO = prove_abs_fn_onto    arr3_ISO_DEF;
+
+
+val _ = Define `apply_arr1 a i = FST (REP_arr1 a) i`;
+val _ = Define `apply_arr2 a i = FST (REP_arr2 a) i`;
+val _ = Define `apply_arr3 a i = FST (REP_arr3 a) i`;
+
+val _ = set_fixity "'" (Infixl 2000);
+overload_on ("'", Term`apply_arr1`);
+overload_on ("'", Term`apply_arr2`);
+overload_on ("'", Term`apply_arr3`);
+
+
+val dim1_def = Define `dim1 = SND o REP_arr1`;
+val dim2_def = Define `dim2 = SND o REP_arr2`;
+val dim3_def = Define `dim3 = SND o REP_arr3`;
+
+val len1_1_def = Define `len1_1 = dim1`;
+val len1_2_def = Define `len1_2 = FST o dim2`;
+val len1_3_def = Define `len1_3 = FST o dim3`;
+
+val len2_2_def = Define `len2_2 = SND o dim2`;
+val len2_3_def = Define `len2_3 = FST o SND o dim3`;
+
+val len3_3_def = Define `len3_3 = SND o SND o dim3`;
+
+overload_on ("len1", ``len1_1``);
+overload_on ("len1", ``len1_2``);
+overload_on ("len1", ``len1_3``);
+overload_on ("len2", ``len2_2``);
+overload_on ("len2", ``len2_3``);
+overload_on ("len3", ``len3_3``);
+
+
+val arr1_fct_def = Define
+  `arr1_fct n f = (\i:num. if i < n then f i else ARB)`;
+val arr2_fct_def = Define
+  `arr2_fct (n1:num,n2:num) f =
+  (\(i1,i2). if i1 < n1 /\ i2 < n2 then f (i1,i2) else ARB)`;
+val arr3_fct_def = Define
+  `arr3_fct (n1:num,n2:num,n3:num) f =
+  (\(i1,i2,i3). if i1 < n1 /\ i2 < n2 /\ i3 < n3 then f(i1,i2,i3) else ARB)`;
+
+val arr1_def = Define `arr1 n f = ABS_arr1 (arr1_fct n f, n)`;
+val arr2_def = Define `arr2 n f = ABS_arr2 (arr2_fct n f, n)`;
+val arr3_def = Define `arr3 n f = ABS_arr3 (arr3_fct n f, n)`;
+
+(*
+val _ = Define
+  `is_arr4_rep (f, n1, n2, n3, n4) =
+     !i1 i2 i3 i4. i1 >= n1 \/ i2 >= n2 \/ i3 >= n3 \/ i4 >= n4 ==>
+     (f (i1, i2, i3, i4) = ARB)`;
+val _ = Define
+  `is_arr5_rep (f, n1, n2, n3, n4, n5) =
+     !i1 i2 i3 i4 i5. i1 >= n1 \/ i2 >= n2 \/ i3 >= n3 \/ i4 >= n4 \/ i5 >= n5
+     ==> (f (i1, i2, i3, i4, i5) = ARB)`;
+*)
+
+
+
+
+
+
+
+
+
+
+Define `A %*% B = 
+  if len2 A <> len1 B then
+    ARB
+  else
+    arr2 (len1 A, len2 B) (\(i,k). sumc 0 (len2 A) \j. A '(i,j) * B '(j,k)`; 
+
+
+is_matrix m n A /\ is_matrix n p B ==>
+  is_matrix m p (A %*% B) /\
+  !i j. (A %*% B) !! (i, j) = 
+
+type_abbrev (for defining a type abbreviation)
+overload_on
+
+new_specification (to make a constant specification)
+
+new_type_definition : (sring * term * thm) -> thm
+new_type_definition(opname, pred_term, thm)
+  thm has form |- ?x. pred_term x
+(only asserts existence of the bijection)
+
+define_new_type_bijections :
+  { name: string, ABS: string, REP: string, tyax: thm } -> thm
+(tyax is the theorem returned by new_type_definition)
+(defines new abstraction and representation constants)
+See also prove_rep_fn_one_one, prove_rep_fn_onto,
+prove_abs_fn_one_one, prove_abs_fun_onto

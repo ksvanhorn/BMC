@@ -1,0 +1,41 @@
+What more is needed to verify correctness?
+- Check that all identifiers are known values -- either predefined or defined
+  as an input or model variable
+- No variable appears twice in inputs + vars.
+- Type checking (and annotate expressions with types).
+  (what about promotion of scalars?)
+- Verify that DimList is a function only of previously declared vars.
+- Variables defined only in terms of earlier variables.
+
+msgString
+msgChar
+msgInt
+msgEOL
+errLines
+errPrompt [msgString]
+errLoc
+
+Theory needs:
+- int
+- real
+- bool
+- variable-length arrays
+
+./include/sampler/SingletonFactory.h:class SingletonFactory : public SamplerFactory
+./modules/bugs/samplers/DSumFactory.h:class DSumFactory : public SamplerFactory
+./modules/bugs/samplers/REFactory.h:class REFactory : public SamplerFactory
+./modules/cut/CutFactory.h:    class CutFactory : public SamplerFactory
+./modules/glm/samplers/GLMFactory.h:    class GLMFactory : public SamplerFactory
+./modules/mix/samplers/MixSamplerFactory.h:    class MixSamplerFactory : public SamplerFactory
+
+./include/sampler/SingletonFactory.h:class SingletonFactory : public SamplerFactory
+./modules/base/samplers/FiniteFactory.h:    class FiniteFactory : public SingletonFactory {
+./modules/base/samplers/SliceFactory.h:    class SliceFactory : public SingletonFactory
+./modules/bugs/samplers/ConjugateFactory.h:class ConjugateFactory : public SingletonFactory
+./modules/bugs/samplers/DirichletFactory.h:class DirichletFactory : public SingletonFactory
+./modules/bugs/samplers/MNormalFactory.h:class MNormalFactory : public SingletonFactory
+./modules/glm/samplers/ConjugateFFactory.h:  class ConjugateFFactory : public SingletonFactory
+
+FiniteFactory.cc
+DiscreteSlicer
+RealSlicer

@@ -1,0 +1,18 @@
+File: ('file <VarStmt> <ModelStmt>)
+VarStmt: ('vars <NodeDec>*)
+NodeDec: (<Name> <Expr>*)
+ModelStmt: ('model <Relation>*)
+StochRelation: ('~ <Var> <Distribution> <Truncation>)
+Truncation: ('trunc <Expr> <Expr>)
+    # ('trunc -infinity infinity) if no truncation
+Distribution: ('distr <Func> <Expr>*)
+DetermRelation: ('<- <Var> <Expr>)
+DetermRelation: ('<- <Var> (('finv <Func>) <Expr>))
+ForLoop: ('for <Name> (<Expr> <Expr>) <Relation>*)
+Var: ('var <Name> <RangeElement>*)
+RangeElement: ('all)
+RangeElement: ('index <Expr>)
+RangeElement: ('range <Expr> <Expr>)
+<Expr>: <Var>
+<Expr>: ('literal <numeric value>)
+<Expr>: ('apply <Func> <Expr>*)

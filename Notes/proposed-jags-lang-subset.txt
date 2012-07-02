@@ -1,0 +1,118 @@
+File ::= VarStmt? ModelStmt
+
+VarStmt ::= "var" DecList ";"?
+DecList ::= (NodeDec ",")* NodeDec
+NodeDec ::= Name ("[" DimList "]")?
+DimList ::= (Expr ",")* Expr
+  // Exprs must be constant integer-valued 
+
+ModelStmt ::= "model" "{" RelationList "}"
+
+RelationList ::= Relation+
+Relation ::= StochRelation ";"? | DetermRelation ";"? | ForLoop
+ForLoop ::= Counter Relations
+Counter ::= "for" "(" Name "in" Expr ":" Expr ")"
+  // Exprs must be constant integer-valued
+Relations ::= "{" RelationList "}"
+DetermRelation ::= Var "<-" Expr | Func "(" Var ")" "<-" Expr
+Func ::= Identifier
+StochRelation ::= Var "~" Distribution Truncated?
+
+Expr ::= Var | Double | "length" "(" Var ")" | Func "(" ExprList ")" |
+         Product | Sum | Expr "/" Expr | Expr "-" Expr | "-" Expr |
+         Expr Compare Expr | Expr "&&" Expr | Expr "||" Expr |
+         Expr Power Expr | Expr Special Expr | "(" Expr ")"
+Product ::= Expr "*" Expr
+Sum ::= Expr "+" Expr
+Compare ::= ">" | ">=" | "<" | "<=" | "==" | "!="
+Special ::= operator within "%%"
+Power ::= "^" | "**" // same meaning
+ExprList ::= (Expr ",")* Expr
+
+RangeList ::= (RangeElement ",")* RangeElement
+RangeElement ::= Empty | Expr | Expr ":" Expr
+Distribution ::= Func "(" ExprList? ")"
+Truncated ::= "T" "(" Expr? "," Expr? ")"
+
+Var ::= Name ("[" RangeList "]")?
+
+Restrictions:
+- Nodes must form a directed acyclic graph
+- Top-level nodes are constant nodes defined in the model definition or in the
+  data file.
+- Scalars are considered to be vectors of length 1
+- Array declarations presumably must declare an array only once and
+  must be consistent with the defined relations.
+- Undeclared arrays: dimensions determed by
+  - data file
+  - using maximal index values on LHS of relation
+  - using dimensions of the parents
+- Data file may contain missing values, but no partially missing values for
+  multivariate nodes.
+- Data file defines parameters (unobserved nodes) of the model by
+  omission.
+
+Functions:
+- %*% : matrix multiplication
+- t() : transpose
+- base operators:
+  ||, &&, !, >, >=, <, <=, ==, +, -, *, /, %special%, - (unary), ^
+- Scalar functions:
+  +abs, +arccos, arccosh, +arcsin, arcinh, +arctan, arctanh,
+  +cos, cosh, cloglog, +equals(x,y), +exp, icloglog, ilogit,
+  +log, logfact, loggam, logit, phi, +pow(x,z), probit, round,
+  +sin, sinh, +sqrt, step, +tan, tanh, trunc
+- Aliases: acos, acosh, asin, asinh, atan
+- Link functions: cloglog, log, logit, probit
+- pdf, cdf, and quantile functions for a variety of distributions:
+  Bernoulli, Beta, Binomial, Chi-Square, Double exponential,
+  Exponential, F, Gamma, Generalized Gamma, ...
+- Scalar-valued, vector/array args:
+  inprod(x1,x2) : x1 and x2 have conforming dimensions
+  interp.line(e, v1, v2): R x R^n x R^n -> R
+  logdet: R^n^n -> R
+  max: any number of scalar, vector, or array args, returning scalar
+  min: ditto
+  mean : single general argument
+  prod : single general argument
+  sum : single general argument
+  sd : single general argument
+- Vector- and array-valued functions:
+  inverse: takes a symmetric p.d. matrix
+  mexp : takes a square matrix
+  rank : takes a vector
+  sort : takes a vector
+  %*% : conforming vectors or matrices
+- scalar functions taking scalar args are automatically vectorized;
+they can also be called when the args are arrays with conforming
+dimensions, or scalars (like in R).
+- length() returns the number of elements in a node array.
+- dim() returns a vector containing the dimensions of a node array.  This
+value can only be used after it is stored in an array, hence calls to
+the dim() function must always be in a data block.
+- msm module defines mexp (matrix exponential function)
+
+Distributions:
+- univariate continuous distributions
+  dbeta, dchisqr, ddexp, dexp, dgamma, dgen.gamma, dlnorm, ...
+- univariate discrete distributions
+  dbetabin, dbern, dbin, ...
+  some have args that must be integers
+- multivariate continuous distributions
+  vector arg, matrix arg
+- Aliases: dbinom, dchisq, dnbinom, dweibull, ddirich
+- mix module defines dnormmix(mu, tau, pi), a mixture of normals.
+- msm module defines dmstate: multi-state distribution describing
+transitions between observed states in continuous-time multi-state
+Markov transition models. (???)
+
+Notes:
+- Dirichlet distribution ddirch(alpha) can have some (not all)
+elements of alpha 0.
+- dmulti and dcat can take unnormalized probability vectors.
+- Logical nodes are not observable.
+- x ~ dinterval(t, c) says that x is a discretization of t defined by
+the cutpoints c. (Not a function, so as to allow x to be observable.)
+- y ~ dsum(x1, ..., xn) says that y is the sum of x1, ..., xn. (Not a
+function, so as to allow x to be observable.)
+- T(L, U) indicates prior truncation of a distribution.

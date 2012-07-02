@@ -1,0 +1,56 @@
+<<"BMC.m";
+<<"TestUtils.m";
+$ContextPath = Prepend[$ContextPath, "BMC`Private`"];
+
+
+assertEq[Catch[model[n ∶ int, r ∶ real, n ∶ real]] ===
+	"Multiple declarations for n: int, real"]
+	
+assert[Catch[model[σ ∶ preal, x ∶ real, x ∼ dnorm[0, σ], x ∼ dunif[0, 1]]]
+	=== "Multiple definitions for x:\n  ∼ dnorm[0, σ]\n  ∼ dunif[0, 1]"]
+	
+assert[Catch[model[σ ∶ preal, x ∶ real, x ∼ dnorm[0, σ], x ← 3]]
+	=== "Multiple definitions for x:\n  ∼ dnorm[0, σ]\n  ← 3"]
+
+(*
+
+theModel = 	model[
+	n ∶ uint,
+	x ∶ real[n],
+	μx ∶ real,
+	μμ : real,
+	σμ : preal,
+	σx ∶ preal,
+	α ∶ preal,
+	β ∶ preal,
+	
+	require[α >= 1],
+	require[β >= 1],
+	
+	σx ∼ dgamma[α, β],
+	μx ∼ dnorm[μμ, σμ],
+	for[{i,1,n},
+		x[i] ∼ dnorm[μx, σx]
+	]
+];
+
+expected = parsedModel[
+	
+];
+
+assert[parseModel[theModel] === parsedModel[
+	{
+		n ∶ uint,
+		x ∶ real[n],
+		μx ∶ real,
+		μμ : real,
+		σμ : preal,
+		σx ∶ preal,
+		α ∶ preal,
+		β ∶ preal },
+	  α >= 1 && β >= 1, 
+*)
+
+(* test syntactic structure *)
+(* necessary preconditions for model *)
+(* test that we have a DAG *)

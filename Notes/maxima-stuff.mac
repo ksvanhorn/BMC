@@ -1,0 +1,64 @@
+
+/*
+Steps:
+- Create expression corresponding to model.
+- Extract params, model vars.
+- Extract assumptions. (Type info for params and model vars; checks required
+  on params.)
+- Verify DAG
+- Create predicate for support of joint distribution, and check that all
+  args to functions/distributions are in required domains.
+- Extract expression for log pdf.
+- Extract full conditional from log pdf, and simplify.
+- Match full conditionals with patterns
+*/
+
+
+n.indep : number nominally independent.
+
+
+data[i,j] = cutp(z[i,j], c[i,])
+
+c[i,1] = -inf
+c[i,K+1] = +inf
+c[i,k] = (cp[k] - tau[i]) / sigma[i] for 1 < k <= K
+cp[k] = <fixed>
+(tau[i], log(sigma[i])) ~ MVN(eta.tls, S)
+
+eta.tls = [0, -S[2,2]/2]
+S[1,1] = exp(nu[1])
+S[2,2] = exp(nu[2])
+S[1,2] = S[2,1] = exp((nu[1]+nu[2])/2) * tanh(nu[3])
+nu[i] ~ N(mu.nu[i], sigma.nu[i]^2) for 1 <= i <= 3
+
+forming = 0
+haloing = 1
+straight.line = 2
+
+if response.type[i] == haloing then
+  z[i,] = ksi[i] * gamma + mu.h + eps.h[i,]
+  ksi[i] ~ N(0, 1)
+  eps.h[i,j] ~ N(0, Psi.h[j])
+  gamma[j] ~ N(mu.gamma[j], sigma.gamma[j]^2)
+  mu.h[j] ~ N(mu.mu.h[j], sigma.mu.h[j]^2)
+
+if response.type[i] == forming then
+  z[i,1] = dot(z[i,2:nvar], beta) + mu.f.y + eps.f[i]
+  eps.f[i] ~ N(0, sigma.y^2)
+  z[i,2:nvar] ~ MVN(mu.f.x, Sigma.f.x)
+  mu.f.y ~ N(mu.mu.f.y, sigma.mu.f.y^2)
+  beta[j] ~ N(mu.beta[j], sigma.beta[j]^2)
+  sigma.y ~ Gamma(alpha.sigma.y, beta.sigma.y)
+  mu.f.x[j] ~ N(mu.mu.f.x[j], sigma.mu.f.x[j]^2)
+  Sigma.f.x ~ InvWishart(nu.Sigma.f.x, V.Sigma.f.x)
+
+if response.type[i] == straight.line then
+  z[i,j] = mu.s[j] + eps.s[i,j]
+  mu.s[j] ~ N(mu.mu.s[j], sigma.mu.s[j]^2)
+  eps.s[i,j] ~ N(0, Psi.s[j])
+  Psi.s[j] ~ Gamma(alpha.Psi.s[j], beta.Psi.s[j])
+
+response.type[i] ~ dcat(eta[i,])
+
+mn.logit(eta[i,]) = delta %*% u[i,] # u[i,] is covariates for resp. i
+delta[h,] ~ MVN(mu.delta[h,], Sigma.delta[h,,])
