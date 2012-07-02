@@ -1,93 +1,136 @@
-Types:
-  'a distribution
-  'a dist
-    (synonymm for 'a distribution option)
-  'a ~> 'b
-    (synonym for 'a -> 'b option)
-
-Definitions:
-
-prob mu A = (the probability of set A according to distribution mu)
-INT mu f = (the Lebesgue integral of f over measure mu)
-(lam x. e) = SOME (\x. e)
-
-lift0 y = SOME y
-lift1 f = SOME (\x. SOME (f x))
-        = SOME (lift0 o f)
-lift2 f = SOME (\x. SOME (\y. SOME (f x y)))
-        = SOME (\x. lift1 (f x))
-        = SOME (lift1 o f)
-lift3 f = SOME (\x. SOME (\y. SOME (\z. SOME (f x y z))))
-        = SOME (\x. lift2 (f x))
-        = SOME (lift2 o f)
-
-Notes from HOL:
+Notes from HOL
+--------------
 
 THE (SOME x) = x
 THE NONE is undefined
 
-Operations:
+Types
+-----
+  'a dist
+  'a ~> 'b
+    (synonym for 'a -> 'b option)
 
->>= : 'a dist -> ('a -> 'b dist) -> 'b dist
-Def:
-  (NONE >>= m) = NONE
-  if prob mu (IS_NONE o m) > 0
-    then (SOME mu >>= m) = NONE
-    else (SOME mu >> m) = SOME nu where
-      prob nu A = INT mu (THE (m x) A)
+Definitions
+-----------
 
-return : 'a -> 'a dist
-Def:
-  return x = SOME mu, where prob mu A = (x in A)
+prob mu A = (the probability of set A according to distribution mu)
+INT mu f = (the Lebesgue integral of f over measure mu)
 
-par : num -> (num -> 'a dist) -> 'a list dist
-Def:
-  if (?i. i < n /\ f i = NONE)
-    then par n f = NONE
-    else par n f = SOME (the product measure of THE (f i) for 0 <= i < n)
+Utilities
+---------
 
-require : bool -> 'a option -> 'a option
+(lam x. e) = SOME (\x. e)
+
+lift0 y = SOME y
+
+lift1: ('a -> 'b) ~> ('a ~> 'b)
+lift1 f = SOME (\x. SOME (f x))
+        = SOME (lift0 o f)
+
+lift2: ('a -> 'b -> 'c) ~> ('a ~> 'b ~> 'c)
+lift2 f = SOME (\x. SOME (\y. SOME (f x y)))
+        = SOME (\x. lift1 (f x))
+        = SOME (lift1 o f)
+
+lift3 : ('a -> 'b -> 'c -> 'd) ~> ('a ~> 'b ~> 'c ~> 'd)
+lift3 f = SOME (\x. SOME (\y. SOME (\z. SOME (f x y z))))
+        = SOME (\x. lift2 (f x))
+        = SOME (lift2 o f)
+
+require1 P f = lift1 (\x. req (P x) (f x))
+require2 P f = lift2 (\x y. req (P x y) (f x y))
+require3 P f = lift3 (\x y z. req (P x y z) (f x y z))
+
+assert : bool -> 'a option -> 'a option
 Def:
-  require T x = x
-  require F x = NONE
+  assert T x = x
+  assert F x = NONE
 
 req : bool -> 'a -> 'a option
 Def:
   req T x = SOME x
   req F x = NONE
 
-Definitions:
+ap : ('a -> 'b option) option -> 'a option -> 'b option
+ap x1 x2 = assert (IS_SOME x1 /\ IS_SOME x2) ((THE x1) (THE x2))
 
-[[ v ~ d1; d2 ]] == [[ d1 ]] >>= (\v. [[ d2 ]]) 
+>>= : 'a dist option -> ('a -> 'b dist option) -> 'b dist option
+Def:
+  (mu >>= m) = req pc nu
+  where
+    pc = (IS_SOME mu /\ (prob (THE mu) (IS_SOME o m)) = 1)
+    nu : 'b dist
+    prob nu A = INT (THE mu) (\x. THE (m x) A)
+
+delta : 'a -> 'a dist
+Def:
+  prob (delta x) A = (x in A)
+
+par : num -> (num -> 'a dist option) -> 'a list dist option
+Def:
+  par n m = req (!i. i < n ==> IS_SOME (m i)) mu
+  where
+    mu = (the product measure of THE (m i) for 0 <= i < n)
+
+Semantics
+---------
+
+[[ v ~ d1; d2 ]] == [[ d1 ]] >>= (\v. [[ d2 ]])
+(* The above holds even when v is a tuple pattern *)
+
 [[ v <- e; d ]] == 
   let x = [[ e ]] in
-  require (IS_SOME x) ((\v. [[ d ]]) (THE x))
-# x is a new variable
-[[ for v e body ]] ==
+  assert (IS_SOME x) ((\v. [[ d ]]) (THE x))
+(* if v is a singel variable, then x is a new variable *)
+(* if v is a tuple pattern, x is an equivalent tuple pattern with the variables of v
+   replaced by new variables *)
+
+[[ par v e body ]] ==
   let n = [[ e ]] in
-  require (IS_SOME n) (par (THE n) (\v. [[ body ]]))
-# n is a new variable
-[[ return e ]] =
-  let x = [[ e ]] in
-  require (IS_SOME x) (return (THE x))
-[[ e1 e2 ]] =
-  let x1 = [[ e1 ]] in
-  let x2 = [[ e2 ]] in
-  require (IS_SOME x1 /\ IS_SOME x2) ((THE x1) (THE x2))
+  assert (IS_SOME n) (par (THE n) (\v. [[ body ]]))
+(* n is a new variable *)
 
-NEXT: Define some distributions and functions
+[[ e1 e2 ]] = ap [[ e1 ]] [[ e2 ]]
 
-[[ exp ]] = (lam x. SOME (exp x))
-[[ map ]] = (lam f. (lam xs. SOME (map f xs)))
-[[ dcat ]] = (lam p0.
+[[ e1 binop e2 ]] = ap (ap [[ binop ]] [[ e1 ]]) [[ e2 ]]
+
+[[ if ebool then e1 else e2 ]] =
+  let x = [[ ebool ]] in
+  assert (IS_SOME x) (if THE x then [[ e1 ]] else [[ e2 ]])
+
+[[ e1 and e2 ]] = [[ if e1 then e2 else false ]]
+
+[[ e1 or e2 ]] [[ if e1 then true else e2 ]]
+
+[[ e1[e2] ]] = ap (ap (lift2 EL) [[ e1 ]]) [[ e2 ]]
+
+
+[[ false ]] = lift0 F
+[[ true ]] = lift0 T
+[[ <num> ]] = lift0 n
+  where <num >is a numeric literal representing value n
+
+[[ return ]] = lift1 delta
+
+[[ exp ]] = lift1 exp
+
+[[ map ]] = lift2 map
+
+[[ dcat ]] = require1 pc dcat
+             where pc p0 =
                let denom = sum p0 in
                let n = length p0 in
                let p = map (\x. x / denom) p0 in
-               req (denom > 0 /\ (!i. i < n ==> (p0 EL i) >= 0))
-                   (dcat p))
-[[ mvnorm ]] = (lam mu. lam Sigma.
+               (denom > 0 /\ (!i. i < n ==> (p0 EL i) >= 0))
+
+[[ mvnorm ]] = require2 pc mvnorm
+               where pc mu Sigma =
                  let n = length mu in
-                 req (is_matrix n n Sigma /\
-                      (is_symmetric Sigma) /\ (is_positive_definite Sigma))
-                     (mvnorm mu Sigma))
-[[ length ]] = lam xs. SOME (length xs)
+                 (is_matrix n n Sigma /\ (is_symmetric Sigma) /\ (is_positive_definite Sigma))
+
+[[ length ]] = lift1 length
+
+[[ %*% ]] = require2 pc matrix_vector_multiplication
+            where pc A x =
+              let n = length x in
+              is_matrix n n A
