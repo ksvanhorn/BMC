@@ -1,0 +1,717 @@
+infix("<-", 180, 20);
+infix("~", 180, 20);
+infix("..", 90, 90);
+infix("==>", 50, 50);
+
+"==>"(p, q) := not p or q;
+
+halo_model: '(file(
+  args(
+    nresp : integernn,
+    nvars : integer,
+    nlevels : integer,
+    mu_nu : real[3],
+    sigma_nu : realp[3],
+    cp : real[nlevels - 1],
+    sigma_mu_y_form : realp,
+    sigma_beta : realp,
+    alpha_lambda_y_form : realp,
+    beta_lambda_y_form : realp,
+    sigma_mu_x_form : realp,
+    dof_Sigma_x_form : realp,
+    inverse_scale_Sigma_x_form : real[nvars - 1, nvars - 1],
+    sigma_mu_x_halo : realp[nvars],
+    sigma_gamma : realp,
+    alpha_sigma_x_halo : realp,
+    beta_sigma_x_halo : realp,
+    sigma_mu_x_garb : realp[nvars],
+    alpha_lambda_x_garb : realp,
+    beta_lambda_x_garb : realp,
+    alpha_p_segment : realnn[3]),
+  reqs(
+    3 <= nvars,
+    3 <= nlevels,
+    for_all(k, [1, nlevels - 2], cp[k] < cp[k + 1]),
+    dof_Sigma_x_form > nvars - 2,
+    is_symm_pd(inverse_scale_Sigma_x_form),
+    0 < sum(alpha_p_segment[h], h, 1, 3)),
+  vars(
+    mu_tls : real[2],
+    Sigma_tls : real[2, 2],
+    nu : real[3],
+    tls : real[nresp, 2],
+    tau : real[nresp],
+    scale : real[nresp],
+    v : integer[nresp, nvars],
+    c : real[nresp, nlevels - 1],
+    x : real[nresp, nvars],
+    segment : integer[nresp],
+    mu_y_form : real,
+    sigma_y_form : real,
+    lambda_y_form : real,
+    beta_ : real[nvars - 1],
+    mu_x_form : real[nvars - 1],
+    Sigma_x_form : real[nvars - 1, nvars - 1],
+    ksi : real[nresp],
+    mu_x_halo : real[nvars],
+    gamma : real[nvars],
+    sigma_x_halo : real[nvars],
+    lambda_x_halo : real[nvars],
+    mu_x_garb : real[nvars],
+    sigma_x_garb : real[nvars],
+    lambda_x_garb : real[nvars],
+    p_segment : real[3]),
+  model(
+    /* scale usage */
+    mu_tls <- [0, -Sigma_tls[2, 2] / 2],
+    Sigma_tls[1, 1] <- exp(nu[1]),
+    Sigma_tls[2, 2] <- exp(nu[2]),
+    Sigma_tls[1, 2] <- exp((nu[1] + nu[2]) / 2) * tanh(nu[3]),
+    Sigma_tls[2, 1] <- Sigma_tls[1, 2],
+    loop(h, [1, 3],
+      nu[h] ~ dnorm(mu_nu[h], sigma_nu[h])),
+    loop(i, [1, nresp],
+      loop(j, [1, nvars],
+        v[i, j] ~ dinterval(x[i, j], c[i, %all])),
+      loop(k, [1, nlevels - 1],
+	c[i, k] <- (cp[k] - tau[i]) / scale[i]),
+      tls[i, %all] ~ dmvnorm(mu_tls, Sigma_tls),
+      tau[i] <- tls[i, 1],
+      scale[i] <- exp(tls[i, 2])),
+
+    /* formers */
+    loop(i, [1, nresp],
+      if equal(segment[i], 1) then block(
+        x[i, 1] ~ dnorm(mu_y_form + dot(x[i, 2 .. nvars], beta_),
+			sigma_y_form),
+        x[i, 2 .. nvars] ~ dmvnorm(mu_x_form, Sigma_x_form))),
+    mu_y_form ~ dnorm(0, sigma_mu_y_form),
+    sigma_y_form <- 1 / sqrt(lambda_y_form),
+    lambda_y_form ~ dgamma(alpha_lambda_y_form, beta_lambda_y_form),
+    loop(j, [1, nvars - 1],
+      beta_[j] ~ dnorm(0, sigma_beta),
+      mu_x_form[j] ~ dnorm(0, sigma_mu_x_form)),
+    Sigma_x_form ~
+      dinvwishart(dof_Sigma_x_form, inverse_scale_Sigma_x_form),
+
+    /* haloers */
+    loop(i, [1, nresp],
+      if equal(segment[i], 2) then block(
+        ksi[i] ~ dnorm(0, 1),
+        loop(j, [1, nvars],
+          x[i, j] ~ dnorm(mu_x_halo[j] + gamma[j] * ksi[i],
+			  sigma_x_halo[j])))),
+    loop(j, [1, nvars],
+      gamma[j] ~ dnorm(0, sigma_gamma),
+      mu_x_halo[j] ~ dnorm(0, sigma_mu_x_halo[j]),
+      sigma_x_halo[j] <- 1 / sqrt(lambda_x_halo[j]),
+      lambda_x_halo[j] ~ dgamma(alpha_sigma_x_halo, beta_sigma_x_halo)),
+
+    /* garbage */
+    loop(i, [1, nresp],
+      if equal(segment[i], 3) then
+        loop(j, [1, nvars],
+          x[i, j] ~ dnorm(mu_x_garb[j], sigma_x_garb[j]))),
+    loop(j, [1, nvars],
+      mu_x_garb[j] ~ dnorm(0, sigma_mu_x_garb[j]),
+      sigma_x_garb[j] <- 1 / sqrt(lambda_x_garb[j]),
+      lambda_x_garb[j] ~ dgamma(alpha_lambda_x_garb, beta_lambda_x_garb)),
+
+    /* segments */
+    loop(i, [1, nresp],
+      segment[i] ~ dcat(p_segment)),
+    p_segment ~ ddirch(alpha_p_segment))));
+
+extract_vars_decls(mdl) := maplist(var_decl, extract_vars_section(mdl));
+
+extract_args_decls(mdl) := maplist(var_decl, extract_args_section(mdl));
+
+extract_args_checks(mdl) :=
+  append(extract_args_restrictions(mdl), extract_reqs_section(mdl));
+
+extract_array_length_proof_obligation(mdl) := 
+  funmake("==>", [var_array_length_assumptions(mdl),
+		  var_array_length_conclusions(mdl)]);
+
+extract_well_defined_proof_obligation(mdl) :=
+  funmake("==>", [well_defined_assumptions(mdl),
+   		  well_defined_conclusions(mdl)]);
+
+extract_log_pdf(mdl) :=
+  simplify_log_pdf(logabs(model_pdf(extract_model_section(mdl))));
+
+model_pdf(x) :=
+  if listp(x) then
+    funmake("*", maplist(model_pdf, x))
+  else if atom(x) then
+    error("Bad model")
+  else block(
+    [oper: op(x),
+     a: args(x)],
+    if oper = "<-" then
+      1
+    elseif oper = "~" then
+      funmake(op(a[2]), cons(a[1], args(a[2])))
+    elseif oper = 'block then
+      funmake("*", maplist(model_pdf, a))
+    elseif oper = 'loop then
+      funmake('product, [model_pdf(rest(a,2)), a[1], a[2][1], a[2][2]])
+    elseif oper = "if" and not a[4] then
+      funmake("if", [a[1], model_pdf(a[2]), true, 1])
+    else
+      error("Bad submodel:", x));
+
+
+simplify_log_pdf(x) := block(
+  [inflag: true,
+   newx: simplify_log_pdf_once(x)],
+  while newx # "fail" do (
+    x: newx,
+    newx: simplify_log_pdf_once(x)
+  ),
+  x);
+
+simplify_log_pdf_once(x) :=
+  if atom(x) then
+    "fail"
+  elseif op(x) = "+" then block(
+    [a: args(x), aa],
+    aa: map(simplify_log_pdf_once, a),
+    if delete("fail", aa) = [] then
+      "fail"
+    else
+      funmake("+", map(lambda([x,y], if y = "fail" then x else y), a, aa)))
+  elseif op(x) = sum then block(
+    [a: args(x), e],
+    e: simplify_log_pdf_once(first(a)),
+    if e = "fail" then
+      "fail"
+    else
+      funmake('sum, cons(e, rest(a))))
+  elseif op(x) = "*" then block(
+    [a: args(x), aa],
+    aa: map(simplify_log_pdf_once, a),
+    if delete("fail", aa) = [] then
+      "fail"
+    else
+      funmake("*", map(lambda([x,y], if y = "fail" then x else y), a, aa)))
+  elseif op(x) = "if" and length(args(x)) = 4 then block(
+    [a: args(x), then_val, else_val],
+    then_val: simplify_log_pdf_once(a[2]),
+    else_val: simplify_log_pdf_once(a[4]),
+    if then_val = "fail" and else_val = "fail" then
+      "fail"
+    else block(
+      if then_val = "fail" then then_val: a[2],
+      if else_val = "fail" then else_val: a[4],
+      funmake("if", [a[1], then_val, a[3], else_val])))
+  elseif op(x) # 'logabs then
+    "fail"
+  else block(
+    [a: args(x)],
+    if length(a) # 1 then
+      error("logabs has the wrong number of arguments")
+    else block(
+      [xx: a[1]],
+      if xx = %e then
+        1
+      else if atom(xx) and constantp(xx) and xx >= 0 then
+        (if xx = 0 then minf else log(xx))
+      else if atom(xx) then
+        "fail"
+      else block(
+        [oper: op(xx), aa: args(xx)],
+        if oper = "^" then
+          aa[2] * logabs(aa[1])
+        elseif oper = "*" then
+          funmake("+", map(logabs, aa))
+        elseif oper = product then
+          funmake('sum, cons(logabs(first(aa)), rest(aa)))
+        elseif oper = "if" and length(aa) = 4 then
+          funmake("if", [aa[1], logabs(aa[2]), aa[3], logabs(aa[4])])
+        else
+          simplify_log_pdf_once_distr(oper, aa)))); 
+
+simplify_log_pdf_once_distr(oper, arglist) := block(
+  [f: assoc(oper, [['dnorm, dnorm], ['dgamma, dgamma]/*, ['ddirch, ddirch]*/])],
+  if f # false then
+    funmake('logabs, [apply(f, arglist)])
+  else
+    "fail");
+
+dnorm(x, mu, sigma) :=
+  exp(-(x - mu)^2/2/sigma)/sqrt(2 * %pi);
+
+dgamma(x, alpha, beta) :=
+  if x <= 0 then
+    0
+  else
+    beta^alpha / gamma(alpha) * x^(alpha - 1) * exp(-beta*x);
+
+/*
+ddirch(x, alpha) := block(
+  [idxvars: index_vars(1, [x, alpha]), idxvar],
+  idxvar: idxvars[1],
+  funmake("*",
+    [funmake('product, gamma(arraymake(x
+*/
+
+exists(pred, lst) := block(
+  unless lst = [] or pred(first(lst)) do
+    lst: rest(lst),
+  is(length(lst) > 0));
+
+operp(x, o) := not symbolp(x) and op(x) = o;
+
+implies(y, x) :=
+  y = x or
+  operp(x, ">=") and operp(y, ">=") and
+  block([ax: args(x), ay: args(y)],
+    ax[1] = ay[1] and numberp(ax[2]) and numberp(ay[2]) and ay[2] >= ax[2]);
+
+/*
+Assume: basic arg types, args checks, basic var types
+Prove: lengths of arrays in each dimension are nonnegative integers
+(This also verifies that they only depend on args, not on other vars)
+
+Asume: basic arg types, args checks, basic var types, dims(...) for
+       each array in vars.
+Assume: implications of distributions
+Prove: declared element type for each var
+       every scalar var and every element of every array defined
+       no attempt to define nonexistent array element
+       bounds for every for loop are integers
+       test for every if is boolean
+*/
+
+extract_args_section(mdl) := 
+  block(
+    [x: first(args(mdl))],
+    if op(x) # 'args then error("Invalid model"),
+    args(x));
+
+extract_reqs_section(mdl) :=
+  block(
+    [x: second(args(mdl))],
+    if op(x) # 'reqs then error("Invalid model"),
+    args(x));
+
+extract_vars_section(mdl) := 
+  block(
+    [x: third(args(mdl))],
+    if op(x) # 'vars then error("Invalid model"),
+    args(x));
+
+extract_model_section(mdl) :=
+  block(
+    [x: fourth(args(mdl))],
+    if op(x) # 'model then error("Invalid model"),
+    args(x));
+
+extract_args_restrictions(mdl) :=
+  flatten(maplist(var_restr, extract_args_section(mdl)));
+
+var_decl(x) := block(
+  [oper: op(x), arglist: args(x), lhs, rhs], 
+  lhs: arglist[1],
+  rhs: arglist[2],
+  if oper # ":" or not symbolp(lhs) then
+    error(sconcat("Invalid declaration: ", x)),
+  if symbolp(rhs) then
+    rhs: base_type(rhs)
+  elseif subvarp(rhs) then
+    rhs: funmake('array, [base_type(op(rhs)), length(args(rhs))])
+  else
+    error(sconcat("Invalid RHS of declaration: ", x)),
+  funmake(":", [lhs, rhs]));
+
+base_type(x) := block(
+  [retval: assoc(x,
+    ['boolean='boolean,
+     'integer='integer,
+     'integernn='integer,
+     'integerp='integer,
+     'realxn='realxn,
+     'realx='realxn,
+     'real='realxn,
+     'realp='realxn,
+     'realnn='realxn],
+    'none)],
+  if retval='none then
+    error(sconcat("Invalid type: ", x)),
+  retval);
+
+var_restr(x) := block(
+  [oper: op(x), arglist: args(x), lhs, rhs],
+  lhs: arglist[1],
+  rhs: arglist[2],
+  if oper # ":" or not symbolp(lhs) then
+    error(sconcat("Invalid declaration: ", x)),
+  if symbolp(rhs) then
+    type_restr(lhs, rhs)
+  elseif subvarp(rhs) then
+    array_type_restr(lhs, op(rhs), args(rhs))
+  else
+    error(sconcat("Invalid RHS of declaration: ", x)));
+
+type_restr(var, typ) :=
+  if member(typ, '[boolean, integer, realxn]) then
+    []
+  elseif typ = 'integernn then
+    [funmake(">=", [var, 0])]
+  elseif typ = 'integerp then
+    [funmake(">", [var, 0])]
+  else
+    [funmake(concat('is_, typ), [var])];
+
+array_type_restr(var, typ, dims) := block(
+  [idxvars, elt_preds, dim_preds, n],
+  n: length(dims),
+  dim_preds: makelist(
+               funmake('equal, [funmake('array_length, [i, var]), dims[i]]),
+	       i, 1, n),
+  idxvars: index_vars(n, [var, dims]),
+  elt_preds: type_restr(arraymake(var, idxvars), typ),
+  elt_preds: maplist(make_nested_for_all(idxvars, dims), elt_preds),
+  append(dim_preds, elt_preds));
+
+index_vars(n, expr) :=
+  if n = 1 and freeof('i, expr) then
+    ['i]
+  else block(
+    [prefix, idxvars],
+    prefix: 'i,
+    idxvars: makelist(concat(prefix, k), k, n),
+    unless lfreeof(idxvars, expr) do (
+      prefix: concat('i, prefix),
+      idxvars: makelist(concat(prefix, k), k, n)),
+    idxvars);
+
+make_nested_for_all(idxvars, dims) :=
+  lambda([pred], make_nested_for_all1(idxvars, dims, pred));
+
+make_nested_for_all1(idxvars, dims, pred) :=
+  if idxvars = [] then
+    pred
+  else block(
+    [inner: make_nested_for_all1(rest(idxvars), rest(dims), pred),
+     ivar: first(idxvars),
+     upper: first(dims)],
+    funmake('for_all, [ivar, [1, upper], inner]));
+
+var_array_length_assumptions(mdl) :=
+  funmake("and", append(arg_type_assumptions(mdl),
+                        extract_reqs_section(mdl),
+                        minimal_var_type_assumptions(mdl)));
+
+arg_type_assumptions(mdl) :=
+  flatten(maplist(full_type_predicate, extract_args_section(mdl)));
+
+minimal_var_type_assumptions(mdl) :=
+  maplist(minimal_type_predicate, extract_vars_section(mdl));
+
+minimal_type_predicate(decl) := block(
+  [oper: op(decl), a: args(decl), v, t],
+  v: a[1],
+  t: a[2],
+  if oper # ":" or not symbolp(v) then
+    error(sconcat("Invalid declaration: ", x)),
+  if symbolp(t) then
+    funmake('is_scalar, [v])
+  elseif subvarp(t) then
+    funmake('is_array, [v, length(args(t))])
+  else
+    error(sconcat("Invalid RHS of declaration: ", t)));
+
+full_type_predicate(decl) := block(
+  [oper: op(decl), a: args(decl), v, t],
+  v: a[1],
+  t: a[2],
+  if oper # ":" or not symbolp(v) then
+    error(sconcat("Invalid declaration: ", x)),
+  if symbolp(t) then
+    full_type_restr(v, t)
+  elseif subvarp(t) then
+    full_array_type_restr(v, op(t), args(t))
+  else
+    error(sconcat("Invalid RHS of declaration: ", t)));
+
+full_type_restr(v, t) :=
+  [funmake(concat('is_, t), [v])];
+
+full_array_type_restr(v, t, dims) := block(
+  [idxvars, dim_pred, len_preds, elt_preds, n],
+  n: length(dims),
+  dim_pred: [funmake('is_array, [v, n])],
+  len_preds: makelist(
+               funmake('equal, [funmake('array_length, [i, v]), dims[i]]),
+	       i, 1, n),
+  idxvars: index_vars(n, [v, dims]),
+  elt_preds: full_type_restr(arraymake(v, idxvars), t),
+  elt_preds: maplist(make_nested_for_all(idxvars, dims), elt_preds),
+  append(dim_pred, len_preds, elt_preds));
+
+var_array_length_conclusions(mdl) :=
+  funmake("and",
+    unique(flatten(maplist(lengths_are_integernn, extract_vars_section(mdl)))));
+
+well_defined_assumptions(mdl) :=
+  funmake("and", append(arg_type_assumptions(mdl),
+  		        extract_reqs_section(mdl),
+                        minimal_var_type_assumptions(mdl),
+			args(var_array_length_conclusions(mdl)),
+			model_type_implications(extract_model_section(mdl))));
+
+lengths_are_integernn(decl) := block(
+  [a: args(decl), v, t],
+  v: a[1],
+  t: a[2],
+  if symbolp(t) then
+    []
+  else
+    flatten(maplist(is_integernn_expr, args(t))));
+
+model_type_implications(rels) :=
+  if listp(rels) then
+    flatten(maplist(model_type_implications, rels))
+  elseif atom(resl) then
+    error(concat("Invalid relations: ", rels))
+  else block(
+    [operand: op(rels),
+     a: args(rels)],
+    if operand = "if" then
+      append(maplist(lambda([x], funmake("==>", [equal(a[1], 'true), x])),
+                     model_type_implications(a[2])),
+             maplist(lambda([x], funmake("==>", [equal(a[1], 'false), x])),
+                     model_type_implications(a[4])))
+    elseif operand = 'block then
+      model_type_implications(a)
+    elseif operand = 'loop then block(
+      [lim: a[2], lo, hi, body],
+      lo: lim[1],
+      hi: lim[2],
+      body: funmake("and", model_type_implications(rest(a, 2))),
+      [funmake("==>", [is_integer(lo), funmake("==>", [is_integer(hi),
+       funmake("for_all", [a[1], lim, body])])])])
+    elseif operand = "<-" then
+      error("*** FINISH THIS ***")
+  );
+
+is_integernn_expr(x) :=
+  if integerp(x) and x >= 0 then
+    []
+  else
+    [funmake('is_integernn, [x])];
+
+/*
+well_defined_assumptions(mdl) :=
+  funmake("and", append(arg_type_assumptions(mdl),
+			extract_args_checks(mdl),
+			var_type_assumptions(mdl),
+*/			
+
+
+matchdeclare(
+  aa, numberp,
+  bb, numberp,
+  ii, integerp,
+  x, lambda([x], not integerp(x)),
+  z, lambda([x], not numberp(x)));
+
+tellsimpafter(aa < bb, is(aa < bb));
+tellsimpafter(aa <= bb, is(aa <= bb));
+tellsimpafter(aa > bb, is(aa > bb));
+tellsimpafter(aa >= bb, is(aa >= bb));
+
+tellsimp(is_integer(ii), true);
+tellsimpafter(is_integer(x + aa), is_integer(x));
+tellsimp(z + aa >= bb, z >= bb - aa);
+/*tellsimpafter(aa <= z, z >= aa);*/
+
+test_ead() :=
+  is(extract_args_decls(halo_model) =
+     '[nresp : integer,
+       nvars : integer,
+       nlevels : integer,
+       mu_nu : array(realxn, 1),
+       sigma_nu : array(realxn, 1),
+       cp : array(realxn, 1),
+       sigma_mu_y_form : realxn,
+       sigma_beta : realxn,
+       alpha_lambda_y_form : realxn,
+       beta_lambda_y_form : realxn,
+       sigma_mu_x_form : realxn,
+       dof_Sigma_x_form : realxn,
+       inverse_scale_Sigma_x_form : array(realxn, 2),
+       sigma_mu_x_halo : array(realxn, 1),
+       sigma_gamma : realxn,
+       alpha_sigma_x_halo : realxn,
+       beta_sigma_x_halo : realxn,
+       sigma_mu_x_garb : array(realxn, 1),
+       alpha_lambda_x_garb : realxn,
+       beta_lambda_x_garb : realxn,
+       alpha_p_segment : array(realxn, 1)]);
+
+test_evd() :=
+  is(extract_vars_decls(halo_model) =
+     '[mu_tls : array(realxn, 1),
+       Sigma_tls : array(realxn, 2),
+       nu : array(realxn, 1),
+       tls : array(realxn, 2),
+       tau : array(realxn, 1),
+       scale : array(realxn, 1),
+       v : array(integer, 2),
+       c : array(realxn, 2),
+       x : array(realxn, 2),
+       segment : array(integer, 1),
+       mu_y_form : realxn,
+       sigma_y_form : realxn,
+       lambda_y_form : realxn,
+       beta_ : array(realxn, 1),
+       mu_x_form : array(realxn, 1),
+       Sigma_x_form : array(realxn, 2),
+       ksi : array(realxn, 1),
+       mu_x_halo : array(realxn, 1),
+       gamma : array(realxn, 1),
+       sigma_x_halo : array(realxn, 1),
+       lambda_x_halo : array(realxn, 1),
+       mu_x_garb : array(realxn, 1),
+       sigma_x_garb : array(realxn, 1),
+       lambda_x_garb : array(realxn, 1),
+       p_segment : array(realxn, 1)]);
+
+test_eac() :=
+  is(extract_args_checks(halo_model) =
+     '[nresp >= 0,
+       equal(array_length(1, mu_nu), 3),
+       for_all(i, [1,3], is_real(mu_nu[i])),
+       equal(array_length(1, sigma_nu), 3),
+       for_all(i, [1,3], is_realp(sigma_nu[i])),
+       equal(array_length(1, cp), nlevels - 1),
+       for_all(i, [1, nlevels - 1], is_real(cp[i])),
+       is_realp(sigma_mu_y_form),
+       is_realp(sigma_beta),
+       is_realp(alpha_lambda_y_form),
+       is_realp(beta_lambda_y_form),
+       is_realp(sigma_mu_x_form),
+       is_realp(dof_Sigma_x_form),
+       equal(array_length(1, inverse_scale_Sigma_x_form), nvars - 1),
+       equal(array_length(2, inverse_scale_Sigma_x_form), nvars - 1),
+       for_all(i1, [1, nvars - 1],
+         for_all(i2, [1, nvars - 1],
+           is_real(inverse_scale_Sigma_x_form[i1, i2]))),
+       equal(array_length(1, sigma_mu_x_halo), nvars),
+       for_all(i, [1, nvars], is_realp(sigma_mu_x_halo[i])),
+       is_realp(sigma_gamma),
+       is_realp(alpha_sigma_x_halo),
+       is_realp(beta_sigma_x_halo),
+       equal(array_length(1, sigma_mu_x_garb), nvars),
+       for_all(i, [1, nvars], is_realp(sigma_mu_x_garb[i])),
+       is_realp(alpha_lambda_x_garb),
+       is_realp(beta_lambda_x_garb),
+       equal(array_length(1, alpha_p_segment), 3),
+       for_all(i, [1,3], is_realnn(alpha_p_segment[i])),
+       3 <= nvars,
+       3 <= nlevels,
+       for_all(k, [1, nlevels - 2], cp[k] < cp[k + 1]),
+       dof_Sigma_x_form > nvars - 2,
+       is_symm_pd(inverse_scale_Sigma_x_form),
+       0 < sum(alpha_p_segment[h], h, 1, 3)]);
+
+scale_usage_model: '(file(
+  args(
+    nresp : integernn,
+    nvars : integer,
+    nlevels : integer,
+    mu_nu : real[3],
+    sigma_nu : realp[3],
+    cp : real[nlevels - 1],
+    sigma_mu_x : realp,
+    dof_Sigma_x : realp,
+    inverse_scale_Sigma_x : real[nvars, nvars]),
+  reqs(
+    3 <= nvars,
+    3 <= nlevels,
+    for_all(k, [1, nlevels - 2], cp[k] < cp[k + 1]),
+    dof_Sigma_x > nvars - 2,
+    is_symm_pd(inverse_scale_Sigma_x)),
+  vars(
+    mu_tls : real[2],
+    Sigma_tls : real[2, 2],
+    nu : real[3],
+    tls : real[nresp, 2],
+    tau : real[nresp],
+    scale : real[nresp],
+    v : integer[nresp, nvars],
+    c : real[nresp, nlevels - 1],
+    x : real[nresp, nvars],
+    mu_x : real[nvars],
+    Sigma_x : real[nvars, nvars]),
+  model(
+    /* scale usage */
+    mu_tls <- [0, -Sigma_tls[2, 2] / 2],
+    Sigma_tls[1, 1] <- exp(nu[1]),
+    Sigma_tls[2, 2] <- exp(nu[2]),
+    Sigma_tls[1, 2] <- exp((nu[1] + nu[2]) / 2) * tanh(nu[3]),
+    Sigma_tls[2, 1] <- Sigma_tls[1, 2],
+    loop(h, [1, 3],
+      nu[h] ~ dnorm(mu_nu[h], sigma_nu[h])),
+    loop(i, [1, nresp],
+      loop(j, [1, nvars],
+        v[i, j] ~ dinterval(x[i, j], c[i, %all])),
+      loop(k, [1, nlevels - 1],
+	c[i, k] <- (cp[k] - tau[i]) / scale[i]),
+      tls[i, %all] ~ dmvnorm(mu_tls, Sigma_tls),
+      tau[i] <- tls[i, 1],
+      scale[i] <- exp(tls[i, 2])),
+
+    /* latent data distribution */
+    loop(i, [1, nresp],
+      x[i, %all] ~ dmvnorm(mu_x, Sigma_x)),
+    loop(j, [1, nvars],
+      mu_x[j] ~ dnorm(0, sigma_mu_x)),
+    Sigma_x ~
+      dinvwishart(dof_Sigma_x_form, inverse_scale_Sigma_x_form))));
+
+test_ealpo() :=
+  is(extract_array_length_proof_obligation(scale_usage_model) =
+     funmake("==>",
+     '[is_integernn(nresp) and
+       is_integer(nvars) and
+       is_integer(nlevels) and
+       is_array(mu_nu, 1) and
+       equal(array_length(1, mu_nu), 3) and
+       for_all(i, [1, 3], is_real(mu_nu[i])) and
+       is_array(sigma_nu, 1) and
+       equal(array_length(1, sigma_nu), 3) and
+       for_all(i, [1, 3], is_realp(sigma_nu[i])) and
+       is_array(cp, 1) and
+       equal(array_length(1, cp), nlevels - 1) and
+       for_all(i, [1, nlevels - 1], is_real(cp[i])) and
+       is_realp(sigma_mu_x) and
+       is_realp(dof_Sigma_x) and
+       is_array(inverse_scale_Sigma_x, 2) and
+       equal(array_length(1, inverse_scale_Sigma_x), nvars) and
+       equal(array_length(2, inverse_scale_Sigma_x), nvars) and
+       for_all(i1, [1, nvars],
+         for_all(i2, [1, nvars], is_real(inverse_scale_Sigma_x[i1,i2]))) and
+       3 <= nvars and
+       3 <= nlevels and
+       for_all(k, [1, nlevels - 2], cp[k] < cp[k + 1]) and
+       dof_Sigma_x > nvars - 2 and
+       is_symm_pd(inverse_scale_Sigma_x) and
+       is_array(mu_tls, 1) and
+       is_array(Sigma_tls, 2) and
+       is_array(nu, 1) and
+       is_array(tls, 2) and
+       is_array(tau, 1) and
+       is_array(scale, 1) and
+       is_array(v, 2) and
+       is_array(c, 2) and
+       is_array(x, 2) and
+       is_array(mu_x, 1) and
+       is_array(Sigma_x, 2),
+
+       is_integernn(nlevels - 1) and
+       is_integernn(nresp) and
+       is_integernn(nvars)]));
