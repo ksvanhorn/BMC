@@ -30,12 +30,14 @@
 (define-test rel-tests
   (let ((rel-deterministic '(<- vard val))
 	(rel-stochastic '(~ vars distr))
+	(rel-block '(:block rel1 rel2))
 	(rel-if-then '(:if test1 rel))
 	(rel-if-then-else '(:if test2 rel-true rel-false))
 	(rel-loop '(:for i (lo hi) body)))
 
     (assert-equal 'deterministic (rel-class rel-deterministic))
     (assert-equal 'stochastic (rel-class rel-stochastic))
+    (assert-equal 'block (rel-class rel-block))
     (assert-equal 'if-then (rel-class rel-if-then))
     (assert-equal 'if-then-else (rel-class rel-if-then-else))
     (assert-equal 'loop (rel-class rel-loop))
@@ -45,6 +47,8 @@
 
     (assert-equal 'vars (rel-var rel-stochastic))
     (assert-equal 'distr (rel-distr rel-stochastic))
+
+    (assert-equal '(rel1 rel2) (rel-block-body rel-block))
 
     (assert-equal 'test1 (rel-if-condition rel-if-then))
     (assert-equal 'rel (rel-true-branch rel-if-then))
@@ -92,5 +96,132 @@
       (assert-equal 'lo (range-lo range-arg))
       (assert-equal 'hi (range-hi range-arg)))))
 
+(defmacro assert-pe (s e) `(assert-equal ,s (print-expr ',e)))
+
+(define-test print-expr-tests
+    (assert-pe "QSUM(h, (1, 3), ALPHA[h])"
+	       (QSUM |h| (1 3) (@ ALPHA |h|)))
+    (assert-pe "is_symm_pd(Sigma)"
+	       (|is_symm_pd| |Sigma|))
+    (assert-pe "dnorm(MU, SIGMA)"
+	       (|dnorm| MU SIGMA))
+    (assert-pe "X[i, 2 : N]"
+	       (@ X |i| (:range 2 N)))
+    (assert-pe "MU[j]"
+	       (@ MU |j|))
+    (assert-pe "SIGMA[, i]"
+	       (@ SIGMA :all |i|))
+    (assert-pe "3 <= nv"
+	       (<= 3 |nv|))
+    (assert-pe "N - 1"
+	       (- N 1))
+    (assert-pe "QAND(k, (1, N), X[k] < X[k + 1])"
+	       (QAND |k| (1 N) (< (@ X |k|) (@ X (+ |k| 1)))))
+    (assert-pe "A + B * C ^ 2 * F(3) / (X + 7) + Y ^ 3 - EXP(MU)"
+	       (- (+ a (/ (* b (^ c 2) (f 3)) (+ x 7)) (^ y 3)) (exp mu))))
+
+(define-test print-decl-tests
+  (assert-equal "X : REAL"
+		(print-decl '(x real)))
+  (assert-equal "A : INTEGER[n - 1, m]"
+		(print-decl '(a (integer (- |n| 1) |m|)))))
+
+(define-test print-rel-tests
+  (assert-equal 
+"  v <- foo(bar)
+"
+   (print-rel 2 '(<- |v| (|foo| |bar|))))
+
+  (assert-equal 
+"  V[i, j] <- EXP(W[i, j])
+"
+   (print-rel 2 '(<- (@ v |i| |j|) (exp (@ w |i| |j|)))))
+
+  (assert-equal 
+"  X ~ DNORM(MU, SIGMA)
+"
+   (print-rel 2 '(~ x (dnorm mu sigma))))
+
+  (assert-equal 
+"    X[i] ~ DGAMMA(ALPHA, BETA)
+"
+   (print-rel 4 '(~ (@ x |i|) (dgamma alpha beta))))
+
+  (assert-equal 
+"  IF Y[I] = 3 THEN
+    X[I] <- Y[I] + Z
+"
+   (print-rel 2 '(:if (= (@ y i) 3)
+				   (<- (@ x i) (+ (@ y i) z)))))
+
+  (assert-equal 
+"  IF E THEN
+    X ~ DEXP(B)
+  ELSE
+    V <- 12
+"
+   (print-rel 2 '(:if e (~ x (dexp b)) (<- v 12))))
+
+  (assert-equal 
+"    X[I] <- Y[I] + Z
+    V[I] ~ DNORM(MU[I], SIGMA)
+    X ~ DEXP(B)
+"
+   (print-rel 4 '(:block
+		  (<- (@ x i) (+ (@ y i) z))
+		  (~ (@ v i) (dnorm (@ mu i) sigma))
+		  (~ x (dexp b)))))
+
+  (assert-equal
+"  FOR i IN N + 2 : M - 1 DO
+    X[i] ~ DEXP(B[i])
+"
+   (print-rel 2 '(:for |i| ((+ n 2) (- m 1))
+		       (~ (@ x |i|) (dexp (@ b |i|)))))))
+
+(define-test print-model-tests
+  (assert-equal
+"ARGS
+  N : INTEGER
+  F : REAL[N]
+REQS
+  N >= 0
+  QAND(i, (1, N), F[i] != 0)
+VARS
+  M : INTEGER
+  X : REAL[N]
+BODY
+  M <- N ^ 3
+  FOR i IN 1 : N DO
+    X[i] ~ DNORM(MU, SIGMA)
+"
+   (print-model
+    '(:model
+      (:args (n integer)
+	     (f (real n)))
+      (:reqs (>= n 0)
+	     (qand |i| (1 n) (!= (@ f |i|) 0)))
+      (:vars (m integer)
+	     (x (real n)))
+      (:body
+        (<- m (^ n 3))
+	(:for |i| (1 n) (~ (@ x |i|) (dnorm mu sigma))))))))
+
+(define-test model-case-xform-tests
+  (let ((input
+"(:model
+  (:args (Sigma real) (y int))
+  (:reqs (>= y 0))
+  (:vars (v real))
+  (:body (<- v (* Sigma y))))
+")
+	(output
+"(:model
+  (:args (|Sigma| |real|) (|y| |int|))
+  (:reqs (>= |y| 0))
+  (:vars (|v| |real|))
+  (:body (<- |v| (* |Sigma| |y|))))
+"))
+    (assert-equal output (model-string-case-xform input))))
 
 ;; expressions?
