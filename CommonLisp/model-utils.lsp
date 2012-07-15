@@ -234,6 +234,102 @@
     (with-open-file (ostrm ofname :direction :output)
        (format ostrm "~a" (print-model mdl)))))
 
+(defun base-decl (decl)
+  (let ((var (decl-var decl))
+	(typ (decl-typ decl)))
+    (let ((base-type
+	   (case (type-class typ)
+		 ('scalar (base-scalar-type typ))
+		 ('array (list (base-scalar-type (elem-type typ))
+			       (length (type-dims typ)))))))
+      (list var base-type))))
 
+(defparameter *base-scalar-types*
+  '((realxn . realxn) (realx . realxn) (real . realxn)
+    (realnn . realxn) (realp . realxn)
+    (integer . integer) (integernn . integer) (integerp . integer)
+    (boolean . boolean)))
 
-      
+(defun base-scalar-type (typ)
+  (cdr (assoc typ *base-scalar-types*)))
+
+(defun args-base-decls (mdl)
+  (mapcar #'base-decl (extract-args mdl)))
+
+(defun vars-base-decls (mdl)
+  (mapcar #'base-decl (extract-vars mdl)))
+
+(defun args-checks (mdl)
+  (append (flatten (mapcar #'decl-checks (extract-args mdl)))
+	  (extract-reqs mdl)))
+
+(defun flatten (lists) (apply #'append lists))
+
+(defun decl-checks (decl)
+  (let ((var (decl-var decl))
+	(typ (decl-typ decl)))
+    (case (type-class typ)
+	  ('scalar (scalar-type-checks var typ))
+	  ('array (array-type-checks var typ)))))
+
+(defun scalar-type-checks (var typ)
+  (let ((btyp (base-scalar-type typ)))
+    (if (eq btyp typ)
+	nil
+        (list (simplify-check (list (concat-symbol 'is- typ) var))))))
+
+(defun simplify-check (check-expr)
+  (destructuring-bind (pred var) check-expr
+     (cond ((eq 'is-integernn pred)
+	    `(>= ,var 0))
+	   ((eq 'is-integerp pred)
+	    `(> ,var 0))
+	   (t check-expr))))
+
+(defun concat-symbol (&rest args)
+  (intern (apply #'concatenate 'string (mapcar #'write-to-string args))))
+
+(defun array-type-checks (var typ)
+  (let* ((etyp (elem-type typ))
+	 (dims (type-dims typ))
+	 (idxvars (index-vars (length dims) `(list ,var ,@dims))))
+    (append (array-length-checks var dims 1)
+	    (array-element-checks var etyp dims idxvars idxvars))))
+
+(defun array-length-checks (var dims n)
+  (if (null dims)
+      nil
+      (cons `(= (array-length ,n ,var) ,(car dims))
+	    (array-length-checks var (cdr dims) (1+ n)))))
+
+(defun array-element-checks (var etyp dims idxvars all-idxvars)
+  (if (null dims)
+      (scalar-type-checks `(@ ,var ,@all-idxvars) etyp)
+      (let ((iv (car idxvars))
+	    (idxvars1 (cdr idxvars))
+	    (dims1 (cdr dims)))
+	(mapcar (lambda (x) `(QAND ,iv (1 ,(car dims)) ,x))
+		(array-element-checks var etyp dims1 idxvars1 all-idxvars)))))
+
+(defun map-range (lo hi fct)
+  (do ((result nil (cons (funcall fct n) result))
+       (n lo (1+ n)))
+      ((> n hi) (reverse result))))
+
+(defun index-vars (n expr)
+  (do ((result nil)
+       (k 1 (1+ k)))
+      ((= n 0) (reverse result))
+     (let ((idxvar (concat-symbol 'i k)))
+       (when (fully-free-of idxvar expr)
+	 (decf n)
+	 (push idxvar result)))))
+
+(defun fully-free-of (var expr)
+  (cond
+    ((symbolp expr) (not (eq var expr)))
+    ((consp expr) (and (fully-free-of var (car expr))
+		       (fully-free-of var (cdr expr))))
+    (t t)))
+
+       

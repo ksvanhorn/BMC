@@ -224,4 +224,65 @@ BODY
 "))
     (assert-equal output (model-string-case-xform input))))
 
-;; expressions?
+(define-test base-decl-tests
+  (assert-equal '(x realxn) (base-decl '(x real)))
+  (assert-equal '(x realxn) (base-decl '(x realx)))
+  (assert-equal '(x realxn) (base-decl '(x realnn)))
+  (assert-equal '(x realxn) (base-decl '(x realp)))
+  (assert-equal '(x realxn) (base-decl '(x realxn)))
+
+  (assert-equal '(v integer) (base-decl '(v integer)))
+  (assert-equal '(v integer) (base-decl '(v integernn)))
+  (assert-equal '(v integer) (base-decl '(v integerp)))
+
+  (assert-equal '(y boolean) (base-decl '(y boolean)))
+
+  (assert-equal '(x (realxn 1)) (base-decl '(x (real i))))
+  (assert-equal '(v (integer 2)) (base-decl '(v (integerp nvars m)))))
+
+(define-test base-decls-tests
+  (assert-equal
+   '((x realxn) (y (integer 3)))
+   (args-base-decls '(:model
+		      (:args (x real)
+			     (y (integerp 2 4 3)))
+		      (:reqs)
+		      (:vars)
+		      (:body))))
+  (assert-equal
+   '((x realxn) (y (integer 3)))
+   (vars-base-decls '(:model
+		      (:args)
+		      (:reqs)
+		      (:vars (x real)
+			     (y (integerp 2 4 3)))
+		      (:body)))))
+
+(define-test misc-utils-tests
+  (assert-equal '(9 16 25) (map-range 3 5 (lambda (n) (* n n))))
+  (assert-equal '(i1 i3 i6) (index-vars 3 '(+ i2 (* i4 i5)))))
+
+(define-test arg-checks-tests
+  (assert-equal
+   '((>= nresp 0)
+     (= (array-length 1 mu) 3)
+     (QAND i1 (1 3) (is-real (@ mu i1)))
+     (= (array-length 1 foo) nresp)
+     (= (array-length 2 foo) 2)
+     (QAND i1 (1 nresp) (QAND i2 (1 2) (> (@ foo i1 i2) 0)))
+     (= (array-length 1 bar) nvar)
+     (> nvar 3)
+     (= 1 (QSUM k (1 3) (@ mu k))))
+   (args-checks '(:model
+		  (:args
+		   (nresp integernn)
+		   (nvar integer)
+		   (mu (real 3))
+		   (foo (integerp nresp 2))
+		   (bar (integer nvar)))
+		  (:reqs
+		   (> nvar 3)
+		   (= 1 (QSUM k (1 3) (@ mu k))))
+		  (:vars)
+		  (:body)))))
+
