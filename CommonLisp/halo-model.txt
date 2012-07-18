@@ -43,8 +43,9 @@
     (sigma_y_form real)
     (lambda_y_form real)
     (beta (real (- nvars 1)))
-    (mu_x_form (real #((- nvars 1))))
+    (mu_x_form (real (- nvars 1)))
     (Sigma_x_form (real (- nvars 1) (- nvars 1)))
+    (Lambda_x_form (real (- nvars 1) (- nvars 1)))
     (ksi (real nresp))
     (mu_x_halo (real nvars))
     (gamma (real nvars))
@@ -90,8 +91,8 @@
       (:block
         (~ (@ beta j) (dnorm 0 sigma_beta))
         (~ (@ mu_x_form j) (dnorm 0 sigma_mu_x_form))))
-    (~ Sigma_x_form
-       (dinvwishart dof_Sigma_x_form inverse_scale_Sigma_x_form))
+    (<- Sigma_x_form (inv Lambda_x_form))	
+    (~ Lambda_x_form (dwishart dof_Sigma_x_form inverse_scale_Sigma_x_form))
 
     ; haloers
     (:for i (1 nresp)

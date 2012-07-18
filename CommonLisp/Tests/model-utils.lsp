@@ -152,7 +152,7 @@
     X[I] <- Y[I] + Z
 "
    (print-rel 2 '(:if (= (@ y i) 3)
-				   (<- (@ x i) (+ (@ y i) z)))))
+	       	   (<- (@ x i) (+ (@ y i) z)))))
 
   (assert-equal 
 "  IF E THEN
@@ -286,3 +286,126 @@ BODY
 		  (:vars)
 		  (:body)))))
 
+(define-test extract-pdf-tests
+  (assert-equal
+   '(precond-postcond-density
+     (and (is-real mu) (is-realp sigma))
+     (is-real x)
+     (* (1/ (sqrt (* 2 %pi)))
+	(1/ sigma)
+	(exp (* -1/2 (1/ (sqr sigma)) (sqr (- x mu))))))
+   (rel->density '(~ x (dnorm mu sigma))))
+
+  (assert-equal
+   '(let ((n1 (array-length 1 vec)))
+      (precond-postcond-density
+       (and (is-real y) (is-array 1 vec) (< 0 n1)
+	    (qand i1 (1 n1) (is-real (@ vec i1)))
+	    (qand i1 (1 (1- n1)) (ind< (@ vec i1) (@ vec (1+ i1)))))
+       (and (is-integer x) (<= 1 x) (<= x (1+ n1))
+	    (=> (< y (@ vec n1)) (< y (@ vec x)))
+	    (=> (<= (@ vec 1) y) (<= (@ vec (1- x)) y)))
+       1))
+   (rel->density '(~ x (dinterval y vec))))
+
+  (assert-equal
+   '(let ((n1 (length m)))
+      (precond-postcond-density
+       (and (is-array 1 m) (qand i1 (1 n1) (is-real (@ m i1)))
+	    (= n1 (array-length 1 S)) (is-symm-pd S))
+       (and (is-array 1 y) (and i1 (1 n1) (is-real (@ y i1))))
+       (* (^ (1/ (sqrt (* 2 %pi))) n1)
+	  (1/ (sqrt (abs (det S))))
+	  (exp (* -1/2 (quadmul (inv S) (vec- y m)))))))
+   (rel->density '(~ y (dmvnorm m S))))
+
+  (assert-equal
+   '(precond-postcond-density
+     (and (is-realp a) (is-realp b))
+     (is-realp (@ lambda i))
+     (* (^ b a) (1/ (gamma a)) (^ (@ lambda i) (1- a))
+	(exp (neg (* b (@ lambda i))))))
+   (rel->density '(~ (@ lambda i) (dgamma a b))))
+
+  (assert-equal
+   '(let ((p1 (array-length 1 V)))
+      (precond-postcond-density
+       (and (is-real nu) (< (1- p1) nu) (is-symm-pd V))
+       (and (is-symm-pd L) (= p1 (array-length 1 L)))
+       (* (^ 2 (* -1/2 nu p1))
+	  (1/ (mvgamma p1 (* 1/2 nu)))
+	  (^ (abs (det V)) (* -1/2 nu))
+	  (^ (abs (det L)) (* 1/2 (- nu p1 1)))
+	  (exp (* -1/2 (trace (matmul (inv V) L)))))))
+   (rel->density '(~ L (dwishart nu V))))
+
+  (assert-equal
+   '(let ((n1 (array-length 1 p)))
+      (precond-postcond-density
+       (is-probability-vector p)
+       (and (is-integerp y) (<= y n1))
+       (@ p y)))
+   (rel->density '(~ y (dcat p))))
+
+  (assert-equal
+   '(let (n1 (length alpha))
+      (precond-postcond-density
+       (and (is-array 1 alpha) (qand i1 (1 n1) (is-realp (@ alpha i1))))
+       (and (is-probability-vector p) (= n1 (array-length 1 p)))
+       (* (qprod i1 (1 n1) (gamma (@ alpha i1)))
+	  (1/ (gamma (qsum i1 (1 n1) (@ alpha i1))))
+	  (qprod i1 (1 n1) (^ (@ p i1) (1- (@ alpha i1)))))))
+   (rel->density '(~ p (ddirch alpha))))
+
+  (assert-equal
+   '(precond-postcond-density
+     (and (is-integer lo) (is-integer hi))
+     (and)
+     (qprod! k (lo hi) (dummy (@ x k) foo)))
+   (rel->density '(:for k (lo hi) (~ (@ x k) (ddummy foo)))))
+
+  (assert-equal
+   '(*! (dummy x1 foo1) (dummy x2 foo2))
+   (rel->density '(:block (~ x1 (ddummy foo1)) (~ x2 (ddummy foo2)))))
+
+  (assert-equal
+   '(when (= (@ y i) 1) (dymmy (@ x i) foo))
+   (rel->density '(:if (= (@ y i) 1) (~ (@ x i) (ddummy foo)))))
+
+  (assert-equal 1 (rel->density '(<- x e)))
+)
+
+; *** WHAT ABOUT SUPPORT OF DISTRIBUTIONS? ***
+
+; Predicates
+;; is-integernn
+;; is-real
+;; is-realp
+;; is_symm_pd
+; Functions:
+; x - y
+; x + y
+; x <= y
+; x < y
+; x = y
+; array-length(n, x)
+; @(x, i1, ..., in)
+; x / y
+; exp
+; list(...)
+; x * y
+; tanh
+; dot
+; sqrt
+; indp
+; indnn
+; abs
+; det
+; ind-symm-pd
+; gamma
+;
+; Expansions: 
+; QSUM
+; QAND
+; :all and :range in array index
+;
