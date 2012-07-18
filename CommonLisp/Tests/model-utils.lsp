@@ -301,7 +301,7 @@ BODY
       (precond-postcond-density
        (and (is-real y) (is-array 1 vec) (< 0 n1)
 	    (qand i1 (1 n1) (is-real (@ vec i1)))
-	    (qand i1 (1 (1- n1)) (ind< (@ vec i1) (@ vec (1+ i1)))))
+	    (qand i1 (1 (1- n1)) (< (@ vec i1) (@ vec (1+ i1)))))
        (and (is-integer x) (<= 1 x) (<= x (1+ n1))
 	    (=> (< y (@ vec n1)) (< y (@ vec x)))
 	    (=> (<= (@ vec 1) y) (<= (@ vec (1- x)) y)))
@@ -369,7 +369,7 @@ BODY
    (rel->density '(:block (~ x1 (ddummy foo1)) (~ x2 (ddummy foo2)))))
 
   (assert-equal
-   '(when (= (@ y i) 1) (dymmy (@ x i) foo))
+   '(when (= (@ y i) 1) (dummy (@ x i) foo))
    (rel->density '(:if (= (@ y i) 1) (~ (@ x i) (ddummy foo)))))
 
   (assert-equal 1 (rel->density '(<- x e)))
@@ -378,34 +378,65 @@ BODY
 ; *** WHAT ABOUT SUPPORT OF DISTRIBUTIONS? ***
 
 ; Predicates
-;; is-integernn
-;; is-real
-;; is-realp
-;; is_symm_pd
+;   is-integernn
+;   is-integer
+;   is-integerp
+;   is-real
+;   is-realp
+;   is-realnn
+;   is-symm-pd
+;   is-array <numdims> <expr>
+;   =
+;   <=
+;   <
+;   >=
+;   >
+;   qand
+;   is-probability-vector
+
+; Functions
+;   x - y1 - ... - yn
+;   x1 + ... + xn
+;   x1 * ... * xn
+;   x1 *! ... *! xn
+;   1-
+;   1+
+;   neg x
+;   x / y
+;   1/ x
+;   x ^ y
+;   exp
+;   array indexing (and slicing)
+;   qsum
+;   qprod
+;   qprod!
+;   array-length <dim> <expr>
+;   list (or array1?)
+;   tanh
+;   sqrt
+;   dot
+;   abs
+;   det
+;   gamma
+;   mvgamma
+;   trace
+;   matmul
+;   quadmul
+;   vec-
+;   inv   (for matrix)
+;   sqr
+
+; Constants
+;   Integers
+;   Rationals
+;   %pi
+;   %e
+
+; Special forms
+;   when <test> <value>  (equals 1 when <test> is false)
+;   precond-postcond-density
+
 ; Functions:
-; x - y
-; x + y
-; x <= y
-; x < y
-; x = y
-; array-length(n, x)
-; @(x, i1, ..., in)
-; x / y
-; exp
-; list(...)
-; x * y
-; tanh
-; dot
-; sqrt
 ; indp
 ; indnn
-; abs
-; det
 ; ind-symm-pd
-; gamma
-;
-; Expansions: 
-; QSUM
-; QAND
-; :all and :range in array index
-;

@@ -16,3 +16,9 @@ RangeElement: ('range <Expr> <Expr>)
 <Expr>: <Var>
 <Expr>: ('literal <numeric value>)
 <Expr>: ('apply <Func> <Expr>*)
+
+First stage of processing AST should output
+- variables and their types
+- a proposition that must be proved to ensure that the model
+  is legit
+- the log probability density function.

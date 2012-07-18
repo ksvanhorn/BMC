@@ -143,8 +143,10 @@
 
 (defun print-if-common (indent rel)
   (output-sp indent)
-  (format t "IF ~a THEN~%" (print-expr (rel-if-condition rel)))
-  (print-rel1 (+ indent 2) (rel-true-branch rel)))
+  (format t "if (~a) {~%" (print-expr (rel-if-condition rel)))
+  (print-rel1 (+ indent 2) (rel-true-branch rel))
+  (output-sp indent)
+  (format t "}~%"))
 
 (defun print-rel1 (indent rel)
   (case (rel-class rel)
@@ -170,16 +172,20 @@
 	('if-then-else
 	 (print-if-common indent rel)
 	 (output-sp indent)
-	 (format t "ELSE~%")
-	 (print-rel1 (+ indent 2) (rel-false-branch rel)))
+	 (format t "else~ {%")
+	 (print-rel1 (+ indent 2) (rel-false-branch rel))
+	 (output-sp indent)
+	 (format t "}~%"))
 
 	('loop 
 	 (output-sp indent)
-	 (format t "FOR ~a IN ~a : ~a DO~%"
+	 (format t "for (~a in ~a : ~a) {~%"
 		 (symbol-name (rel-loop-var rel))
 		 (print-expr (bounds-lo (rel-loop-bounds rel)))
 		 (print-expr (bounds-hi (rel-loop-bounds rel))))
-	 (print-rel1 (+ indent 2) (rel-loop-body rel)))))
+	 (print-rel1 (+ indent 2) (rel-loop-body rel))
+	 (output-sp indent)
+	 (format t "}~%"))))
 
 (defun print-model (mdl)
   (let* ((stream (make-string-output-stream))
@@ -192,14 +198,18 @@
 	(reqs (extract-reqs mdl))
 	(vars (extract-vars mdl))
 	(body (extract-body mdl)))
-    (format t "ARGS~%")
+    (format t "args {~%")
     (dolist (a args) (format t "  ~a~%" (print-decl a)))
-    (format t "REQS~%")
+    (format t "}~%")
+    (format t "reqs {~%")
     (dolist (r reqs) (format t "  ~a~%" (print-expr r)))
-    (format t "VARS~%")
+    (format t "}~%")
+    (format t "vars {~%")
     (dolist (v vars) (format t "  ~a~%" (print-decl v)))
-    (format t "BODY~%")
-    (dolist (rel body) (format t "~a" (print-rel 2 rel)))))
+    (format t "}~%")
+    (format t "model {~%")
+    (dolist (rel body) (format t "~a" (print-rel 2 rel)))
+    (format t "}~%")))
 
 (defun model-string-case-xform (s)
   (let ((ostrm (make-string-output-stream))
