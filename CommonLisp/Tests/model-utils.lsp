@@ -148,17 +148,20 @@
    (print-rel 4 '(~ (@ x |i|) (dgamma alpha beta))))
 
   (assert-equal 
-"  IF Y[I] = 3 THEN
+"  if (Y[I] = 3) {
     X[I] <- Y[I] + Z
+  }
 "
    (print-rel 2 '(:if (= (@ y i) 3)
 	       	   (<- (@ x i) (+ (@ y i) z)))))
 
   (assert-equal 
-"  IF E THEN
+"  if (E) {
     X ~ DEXP(B)
-  ELSE
+  }
+  else {
     V <- 12
+  }
 "
    (print-rel 2 '(:if e (~ x (dexp b)) (<- v 12))))
 
@@ -173,27 +176,33 @@
 		  (~ x (dexp b)))))
 
   (assert-equal
-"  FOR i IN N + 2 : M - 1 DO
+"  for (i in N + 2 : M - 1) {
     X[i] ~ DEXP(B[i])
+  }
 "
    (print-rel 2 '(:for |i| ((+ n 2) (- m 1))
 		       (~ (@ x |i|) (dexp (@ b |i|)))))))
 
 (define-test print-model-tests
   (assert-equal
-"ARGS
+"args {
   N : INTEGER
   F : REAL[N]
-REQS
+}
+reqs {
   N >= 0
   QAND(i, (1, N), F[i] != 0)
-VARS
+}
+vars {
   M : INTEGER
   X : REAL[N]
-BODY
+}
+model {
   M <- N ^ 3
-  FOR i IN 1 : N DO
+  for (i in 1 : N) {
     X[i] ~ DNORM(MU, SIGMA)
+  }
+}
 "
    (print-model
     '(:model
@@ -238,7 +247,10 @@ BODY
   (assert-equal '(y boolean) (base-decl '(y boolean)))
 
   (assert-equal '(x (realxn 1)) (base-decl '(x (real i))))
-  (assert-equal '(v (integer 2)) (base-decl '(v (integerp nvars m)))))
+  (assert-equal '(v (integer 2)) (base-decl '(v (integerp nvars m))))
+
+  (assert-equal 3 (num-dims '(realxn 3)))
+  (assert-equal 1 (num-dims '(integer 1))))
 
 (define-test base-decls-tests
   (assert-equal
@@ -285,6 +297,13 @@ BODY
 		   (= 1 (QSUM k (1 3) (@ mu k))))
 		  (:vars)
 		  (:body)))))
+
+#|
+(defun gensym-fct ()
+  (let ((ctr 0))
+    (lambda (pfx)
+      (incf ctr)
+      (intern (concatenate 'string pfx (write-to-string ctr)))))) 
 
 (define-test extract-pdf-tests
   (assert-equal
@@ -374,6 +393,7 @@ BODY
 
   (assert-equal 1 (rel->density '(<- x e)))
 )
+|#
 
 ; *** WHAT ABOUT SUPPORT OF DISTRIBUTIONS? ***
 
@@ -385,7 +405,7 @@ BODY
 ;   is-realp
 ;   is-realnn
 ;   is-symm-pd
-;   is-array <numdims> <expr>
+;   is-array <numdims> <expr> 
 ;   =
 ;   <=
 ;   <

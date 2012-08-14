@@ -172,7 +172,7 @@
 	('if-then-else
 	 (print-if-common indent rel)
 	 (output-sp indent)
-	 (format t "else~ {%")
+	 (format t "else {~%")
 	 (print-rel1 (+ indent 2) (rel-false-branch rel))
 	 (output-sp indent)
 	 (format t "}~%"))
@@ -253,6 +253,9 @@
 		 ('array (list (base-scalar-type (elem-type typ))
 			       (length (type-dims typ)))))))
       (list var base-type))))
+
+(defun num-dims (base-array-typ)
+  (second base-array-typ))
 
 (defparameter *base-scalar-types*
   '((realxn . realxn) (realx . realxn) (real . realxn)
@@ -413,6 +416,3 @@
 	   (* (qprod ,i (1 ,n) (gamma (@ ,a ,i)))
 	      (^ (gamma (qsum ,i (1 ,n) (@ ,a ,i))) -1)
 	      (qprod ,i (1 ,n) (^ (@ ,pr ,i) (+ (@ ,a ,i) -1)))))))))
-
-
-

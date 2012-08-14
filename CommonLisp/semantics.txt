@@ -1,0 +1,56 @@
+PREDICATES (always T or F):
+
+(is-integernn x?)
+(is-integerp x?)
+(is-integer x?)
+(is-real x?)
+(is-realp x?)
+(is-realnn x?)
+(is-symm-pd x?)  ; Implies that x is a square matrix of reals
+(is-array n? x?) ; x is an n-dimensional array. Scalars are 0-dimensional.
+(= x? y?)
+(<= x? y?)
+(< x? y?)
+(is-probability-vector v?)
+(qand)
+
+AXIOMS
+
+(all (?x ?mu ?sigma)
+  (=> (precond-dnorm ?mu ?sigma)
+      (and (or (postcond-dnorm ?x) (= (dnorm ?x ?mu ?sigma) 0))
+	   (=> (postcond-dnorm ?x)
+	       (= (dnorm ?x ?mu ?sigma) (dnorm-pdf ?x ?mu ?sigma))))))
+		    
+
+(all (x?) (=> (is-integer x?) (is-real x?)))
+
+(all (x?) (<=> (is-integernn x?) (and (is-integer x?) (<= 0 x?))))
+(all (x?) (<=> (is-integerp x?) (and (is-integer x?) (< 0 x?))))
+(all (x?) (<=> (is-realnn x?) (and (is-real x?) (<= 0 x?))))
+(all (x?) (<=> (is-realp x?) (and (is-real x?) (< 0 x?))))
+
+(all (i? lo? hi?)
+  (<=> (is-in-idx-range i? lo? hi?)
+       (and (is-integer i?) (<= lo? i?) (<= i? hi?))))
+(all (x?) (<=> (is-real-array m? n? x?)
+               (and (is-array 2 x?)
+	       	    (= m? (array-length 1 x?))
+		    (= n? (array-length 2 x?))
+		    (all (i? j?)
+		      (=> (and (is-in-idx-range i? 1 ?m)
+		      	       (is-in-idx-range j? 1 ?n))
+			  (is-real (@ x? m? n?)))))))
+(all (x?) (<=> (is-real-vector n? x?)
+     	       (and (is-array 1 x?)
+	       	    (= n? (array-length 1 x?))
+		    (all (i?) (=> (is-in-idx-range i? 1 n?)
+		    	      	  (is-real (@ x? i?)))))))
+(all (x?) (<=> (is-symm-pd x?)
+     	       (exi (?n)
+                 (and (is-real-array ?n ?n ?x)
+		      (all (v?)
+                        (=> (and (is-real-vector n? v?)
+			    	 (exi? (?i) (and (is-in-idx-range i? 1 n?)
+				       	       	 (/= 0 (@ v? i?)))))
+                            (/= 0 (quadmul x? v?))))))))
