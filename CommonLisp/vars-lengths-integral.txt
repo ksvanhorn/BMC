@@ -1,0 +1,5 @@
+((is-integernn nresp)
+ (is-integernn nvars)
+ (is-integernn (- nlevels 1))
+ (is-integernn (- nvars 1))
+)

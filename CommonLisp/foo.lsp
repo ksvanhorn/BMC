@@ -1,0 +1,37 @@
+(defun read-file (fpath)
+  (with-open-file (istrm fpath) (read istrm)))
+(defparameter *my-assums* (read-file "args-assumptions.txt"))
+(defparameter *my-axioms* (read-file "basic-axioms.txt"))
+(defparameter *my-thm* (read-file "vars-lengths-integral.txt"))
+
+(defun better-prove (thm axioms)
+  (if (conjunction? thm)
+      (let* ((thms (args thm))
+	     (failed nil)
+	     (count 0))
+	(dolist (x thms)
+	  (let ((result (multiple-value-list (prove x :axioms axioms))))
+            (incf count (second result))
+	    (if (first result)
+		(push (convert-to-cnf x) axioms) (push x failed))))
+	(values (null failed) count))
+      (prove thm :axioms axioms)))
+
+(when t
+(let* ((combined-axioms (append *my-axioms* *my-assums*))
+       (axioms (convert-to-cnf (conjunction combined-axioms)))
+       (thm (conjunction *my-thm*))
+       (*resource-limit* 1000))
+  (format t "thm: ~a~%" thm)
+;  (format t "axioms: ~a~%" axioms)
+;  (format t "prove...~%")
+  (format t "~%result: ~a~%~%"
+	  (multiple-value-list (better-prove thm axioms))))
+)
+
+(when nil
+(let* ((combined-axioms (append *my-axioms* *my-assums*))
+            (axioms (convert-to-cnf (conjunction combined-axioms))))
+  (with-open-file (ostrm "foobar.txt" :direction :output)
+    (prin1 axioms ostrm)))
+)

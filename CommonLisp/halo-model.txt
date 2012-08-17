@@ -56,13 +56,18 @@
     (lambda_x_garb (real nvars))
     (p_segment (real 3)))
   (:body
+    ; segments
+    (~ p_segment (ddirch alpha_p_segment))
+    (:for i (1 nresp)
+      (~ (@ segment i) (dcat p_segment)))
+
     ; scale usage
-    (<- mu_tls (list 0 (neg (/ (@ Sigma_tls 2 2) 2))))
     (<- (@ Sigma_tls 1 1) (exp (@ nu 1)))
     (<- (@ Sigma_tls 2 2) (exp (@ nu 2)))
     (<- (@ Sigma_tls 1 2)
         (* (exp (/ (+ (@ nu 1) (@ nu 2)) 2)) (tanh (@ nu 3))))
     (<- (@ Sigma_tls 2 1) (@ Sigma_tls 1 2))
+    (<- mu_tls (list 0 (neg (/ (@ Sigma_tls 2 2) 2))))
     (:for h (1 3)
       (~ (@ nu h) (dnorm (@ mu_nu h) (@ sigma_nu h))))
     (:for i (1 nresp)
@@ -124,10 +129,5 @@
         (~ (@ mu_x_garb j) (dnorm 0 (@ sigma_mu_x_garb j)))
         (<- (@ sigma_x_garb j) (/ 1 (sqrt (@ lambda_x_garb j))))
         (~ (@ lambda_x_garb j)
-           (dgamma alpha_lambda_x_garb beta_lambda_x_garb))))
-
-    ; segments
-    (:for i (1 nresp)
-      (~ (@ segment i) (dcat p_segment)))
-    (~ p_segment (ddirch alpha_p_segment))))
+           (dgamma alpha_lambda_x_garb beta_lambda_x_garb))))))
 

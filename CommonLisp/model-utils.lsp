@@ -12,7 +12,7 @@
 	((listp typ)
 	 'array)))
 (defun elem-type (typ) (car typ))
-(defun type-dims (typ) (cdr typ))
+(defun type-dims (typ) (if (symbolp typ) '() (cdr typ)))
 
 (defun rel-class (rel)
   (case (first rel)
@@ -247,12 +247,11 @@
 (defun base-decl (decl)
   (let ((var (decl-var decl))
 	(typ (decl-typ decl)))
-    (let ((base-type
-	   (case (type-class typ)
-		 ('scalar (base-scalar-type typ))
-		 ('array (list (base-scalar-type (elem-type typ))
-			       (length (type-dims typ)))))))
-      (list var base-type))))
+    (case (type-class typ)
+	  ('scalar (list var (base-scalar-type typ) 0))
+	  ('array (list var
+			(base-scalar-type (elem-type typ))
+			(length (type-dims typ)))))))
 
 (defun num-dims (base-array-typ)
   (second base-array-typ))
@@ -262,6 +261,8 @@
     (realnn . realxn) (realp . realxn)
     (integer . integer) (integernn . integer) (integerp . integer)
     (boolean . boolean)))
+
+(defun scalar-types () (mapcar #'car *base-scalar-types*))
 
 (defun base-scalar-type (typ)
   (cdr (assoc typ *base-scalar-types*)))

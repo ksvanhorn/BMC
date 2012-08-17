@@ -1,0 +1,130 @@
+using System;
+using Common;
+
+namespace Estimation
+{
+    [Serializable]
+    public class HaloUpdater
+    {
+        // Inputs
+        int nresp;
+        int nvars;
+        int nlevels;
+        Array1D<double> mu_nu;
+        Array1D<double> sigma_nu;
+        Array1D<double> cp;
+        double sigma_mu_y_form;
+        double sigma_beta;
+        double alpha_lambda_y_form;
+        double beta_lambda_y_form;
+        double sigma_mu_x_form;
+        double dof_Sigma_x_form;
+        Array2D<double> inverse_scale_Sigma_x_form;
+        Array1D<double> sigma_mu_x_halo;
+        double sigma_gamma;
+        double alpha_sigma_x_halo;
+        double beta_sigma_x_halo;
+        Array1D<double> sigma_mu_x_garb;
+        double alpha_lambda_x_garb;
+        double beta_lambda_x_garb;
+        Array1D<double> alpha_p_segment;
+
+        // Model variables
+        Array1D<double> mu_tls;
+        Array2D<double> Sigma_tls;
+        Array1D<double> nu;
+        Array2D<double> tls;
+        Array1D<double> tau;
+        Array1D<double> scale;
+        Array2D<int> v;
+        Array2D<double> c;
+        Array2D<double> x;
+        Array1D<int> segment;
+        double mu_y_form;
+        double sigma_y_form;
+        double lambda_y_form;
+        Array1D<double> beta;
+        Array1D<double> mu_x_form;
+        Array2D<double> Sigma_x_form;
+        Array2D<double> Lambda_x_form;
+        Array1D<double> ksi;
+        Array1D<double> mu_x_halo;
+        Array1D<double> gamma;
+        Array1D<double> sigma_x_halo;
+        Array1D<double> lambda_x_halo;
+        Array1D<double> mu_x_garb;
+        Array1D<double> sigma_x_garb;
+        Array1D<double> lambda_x_garb;
+        Array1D<double> p_segment;
+
+        public void Validate()
+        {
+            BMC.Check(nresp >= 0,
+                      "nresp >= 0");
+            BMC.Check(BMC.Length(1, mu_nu) == 3,
+                      "BMC.Length(1, mu_nu) == 3");
+            BMC.Check(BMC.ForAll(0, 3, I1 => BMC.IsReal(mu_nu[I1])),
+                      "BMC.ForAll(0, 3, I1 => BMC.IsReal(mu_nu[I1]))");
+            BMC.Check(BMC.Length(1, sigma_nu) == 3,
+                      "BMC.Length(1, sigma_nu) == 3");
+            BMC.Check(BMC.ForAll(0, 3, I1 => BMC.IsRealp(sigma_nu[I1])),
+                      "BMC.ForAll(0, 3, I1 => BMC.IsRealp(sigma_nu[I1]))");
+            BMC.Check(BMC.Length(1, cp) == nlevels - 1,
+                      "BMC.Length(1, cp) == nlevels - 1");
+            BMC.Check(BMC.ForAll(0, nlevels - 1, I1 => BMC.IsReal(cp[I1])),
+                      "BMC.ForAll(0, nlevels - 1, I1 => BMC.IsReal(cp[I1]))");
+            BMC.Check(BMC.IsRealp(sigma_mu_y_form),
+                      "BMC.IsRealp(sigma_mu_y_form)");
+            BMC.Check(BMC.IsRealp(sigma_beta),
+                      "BMC.IsRealp(sigma_beta)");
+            BMC.Check(BMC.IsRealp(alpha_lambda_y_form),
+                      "BMC.IsRealp(alpha_lambda_y_form)");
+            BMC.Check(BMC.IsRealp(beta_lambda_y_form),
+                      "BMC.IsRealp(beta_lambda_y_form)");
+            BMC.Check(BMC.IsRealp(sigma_mu_x_form),
+                      "BMC.IsRealp(sigma_mu_x_form)");
+            BMC.Check(BMC.IsRealp(dof_Sigma_x_form),
+                      "BMC.IsRealp(dof_Sigma_x_form)");
+            BMC.Check(BMC.Length(1, inverse_scale_Sigma_x_form) == nvars - 1,
+                      "BMC.Length(1, inverse_scale_Sigma_x_form) == nvars - 1");
+            BMC.Check(BMC.Length(2, inverse_scale_Sigma_x_form) == nvars - 1,
+                      "BMC.Length(2, inverse_scale_Sigma_x_form) == nvars - 1");
+            BMC.Check(BMC.ForAll(0, nvars - 1, I1 => BMC.ForAll(0, nvars - 1, I2 => BMC.IsReal(inverse_scale_Sigma_x_form[I1, I2]))),
+                      "BMC.ForAll(0, nvars - 1, I1 => BMC.ForAll(0, nvars - 1, I2 => BMC.IsReal(inverse_scale_Sigma_x_form[I1, I2])))");
+            BMC.Check(BMC.Length(1, sigma_mu_x_halo) == nvars,
+                      "BMC.Length(1, sigma_mu_x_halo) == nvars");
+            BMC.Check(BMC.ForAll(0, nvars, I1 => BMC.IsRealp(sigma_mu_x_halo[I1])),
+                      "BMC.ForAll(0, nvars, I1 => BMC.IsRealp(sigma_mu_x_halo[I1]))");
+            BMC.Check(BMC.IsRealp(sigma_gamma),
+                      "BMC.IsRealp(sigma_gamma)");
+            BMC.Check(BMC.IsRealp(alpha_sigma_x_halo),
+                      "BMC.IsRealp(alpha_sigma_x_halo)");
+            BMC.Check(BMC.IsRealp(beta_sigma_x_halo),
+                      "BMC.IsRealp(beta_sigma_x_halo)");
+            BMC.Check(BMC.Length(1, sigma_mu_x_garb) == nvars,
+                      "BMC.Length(1, sigma_mu_x_garb) == nvars");
+            BMC.Check(BMC.ForAll(0, nvars, I1 => BMC.IsRealp(sigma_mu_x_garb[I1])),
+                      "BMC.ForAll(0, nvars, I1 => BMC.IsRealp(sigma_mu_x_garb[I1]))");
+            BMC.Check(BMC.IsRealp(alpha_lambda_x_garb),
+                      "BMC.IsRealp(alpha_lambda_x_garb)");
+            BMC.Check(BMC.IsRealp(beta_lambda_x_garb),
+                      "BMC.IsRealp(beta_lambda_x_garb)");
+            BMC.Check(BMC.Length(1, alpha_p_segment) == 3,
+                      "BMC.Length(1, alpha_p_segment) == 3");
+            BMC.Check(BMC.ForAll(0, 3, I1 => BMC.IsRealnn(alpha_p_segment[I1])),
+                      "BMC.ForAll(0, 3, I1 => BMC.IsRealnn(alpha_p_segment[I1]))");
+            BMC.Check(3 <= nvars,
+                      "3 <= nvars");
+            BMC.Check(3 <= nlevels,
+                      "3 <= nlevels");
+            BMC.Check(BMC.ForAll(0, nlevels - 2, k => cp[k] < cp[1 + k]),
+                      "BMC.ForAll(0, nlevels - 2, k => cp[k] < cp[1 + k])");
+            BMC.Check(dof_Sigma_x_form > nvars - 2,
+                      "dof_Sigma_x_form > nvars - 2");
+            BMC.Check(BMC.IsSymmPD(inverse_scale_Sigma_x_form),
+                      "BMC.IsSymmPD(inverse_scale_Sigma_x_form)");
+            BMC.Check(0 < BMC.Sum(0, 3, k => alpha_p_segment[k]),
+                      "0 < BMC.Sum(0, 3, k => alpha_p_segment[k])");
+        }
+    }
+}

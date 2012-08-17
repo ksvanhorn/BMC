@@ -24,6 +24,7 @@
     (assert-equal 'typ1 (elem-type array1))
     (assert-equal 'typ2 (elem-type array2))
 
+    (assert-equal '() (type-dims scalar))
     (assert-equal '(n1) (type-dims array1))
     (assert-equal '(m1 m2) (type-dims array2))))
 
@@ -234,27 +235,24 @@ model {
     (assert-equal output (model-string-case-xform input))))
 
 (define-test base-decl-tests
-  (assert-equal '(x realxn) (base-decl '(x real)))
-  (assert-equal '(x realxn) (base-decl '(x realx)))
-  (assert-equal '(x realxn) (base-decl '(x realnn)))
-  (assert-equal '(x realxn) (base-decl '(x realp)))
-  (assert-equal '(x realxn) (base-decl '(x realxn)))
+  (assert-equal '(x realxn 0) (base-decl '(x real)))
+  (assert-equal '(x realxn 0) (base-decl '(x realx)))
+  (assert-equal '(x realxn 0) (base-decl '(x realnn)))
+  (assert-equal '(x realxn 0) (base-decl '(x realp)))
+  (assert-equal '(x realxn 0) (base-decl '(x realxn)))
 
-  (assert-equal '(v integer) (base-decl '(v integer)))
-  (assert-equal '(v integer) (base-decl '(v integernn)))
-  (assert-equal '(v integer) (base-decl '(v integerp)))
+  (assert-equal '(v integer 0) (base-decl '(v integer)))
+  (assert-equal '(v integer 0) (base-decl '(v integernn)))
+  (assert-equal '(v integer 0) (base-decl '(v integerp)))
 
-  (assert-equal '(y boolean) (base-decl '(y boolean)))
+  (assert-equal '(y boolean 0) (base-decl '(y boolean)))
 
-  (assert-equal '(x (realxn 1)) (base-decl '(x (real i))))
-  (assert-equal '(v (integer 2)) (base-decl '(v (integerp nvars m))))
-
-  (assert-equal 3 (num-dims '(realxn 3)))
-  (assert-equal 1 (num-dims '(integer 1))))
+  (assert-equal '(x realxn 1) (base-decl '(x (real i))))
+  (assert-equal '(v integer 2) (base-decl '(v (integerp nvars m)))))
 
 (define-test base-decls-tests
   (assert-equal
-   '((x realxn) (y (integer 3)))
+   '((x realxn 0) (y integer 3))
    (args-base-decls '(:model
 		      (:args (x real)
 			     (y (integerp 2 4 3)))
@@ -262,7 +260,7 @@ model {
 		      (:vars)
 		      (:body))))
   (assert-equal
-   '((x realxn) (y (integer 3)))
+   '((x realxn 0) (y integer 3))
    (vars-base-decls '(:model
 		      (:args)
 		      (:reqs)
