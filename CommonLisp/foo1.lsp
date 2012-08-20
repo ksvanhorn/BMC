@@ -17,26 +17,65 @@
     mdl))
 ; END utilities
 
-(defun dag-proof-obligation (mdl)
+(defun dag-proof-obligations (mdl)
   (po-list nil (extract-body mdl)))
 
-(defun po-list (proof-obligations preceding rels)
-  (do ()
-      ((null rels) proof-obligations)
-    (push (po preceding (car rels)) proof-obligations)
-    (push (car rels) preceding)
-    (setf rels (cdr rels))))
+(defun po-list (assumptions rels)
+  (let ((to-prove nil)
+	(assume assumptions))
+    (dolist (r rels)
+      (destructuring-bind
+        ((new-assume . new-to-prove) (po assume r))
+	(setf to-prove (append to-prove new-to-prove))
+	(setf assume (append assume new-assume))))
+    (cons assume to-prove)))
 
-(defun po (preceding rel)
-  `(=> ,(reverse preceding) ,rel))
-#|
-  (case (rel-class rel)
-	('deterministic ???)
-	('stochastic ???)
-	('block ???)
-	('if-then ???)
-	('if-then-else ???)
-	('loop ???)))
+(defun po (assumptions rel)
+  (let ((fct (case (rel-class rel)
+		   ('deterministic #'po-determ)
+		   ('stochastic #'po-stoch)
+		   ('block #'po-block)
+		   ('if-then #'po-if-then)
+		   ('if-then-else #'po-if-then-else)
+		   ('loop #'po-loop))))
+    (funcall fct assumptions rel)))
+
+(defun po-block (assumptions rel) (po-list assumptions (rel-block-body rel)))
+
+(defun po-determ (assumptions rel)
+  (let ((var (rel-var rel))
+	(val (rel-val rel)))
+    ; to-prove: val has type matching required type of var
+    ; to-prove: if var is array elem or subrange, indices have required types
+    ; new assumption: var has required type, and conclusions of each to-prove
+)
+)
+
+(defun po-stoch (assumptions rel)
+)
+
+(defun po-if-then (assumptions rel)
+  ; to-prove: test is boolean
+  ; to-prove: body of if, with assumption that test is true
+  ; test => body of if  
+)
+
+(defun po-if-then-else (assumptions rel)
+  ; to-prove: test is boolean
+  ; to-prove: body of if, with assumption that test is true
+  ; to-prove: body of if, with assumption that test is false
+  ; new assumption: test => if clause
+  ; new assumption: (not test) => else clause
+)
+
+(defun po-loop (assumptions rel)
+  ; to-prove: lower bound is integer
+  ; to-prove: upper bound is integer
+  ; to-prove: for all values of index var between upper and lower bound,
+  ;           body of loop
+  ; new assumption conclusions of all things proven
+)
+
 |#
 
 (let ((mdl (read-model "halo-model.txt")))

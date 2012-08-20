@@ -1,124 +1,12 @@
-(defun extract-args (mdl) (cdr (second mdl)))
-(defun extract-reqs (mdl) (cdr (third mdl)))
-(defun extract-vars (mdl) (cdr (fourth mdl)))
-(defun extract-body (mdl) (cdr (fifth mdl)))
+(defpackage :model
+  (:use :common-lisp :utils)
+  (:export
+    :read-model :extract-args :extract-reqs :extract-vars :extract-body
+    ;:args-base-decls :vars-base-decls
+    ;:expr-class :op :args :quantifierp :binopp
+))
+(in-package :model)
 
-(defun decl-var (decl) (first decl))
-(defun decl-typ (decl) (second decl))
-
-(defun type-class (typ)
-  (cond ((symbolp typ)
-	 'scalar)
-	((listp typ)
-	 'array)))
-(defun elem-type (typ) (car typ))
-(defun type-dims (typ) (if (symbolp typ) '() (cdr typ)))
-
-(defun rel-class (rel)
-  (case (first rel)
-	('<- 'deterministic)
-	('~ 'stochastic)
-	(:block 'block)
-	(:if (case (length (rest rel))
-		   (2 'if-then)
-		   (3 'if-then-else)))
-	(:for 'loop)))
-
-(defun rel-var (rel) (second rel))
-(defun rel-val (rel) (third rel))
-(defun rel-distr (rel) (third rel))
-(defun rel-block-body (rel) (rest rel))
-(defun rel-if-condition (rel) (second rel))
-(defun rel-true-branch (rel) (third rel))
-(defun rel-false-branch (rel) (fourth rel))
-(defun rel-loop-var (rel) (second rel))
-(defun rel-loop-bounds (rel) (third rel))
-(defun rel-loop-body (rel) (fourth rel))
-(defun bounds-lo (bnds) (first bnds))
-(defun bounds-hi (bnds) (second bnds))
-
-(defun expr-class (expr)
-  (cond ((numberp expr) 'literal-num)
-	((symbolp expr) 'variable)
-	((consp expr)
-	 (let ((h (first expr)))
-	   (cond ((eq '@ h) 'array-app)
-		 ((symbolp h) 'funct-app))))))
-
-(defun op (fct-expr) (first fct-expr))
-(defun args (fct-expr) (rest fct-expr))
-
-(defun array-op (arr-expr) (second arr-expr))
-(defun array-args (arr-expr) (cddr arr-expr))
-
-(defun index-class (index-expr)
-  (cond
-   ((eq :all index-expr)
-    'all)
-   ((and (consp index-expr) (eq :range (first index-expr)))
-    'range)
-   (t 'index)))
-
-(defun range-lo (range-expr) (second range-expr))
-(defun range-hi (range-expr) (third range-expr))
-
-(defun print-expr (e &optional (prec -1))
-  (case (expr-class e)
-	('literal-num (write-to-string e))
-	('variable (symbol-name e))
-	('array-app (print-array-app-expr e))
-	('funct-app
-	 (let ((oper (op e))
-	        (a (args e)))
-	   (cond ((quantifierp oper) (print-quantifier-expr oper a))
-		 ((binopp oper) (print-binop-expr e prec))
-		 (t (print-funct-app-expr oper a)))))))
-
-(defun print-funct-app-expr (oper a)
-  (format nil "~a(~{~a~^, ~})"
-	  (print-expr oper)
-	  (mapcar #'print-expr a)))
-
-(defun print-quantifier-expr (oper a)
-  (let ((var (print-expr (first a)))
-	(lo (print-expr (bounds-lo (second a))))
-	(hi (print-expr (bounds-hi (second a))))
-	(body (print-expr (third a))))
-    (format nil "~a(~a, (~a, ~a), ~d)" oper var lo hi body)))
-
-(defun print-binop-expr (e context-prec)
-  (let* ((oper (op e))
-	 (prec (precedence oper))
-	 (oper-s (symbol-name oper))
-	 (a (mapcar (lambda (x) (print-expr x prec)) (args e))))
-    (with-output-to-string (s)
-      (if (> context-prec prec) (write-char #\( s))
-      (format s "~a" (car a))
-      (dolist (x (cdr a)) (format s " ~a ~a" oper-s x))
-      (if (> context-prec prec) (write-char #\) s))
-      s)))
-
-(defun print-array-app-expr (e)
-  (format nil "~a[~{~a~^, ~}]"
-	 (print-expr (array-op e))
-	 (mapcar #'print-index-expr (array-args e))))
-
-(defun print-index-expr (e)
-  (case (index-class e)
-	('all "")
-	('range (format nil "~a : ~a" (range-lo e) (range-hi e)))
-	('index (print-expr e))))
-
-(defun quantifierp (x)
-  (member x '(QSUM QAND QOR QPROD)))
-
-(defun binopp (x) (assoc x *precedences*))
-
-(defun precedence (x) (cdr (assoc x *precedences*)))
-
-(defparameter *precedences*
-  '((< . 5) (<= . 5) (= . 5) (!= . 5) (> . 5) (>= . 5)
-    (+ . 10) (- . 10) (* . 20) (/ . 20) (^ . 30)))
 
 (defun print-decl (d)
   (let ((var-s (symbol-name (decl-var d)))
@@ -187,30 +75,6 @@
 	 (output-sp indent)
 	 (format t "}~%"))))
 
-(defun print-model (mdl)
-  (let* ((stream (make-string-output-stream))
-	 (*standard-output* stream))
-    (print-model1 mdl)
-    (get-output-stream-string stream)))
-
-(defun print-model1 (mdl)
-  (let ((args (extract-args mdl))
-	(reqs (extract-reqs mdl))
-	(vars (extract-vars mdl))
-	(body (extract-body mdl)))
-    (format t "args {~%")
-    (dolist (a args) (format t "  ~a~%" (print-decl a)))
-    (format t "}~%")
-    (format t "reqs {~%")
-    (dolist (r reqs) (format t "  ~a~%" (print-expr r)))
-    (format t "}~%")
-    (format t "vars {~%")
-    (dolist (v vars) (format t "  ~a~%" (print-decl v)))
-    (format t "}~%")
-    (format t "model {~%")
-    (dolist (rel body) (format t "~a" (print-rel 2 rel)))
-    (format t "}~%")))
-
 (defun model-string-case-xform (s)
   (let ((ostrm (make-string-output-stream))
 	(istrm (make-string-input-stream s)))
@@ -234,15 +98,6 @@
 	      (setq in-identifier t))
 	    (setq in-token t))))
       (write-char c ostrm)))
-
-(defun pprint-model-file (ifname ofname)
-  (let* ((sinp (with-open-file (is ifname)
-	         (let ((os (make-string-output-stream)))
-		   (model-case-xform is os)
-		   (get-output-stream-string os))))
-	 (mdl (read (make-string-input-stream sinp))))
-    (with-open-file (ostrm ofname :direction :output)
-       (format ostrm "~a" (print-model mdl)))))
 
 (defun base-decl (decl)
   (let ((var (decl-var decl))
@@ -301,7 +156,7 @@
 	   (t check-expr))))
 
 (defun concat-symbol (&rest args)
-  (intern (apply #'concatenate 'string (mapcar #'write-to-string args))))
+  (intern (strcat args)))
 
 (defun array-type-checks (var typ)
   (let* ((etyp (elem-type typ))
@@ -358,7 +213,7 @@
 ))
 
 (defun density (var distr)
-  (unless (eq (expr-class distr) 'funct-app)
+  (unless (eq (expr-class distr) :funct-app)
     (error (format nil "Invalid distribution expression: ~a" distr)))
   (apply (density-fct (op distr)) (cons var (args distr))))
 
