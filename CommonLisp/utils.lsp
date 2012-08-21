@@ -4,7 +4,7 @@
 	   :assoc-lookup
 	   :indent :print-indent :with-indent-amt
 	   :fmt :with-fmt-out
-	   :strcat))
+	   :strcat :zip :flatten))
 (in-package :utils)
 
 ; read utils
@@ -70,3 +70,8 @@
 
 (defun strcat (&rest args)
   (apply #'concatenate 'string args))
+
+; list utils
+
+(defun zip (&rest lists) (apply #'mapcar #'list lists))
+(defun flatten (lists) (apply #'append lists))

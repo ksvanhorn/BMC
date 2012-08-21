@@ -1,0 +1,125 @@
+args {
+  nresp : integernn
+  nvars : integer
+  nlevels : integer
+  mu_nu : real[3]
+  sigma_nu : realp[3]
+  cp : real[nlevels - 1]
+  sigma_mu_y_form : realp
+  sigma_beta : realp
+  alpha_lambda_y_form : realp
+  beta_lambda_y_form : realp
+  sigma_mu_x_form : realp
+  dof_Sigma_x_form : realp
+  inverse_scale_Sigma_x_form : real[nvars - 1, nvars - 1]
+  sigma_mu_x_halo : realp[nvars]
+  sigma_gamma : realp
+  alpha_sigma_x_halo : realp
+  beta_sigma_x_halo : realp
+  sigma_mu_x_garb : realp[nvars]
+  alpha_lambda_x_garb : realp
+  beta_lambda_x_garb : realp
+  alpha_p_segment : realnn[3]
+}
+reqs {
+  3 <= nvars
+  3 <= nlevels
+  QAND(k, 1 : nlevels - 2, cp[k] < cp[1 + k])
+  dof_Sigma_x_form > nvars - 2
+  is_symm_pd(inverse_scale_Sigma_x_form)
+  0 < QSUM(k, 1 : 3, alpha_p_segment[k])
+}
+vars {
+  mu_tls : real[2]
+  Sigma_tls : real[2, 2]
+  nu : real[3]
+  tls : real[nresp, 2]
+  tau : real[nresp]
+  scale : real[nresp]
+  v : integer[nresp, nvars]
+  c : real[nresp, nlevels - 1]
+  x : real[nresp, nvars]
+  segment : integer[nresp]
+  mu_y_form : real
+  sigma_y_form : real
+  lambda_y_form : real
+  beta : real[nvars - 1]
+  mu_x_form : real[nvars - 1]
+  Sigma_x_form : real[nvars - 1, nvars - 1]
+  Lambda_x_form : real[nvars - 1, nvars - 1]
+  ksi : real[nresp]
+  mu_x_halo : real[nvars]
+  gamma : real[nvars]
+  sigma_x_halo : real[nvars]
+  lambda_x_halo : real[nvars]
+  mu_x_garb : real[nvars]
+  sigma_x_garb : real[nvars]
+  lambda_x_garb : real[nvars]
+  p_segment : real[3]
+}
+model {
+  p_segment ~ ddirch(alpha_p_segment)
+  for (i in 1 : nresp) {
+    segment[i] ~ dcat(p_segment)
+  }
+  Sigma_tls[1, 1] <- exp(nu[1])
+  Sigma_tls[2, 2] <- exp(nu[2])
+  Sigma_tls[1, 2] <- exp((nu[1] + nu[2]) / 2) * tanh(nu[3])
+  Sigma_tls[2, 1] <- Sigma_tls[1, 2]
+  mu_tls <- list(0, neg(Sigma_tls[2, 2] / 2))
+  for (h in 1 : 3) {
+    nu[h] ~ dnorm(mu_nu[h], sigma_nu[h])
+  }
+  for (i in 1 : nresp) {
+    for (j in 1 : nvars) {
+      v[i, j] ~ dinterval(x[i, j], c[i, ])
+    }
+    for (k in 1 : nlevels - 1) {
+      c[i, k] <- (cp[k] - tau[i]) / scale[i]
+    }
+    tls[i, ] ~ dmvnorm(mu_tls, Sigma_tls)
+    tau[i] <- tls[i, 1]
+    scale[i] <- exp(tls[i, 2])
+  }
+  for (i in 1 : nresp) {
+    if (1 = segment[i]) {
+      x[i, 1] ~ dnorm(mu_y_form + dot(x[i, 2 : nvars], beta), sigma_y_form)
+      x[i, 2 : nvars] ~ dmvnorm(mu_x_form, Sigma_x_form)
+    }
+  }
+  mu_y_form ~ dnorm(0, sigma_mu_y_form)
+  sigma_y_form <- 1 / sqrt(lambda_y_form)
+  lambda_y_form ~ dgamma(alpha_lambda_y_form, beta_lambda_y_form)
+  for (j in 1 : nvars - 1) {
+    beta[j] ~ dnorm(0, sigma_beta)
+    mu_x_form[j] ~ dnorm(0, sigma_mu_x_form)
+  }
+  Sigma_x_form <- inv(Lambda_x_form)
+  Lambda_x_form ~ dwishart(dof_Sigma_x_form, inverse_scale_Sigma_x_form)
+  for (i in 1 : nresp) {
+    if (2 = segment[i]) {
+      ksi[i] ~ dnorm(0, 1)
+      for (j in 1 : nvars) {
+        x[i, j] ~ dnorm(mu_x_halo[j] + gamma[j] * ksi[i], sigma_x_halo[j])
+      }
+    }
+  }
+  for (j in 1 : nvars) {
+    gamma[j] ~ dnorm(0, sigma_gamma)
+    mu_x_halo[j] ~ dnorm(0, sigma_mu_x_halo[j])
+    sigma_x_halo[j] <- 1 / sqrt(lambda_x_halo[j])
+    lambda_x_halo[j] ~ dgamma(alpha_sigma_x_halo, beta_sigma_x_halo)
+  }
+  for (i in 1 : nresp) {
+    if (3 = segment[i]) {
+      for (j in 1 : nvars) {
+        x[i, j] ~ dnorm(mu_x_garb[j], sigma_x_garb[j])
+      }
+    }
+  }
+  for (j in 1 : nvars) {
+    mu_x_garb[j] ~ dnorm(0, sigma_mu_x_garb[j])
+    sigma_x_garb[j] <- 1 / sqrt(lambda_x_garb[j])
+    lambda_x_garb[j] ~ dgamma(alpha_lambda_x_garb, beta_lambda_x_garb)
+  }
+}

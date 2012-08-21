@@ -1,17 +1,20 @@
 (defpackage :model
-  (:use :common-lisp :utils)
+  (:use :common-lisp :expr :utils)
   (:export
     :read-model :extract-args :extract-reqs :extract-vars :extract-body
     :decl-var :decl-typ :type-class :elem-type :type-dims
     :rel-class :rel-var :rel-val :rel-distr :rel-block-body
     :rel-if-condition :rel-true-branch :rel-false-branch
-    :rel-loop-var :rel-loop-bounds :rel-loop-body :bounds-lo :bounds-hi))
+    :rel-loop-var :rel-loop-bounds :rel-loop-body :bounds-lo :bounds-hi
+    :args-base-decls :vars-base-decls :args-checks))
 (in-package :model)
 
 ; TODO: fuller check of model structure?
 
 (defun read-model (ifname)
-  (let ((mdl (read-file-upcasing-only *model-keywords* ifname)))
+  (let* ((uc (append *model-keywords* *quantifiers*))
+ 	 (mdl (read-file-upcasing-only uc ifname)))
+;   (check-model mdl)
     (check-model-has-sections '(:args :reqs :vars :body) mdl)
     ;(check-elements-are-decls (extract-args mdl))
     ;(check-elements-are-exprs (extract-reqs mdl))
@@ -77,4 +80,107 @@
 (defun bounds-lo (bnds) (first bnds))
 (defun bounds-hi (bnds) (second bnds))
 
-; START expr functions
+(defun args-base-decls (mdl)
+  (mapcar #'base-decl (extract-args mdl)))
+
+(defun vars-base-decls (mdl)
+  (mapcar #'base-decl (extract-vars mdl)))
+
+(defun base-decl (decl)
+  (let ((var (decl-var decl))
+	(typ (decl-typ decl)))
+    (case (type-class typ)
+	  (:scalar (list var (base-scalar-type typ) 0))
+	  (:array (list var
+			(base-scalar-type (elem-type typ))
+			(length (type-dims typ)))))))
+
+(defun base-scalar-type (typ)
+  (cdr (assoc typ *base-scalar-types*)))
+
+(defparameter *base-scalar-types*
+  '((:realxn . :realxn) (:realx . :realxn) (:real . :realxn)
+    (:realnn . :realxn) (:realp . :realxn)
+    (:integer . :integer) (:integernn . :integer) (:integerp . :integer)
+    (:boolean . :boolean)))
+
+(defun args-checks (mdl)
+  (append (flatten (mapcar #'decl-checks (extract-args mdl)))
+	  (extract-reqs mdl)))
+
+(defun decl-checks (decl)
+  (let ((var (decl-var decl))
+	(typ (decl-typ decl)))
+    (case (type-class typ)
+	  (:scalar (scalar-type-checks var typ))
+	  (:array (array-type-checks var typ)))))
+
+(defun scalar-type-checks (var typ)
+  (let ((btyp (base-scalar-type typ)))
+    (if (eq btyp typ)
+	nil
+        (list (simplify-check (list (type-predicate typ) var))))))
+
+(defun type-predicate (typ)
+  (assoc-lookup typ *type-predicates*))
+
+(defparameter *type-predicates*
+  '((:integerp . :is-integerp)
+    (:integernn . :is-integernn)
+    (:realp . :is-realp)
+    (:realnn . :is-realnn)
+    (:real . :is-real)
+    (:realx . :is-realx)))
+
+(defun simplify-check (check-expr)
+  (destructuring-bind (pred var) check-expr
+     (case pred
+	   (:is-integernn `(:<= 0 ,var))
+	   (:is-integerp `(:< 0 ,var))
+	   (t check-expr))))
+
+(defun array-type-checks (var typ)
+  (let* ((etyp (elem-type typ))
+	 (dims (type-dims typ))
+	 (idxvars (index-vars (length dims) `(list ,var ,@dims))))
+    (append (array-length-checks var dims 1)
+	    (array-element-checks var etyp dims idxvars idxvars))))
+
+(defun index-vars (n expr &optional (pfx "i"))
+  (do ((result nil)
+       (k 1 (1+ k)))
+      ((= n 0) (reverse result))
+     (let ((idxvar (var-symbol pfx k)))
+       (when (fully-free-of idxvar expr)
+	 (decf n)
+	 (push idxvar result)))))
+
+(defun var-symbol (pfx n)
+  (intern (strcat pfx (write-to-string n)) "KEYWORD"))
+
+(defun fully-free-of (var expr)
+  (cond
+    ((symbolp expr) (not (eq var expr)))
+    ((consp expr) (and (fully-free-of var (car expr))
+		       (fully-free-of var (cdr expr))))
+    (t t)))
+
+(defun array-length-checks (var dims n)
+  (if (null dims)
+      nil
+      (cons `(:= (:array-length ,n ,var) ,(car dims))
+	    (array-length-checks var (cdr dims) (1+ n)))))
+
+(defun array-element-checks (var etyp dims idxvars all-idxvars)
+  (if (null dims)
+      (scalar-type-checks `(:@ ,var ,@all-idxvars) etyp)
+      (let ((iv (car idxvars))
+	    (idxvars1 (cdr idxvars))
+	    (dims1 (cdr dims)))
+	(mapcar (lambda (x) `(:qand ,iv (1 ,(car dims)) ,x))
+		(array-element-checks var etyp dims1 idxvars1 all-idxvars)))))
+
+
+
+
+

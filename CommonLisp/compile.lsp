@@ -1,5 +1,5 @@
 (defpackage :compile
-  (:use :model :utils)
+  (:use :common-lisp :model :print :utils)
   (:export :compile-to-csharp))
 (in-package :compile)
 
@@ -32,8 +32,7 @@
 (defun gen-args (mdl)
   (fmt *lcom-fmt* "Inputs")
   (dolist (x (args-base-decls mdl))
-    (gen-decl x))
-)
+    (gen-decl x)))
 
 (defun gen-vars (mdl)
   (fmt *lcom-fmt* "Model variables")
@@ -43,8 +42,8 @@
 (defparameter *lcom-fmt* "// ~a")
 
 (defun gen-decl (decl)
-  (destructuring-bind ((var typ ndim) decl)
-    (fmt "~a ~a;" (type-string typ ndim) var)))
+  (destructuring-bind (var typ ndim) decl
+    (fmt "public ~a ~a;" (type-string typ ndim) var)))
 
 (defun type-string (typ ndim)
   (let ((elem-type-str (assoc-lookup typ *csharp-scalar-types*)))
@@ -66,6 +65,39 @@
 	  (fmt "          \"~a\");" bool-expr))))
     (fmt "}")))
 
+(defun print-expr-c# (x)
+  (with-print-options
+    :is-binop #'is-binop
+    :fct-name #'fct-name
+    :quant-format #'quant-format
+    (expr->string x)))
+
+(defun is-binop (op)
+  (and (default-is-binop op) (not (member op *excluded-binops*))))
+
+(defparameter *excluded-binops* '(=> ^))
+
+(defun fct-name (op)
+  (let ((a (assoc op *oper-names*)))
+    (if (null a) (symbol-name op) (cdr a))))
+
+(defun quant-format (op-str var-str lo-str hi-str body-str)
+  (format nil "~a(~a, ~a, ~a => ~a)"
+	  op-str lo-str hi-str var-str body-str))
+
+(defparameter *oper-names*
+  '((:array-length . "BMC.Length")
+    (:qand . "BMC.ForAll")
+    (:qsum . "BMC.Sum")
+    (:=> . "BMC.Implies")
+    (:= . "==")
+    (:is-realp . "BMC.IsRealp")
+    (:is-realnn . "BMC.IsRealnn")
+    (:is-real . "BMC.IsReal")
+    (:is-realx . "BMC.IsRealx")
+    (:|is_symm_pd| . "BMC.IsSymmPD")))
+
+#|
 (defun print-expr-c# (e &optional (prec -1))
   (case (expr-class e)
 	(:literal-num (write-to-string e))
@@ -85,11 +117,6 @@
   (format nil "~a[~{~a~^, ~}]"
 	 (print-expr-c# (array-op e))
 	 (mapcar #'print-index-expr-c# (array-args e))))
-
-
-
-
-(defparameter *excluded-binops* '(=> ^))
 
 (defun print-funct-app-expr-c# (oper a)
   (format nil "~a(~{~a~^, ~})"
@@ -124,17 +151,4 @@
 (defun dec-expr (x)
   (if (numberp x) (1- x) `(- ,x 1)))
 
-(defparameter *oper-names-c#*
-  '((array-length . "BMC.Length")
-    (qand . "BMC.ForAll")
-    (qsum . "BMC.Sum")
-    (=> . "BMC.Implies")
-    (= . "==")
-    (is-realp . "BMC.IsRealp")
-    (is-realnn . "BMC.IsRealnn")
-    (is-real . "BMC.IsReal")
-    (|is_symm_pd| . "BMC.IsSymmPD")))
-
-(defun name-c# (oper)
-  (let ((a (assoc oper *oper-names-c#*)))
-    (if (null a) (symbol-name oper) (cdr a))))
+|#

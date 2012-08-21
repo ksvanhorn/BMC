@@ -3,7 +3,8 @@
   (:export
     :expr-class
     :fct-op :fct-args
-    :quant-op :quant-var :quant-bounds :quant-body
+    :quant-op :quant-var :quant-bounds :qbnds-lo :qbnds-hi :quant-body
+    :*quantifiers*
     :array-op :array-args :index-class :range-lo :range-hi))
 (in-package :expr)
 
@@ -23,11 +24,14 @@
 (defun array-args (aexpr) (nthcdr 2 aexpr))
 
 (defun is-qexpr (x)
-  (and (listp x) (member (first x) '(:qsum :qprod :qand :qor))))
+  (and (listp x) (member (first x) *quantifiers*)))
+(defparameter *quantifiers* '(:qsum :qprod :qand :qor))
 (defun quant-op (x) (first x))
 (defun quant-var (x) (second x))
 (defun quant-bounds (x) (third x))
 (defun quant-body (x) (fourth x))
+(defun qbnds-lo (x) (first x))
+(defun qbnds-hi (x) (second x))
 
 (defun index-class (e)
   (cond

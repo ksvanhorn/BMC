@@ -2,6 +2,7 @@
 
 (load "utils")
 (load "expr")
+(load "print")
 (load "model")
 (load "compile")
 
@@ -9,7 +10,7 @@
   (:use :common-lisp :compile :model))
 (in-package :bmc)
 
-(assert (<= 3 (length ext:*args)))
+(assert (<= 3 (length ext:*args*)))
 (let ((ifname (first ext:*args*))
       (ofname (second ext:*args*))
       (class-name (third ext:*args*))
@@ -17,7 +18,7 @@
       (mdl))
   (assert (stringp ifname))
   (assert (stringp ofname))
-  (assert (stringp updater-name))
+  (assert (stringp class-name))
   (assert (stringp csharp-namespace))
   (setf mdl (read-model ifname))
   (with-open-file (ostrm ofname :direction :output)

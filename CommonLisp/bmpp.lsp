@@ -2,10 +2,11 @@
 
 (load "utils")
 (load "expr")
+(load "print")
 (load "model")
 
 (defpackage :bmpp
-  (:use :common-lisp :model :expr :utils))
+  (:use :common-lisp :print :model :expr :utils))
 (in-package :bmpp)
 
 (defmacro pp-hdr-block (header &rest body)
@@ -51,7 +52,7 @@
 	(:scalar (scalar-type-name typ))
 	(:array (format nil "~a[~{~a~^, ~}]"
 			(scalar-type-name (elem-type typ))
-			(mapcar #'expr->string (type-dims typ))))))
+			(mapcar #'expr-string (type-dims typ))))))
 
 (defun scalar-type-name (typ)
   (unless (and (symbolp typ) (not (null typ)))
@@ -59,7 +60,14 @@
   (string-downcase typ))
 
 (defun pretty-print-expr (expr)
-  (fmt "~a" (expr->string expr)))
+  (fmt "~a" (expr-string expr)))
+
+(defun expr-string (x)
+  (with-print-options
+    :is-binop #'default-is-binop
+    :fct-name #'default-fct-name
+    :quant-format #'default-quant-format
+    (expr->string x)))
 
 (defun pretty-print-rel (rel)
   (case (rel-class rel)
@@ -71,17 +79,17 @@
 	(:loop (pretty-print-loop rel))))
 
 (defun pp-rel-deterministic (rel)
-  (fmt "~a <- ~a" (expr->string (rel-var rel)) (expr->string (rel-val rel))))
+  (fmt "~a <- ~a" (expr-string (rel-var rel)) (expr-string (rel-val rel))))
 
 (defun pp-rel-stochastic (rel)
-  (fmt "~a ~~ ~a" (expr->string (rel-var rel)) (expr->string (rel-distr rel))))
+  (fmt "~a ~~ ~a" (expr-string (rel-var rel)) (expr-string (rel-distr rel))))
 
 (defun pretty-print-block (rel)
   (mapc #'pretty-print-rel (rel-block-body rel)))
 
 (defun pretty-print-if-then (rel)
   (pp-hdr-block
-    (format nil "if (~a)" (expr->string (rel-if-condition rel)))
+    (format nil "if (~a)" (expr-string (rel-if-condition rel)))
     (pretty-print-rel (rel-true-branch rel))))
 
 (defun pretty-print-if-then-else (rel)
@@ -92,80 +100,16 @@
 (defun pretty-print-loop (rel)
   (let* ((bounds (rel-loop-bounds rel))
 	 (var-name (symbol-name (rel-loop-var rel)))
-	 (lo (expr->string (bounds-lo bounds)))
-	 (hi (expr->string (bounds-hi bounds))))
+	 (lo (expr-string (bounds-lo bounds)))
+	 (hi (expr-string (bounds-hi bounds))))
     (pp-hdr-block
       (format nil "for (~a in ~a : ~a)" var-name lo hi)
       (pretty-print-rel (rel-loop-body rel)))))
 
-(defun expr->string (e &optional (lprec -1) (rprec -1))
-  (case (expr-class e)
-	(:literal-num (write-to-string e))
-	(:variable (symbol-name e))
-	(:quant (qexpr->string e))
-	(:array-app (@expr->string e))
-	(:funct-app (fexpr->string e lprec rprec))))
-
-(defun qexpr->string (e)
-  (let* ((op (symbol-name (quant-op e)))
-	 (var (symbol-name (quant-var e)))
-	 (bounds (quant-bounds e))
-	 (body (expr->string (quant-body e)))
-	 (lo (expr->string (bounds-lo bounds)))
-	 (hi (expr->string (bounds-hi bounds))))
-    (format nil "~a(~a, ~a : ~a, ~a)" op var lo hi body)))
-
-(defun @expr->string (e)
-  (format nil "~a[~{~a~^, ~}]"
-	 (symbol-name (array-op e))
-	 (mapcar #'iexpr->string (array-args e))))
-
-(defun iexpr->string (e)
-  (case (index-class e)
-	(:all "")
-	(:range (format nil "~a : ~a" (range-lo e) (range-hi e)))
-	(:index (expr->string e))))
-
-(defun fexpr->string (e lprec rprec)
-  (let ((op (fct-op e))
-	(args (fct-args e)))
-    (if (is-binop op)
-	(bexpr->string op args lprec rprec)
-        (format nil "~a(~{~a~^, ~})"
-		(symbol-name op) (mapcar #'expr->string args)))))
-
-(defun bexpr->string (op args lprec rprec)
-  (let* ((op-prec (precedences op))
-	 (op-lprec (car op-prec))
-	 (op-rprec (cdr op-prec))
-	 (left (first args))
-	 (right (second args))
-	 (use-parens (or (< op-lprec lprec) (< op-rprec rprec))))
-    (format nil "~a~a ~a ~a~a"
-	    (if use-parens "(" "")
-	    (expr->string left lprec op-lprec)
-	    op
-	    (expr->string right op-rprec rprec)
-	    (if use-parens ")" ""))))
-
 #|
-(defun expand-binop-expr (op args)
-  (unless (<= 2 args) (error "Binary operator must have at least two args"))
-|#
-
-(defun is-binop (x)
-  (assoc x *precedences*))
-
-(defun precedences (op) (assoc-lookup op *precedences*))
-
-(defparameter *precedences*
-  '((:<  5 . 5) (:<= 5 . 5) (:= 5 . 5) (:!= 5 . 5) (:> 5 . 5) (:>= 5 . 5)
-    (:+ 10 . 11) (:- 10 . 11) (:* 20 . 21) (:/ 20 . 21) (:^ 31 . 30)))
-
-; Begin test
 (defun show-case (expr)
   (format t "~w~%" expr)
-  (format t "~a~%~%" (expr->string expr)))
+  (format t "~a~%~%" (expr-string expr)))
 
 (defparameter *test-ops* '(:+ :- :* :/ :^))
 
@@ -179,8 +123,7 @@
 	    (random-expr (1- depth))
 	    (random-expr (1- depth))))))
 
-(dotimes (i 20) (show-case (random-expr 4)))
-
-; End test
+(dotimes (i 5) (show-case (random-expr 4)))
+|#
 
 (main)
