@@ -21,5 +21,18 @@
   (assert (stringp class-name))
   (assert (stringp csharp-namespace))
   (setf mdl (read-model ifname))
+  ; TODO: When creating validation code, we need to account for array slices
+  ;   [Not needed for halo]
+  ; TODO: rework unit tests
+  ; TODO: validation of initial Markov chain state
+  ; TODO: generate updates for deterministic vars
+  ; TODO: xform + new axioms for quantifiers
+  ; TODO: xform + new axioms for array slices
+  ; TODO: prove model var dimension lengths are nonnegative integers
+  ; TODO: prove DAG, var constraints, etc.
+  ; TODO: Use multi-dimensional array type that indexes from 1?
+  ; TODO?: check that dim lengths in args section are integers
+  ; TODO?: check that reqs section and if tests are boolean.
+  ; TODO [CFG]: check that scalar types not used as vars
   (with-open-file (ostrm ofname :direction :output)
     (compile-to-csharp csharp-namespace class-name mdl ostrm)))

@@ -6,6 +6,8 @@
 ; Main function
 
 (defun compile-to-csharp (csharp-name-space class-name mdl os)
+  (destructuring-bind (axioms . norm-mdl) (normalize-model mdl)
+    nil)
   (with-fmt-out os
     (fmt "using System;")
     (fmt "using Common;")
@@ -97,58 +99,179 @@
     (:is-realx . "BMC.IsRealx")
     (:|is_symm_pd| . "BMC.IsSymmPD")))
 
-#|
-(defun print-expr-c# (e &optional (prec -1))
-  (case (expr-class e)
-	(:literal-num (write-to-string e))
-	(:variable (symbol-name e))
-	(:array-app (print-array-app-expr-c# e))
-	(:funct-app
-	 (let ((oper (op e))
-	        (a (args e)))
-	   (cond ((quantifierp oper) (print-quantifier-expr-c# oper a))
-		 ((is-binop oper) (print-binop-expr-c# e prec))
-		 (t (print-funct-app-expr-c# oper a)))))))
+(defun normalize-model (mdl)
+  (destructuring-bind (args-ax . new-args)
+		      (normalize-decls (extract-args mdl))
+  (destructuring-bind (reqs-ax . new-reqs)
+		      (normalize-exprs (extract-reqs mdl))
+  (destructuring-bind (vars-ax . new-vars)
+		      (normalize-decls (extract-vars mdl))
+  (destructuring-bind (rels-ax . new-rels)
+		      (normalize-rels (extract-body mdl))
+  (let ((new-mdl (make-model new-args new-reqs new-vars new-rels))
+	(axioms (remove-duplicates (append args-ax reqs-ax vars-ax rels-ax))))
+    (cons axioms new-mdl)))))))
 
-(defun is-binop (oper)
-  (and (binopp oper) (not (member oper *excluded-binops*))))
+(defun make-model (args reqs vars rels)
+  `(:model (:args ,@args) (:reqs ,@reqs) (:vars ,@vars) (:rels ,@rels)))
 
-(defun print-array-app-expr-c# (e)
-  (format nil "~a[~{~a~^, ~}]"
-	 (print-expr-c# (array-op e))
-	 (mapcar #'print-index-expr-c# (array-args e))))
+(defun normalize-decls (decls)
+  (let* ((xdecls (mapcar #'normalize-decl decls))
+	 (axioms (apply #'append (mapcar #'car xdecls)))
+	 (ndecls (mapcar #'cdr xdecls)))
+    (cons axioms ndecls)))
 
-(defun print-funct-app-expr-c# (oper a)
-  (format nil "~a(~{~a~^, ~})"
-	  (name-c# oper)
-	  (mapcar #'print-expr-c# a)))
+(defun normalize-decl (decl)
+  (destructuring-bind (var-ax . new-var) (normalize-expr (decl-var decl))
+  (destructuring-bind (typ-ax . new-typ) (normalize-type (decl-typ decl))
+    (cons (append var-ax typ-ax)
+	  (make-decl new-var new-typ)))))
 
-(defun print-binop-expr-c# (e context-prec)
-  (let* ((oper (op e))
-	 (prec (precedence oper))
-	 (oper-s (name-c# oper))
-	 (a (mapcar (lambda (x) (print-expr-c# x prec)) (args e))))
-    (with-output-to-string (s)
-       (if (> context-prec prec) (write-char #\Space s))
-       (format s "~a" (car a))
-       (dolist (x (cdr a)) (format s " ~a ~a" oper-s x))
-       (if (> context-prec prec) (write-char #\) s)))))
+(defun make-decl (var typ) (list var typ))
 
-(defun print-index-expr-c# (e)
-  (case (index-class e)
-	('all "")
-	('range (format nil "~a : ~a" (range-lo e) (range-hi e)))
-	('index (print-expr-c# e))))
+(defun normalize-type (typ)
+  (case (type-class typ)
+	(:scalar (cons '() typ))
+	(:array
+	  (let ((etyp (elem-type typ))
+		(dims (type-dims typ)))
+          (destructuring-bind (dims-ax . new-dims) (normalize-exprs dims)
+	    (cons dims-ax (make-array-type etyp new-dims)))))))
 
-(defun print-quantifier-expr-c# (oper a)
-  (let ((opname (name-c# oper))
-	(var (symbol-name (first a)))
-	(lo (print-expr-c# (dec-expr (bounds-lo (second a)))))
-	(hi (print-expr-c# (bounds-hi (second a))))
-	(body (print-expr-c# (third a))))
-    (format nil "~a(~a, ~a, ~a => ~a)" opname lo hi var body)))
+(defun make-array-type (etyp dims) (cons etyp dims))
 
-(defun dec-expr (x)
-  (if (numberp x) (1- x) `(- ,x 1)))
+(defun normalize-rels (rels)
+  (let* ((xrels (mapcar #'normalize-rel rels))
+	 (axioms (apply #'append (mapcar #'car xrels)))
+	 (nrels (mapcar #'cdr xrels)))
+    (cons axioms nrels)))
 
+(defun normalize-rel (rel)
+  (case (rel-class rel)
+	(:deterministic (normalize-determ-rel rel))
+	(:stochastic (normalize-stoch-rel rel))
+	(:block (normalize-block-rel rel))
+	(:if-then (normalize-if-then-rel rel))
+	(:if-then-else (normalize-if-then-else-rel rel))
+	(:loop (normalize-loop-rel rel))))
+
+(defun normalize-determ-rel (rel) 
+  (destructuring-bind (var-ax . nvar) (normalize-expr (rel-var rel))
+  (destructuring-bind (val-ax . nval) (normalize-expr (rel-val rel))
+    (cons (append var-ax val-ax)
+	  (make-determ-rel nvar nval)))))
+
+(defun make-determ-rel (var val) (list :<- var val))
+
+(defun normalize-stoch-rel (rel)
+  (destructuring-bind (var-ax . nvar) (normalize-expr (rel-var rel))
+  (destructuring-bind (distr-ax . ndistr) (normalize-expr (rel-distr rel))
+    (cons (append var-ax distr-ax)
+	  (make-stoch-rel nvar distr)))))
+
+(defun make-stoch-rel (var distr) (list :~ var distr))
+
+(defun normalize-block-rel (rel)
+  (destructuring-bind (axioms . rels) (normalize-rels (rel-block-body rel))
+    (cons axioms (make-block-rel rels))))
+
+(defun make-block-rel (rels) (cons :block rels))
+
+(defun normalize-if-then-rel (rel)
+  (destructuring-bind (test-axioms . ntest)
+		      (normalize-expr (rel-if-condition rel))
+  (destructuring-bind (then-axioms . nthen)
+		      (normalize-rel (rel-true-branch))
+    (cons (append test-axioms then-axioms)
+	  (make-if-then-rel ntest nthen)))))
+
+(defun make-if-then-rel (test then) (list :if test then))
+
+(defun normalize-if-then-else-rel (rel)
+  (destructuring-bind (test-axioms . ntest)
+		      (normalize-expr (rel-if-condition rel))
+  (destructuring-bind (then-axioms . nthen)
+		      (normalize-rel (rel-true-branch))
+  (destructuring-bind (else-axioms . nelse)
+		      (normalize-rel (rel-false-branch))
+    (cons (append test-axioms then-axioms else-axioms)
+	  (make-if-then-else-rel ntest nthen nelse))))))
+
+(defun make-if-then-else-rel (test then else) (list :if test then else))
+
+(defun normalize-loop-rel (rel)
+  (let ((bnds (rel-loop-bounds rel)))
+  (destructuring-bind (lo-axioms . nlo) (normalize-expr (bounds-lo bnds))
+  (destructuring-bind (hi-axioms . nhi) (normalize-expr (bounds-hi bnds))
+  (destructuring-bind (body-axioms . nbody) (normalize-rel (rel-loop-body rel))
+    (cons (append lo-axioms hi-axioms body-axioms)
+	  (make-loop-rel (rel-loop-var rel) nlo nhi nbody)))))))
+
+(defun make-loop-rel (var lo hi body) `(:for ,var (,lo ,hi) ,body))
+
+(defun normalize-exprs (exprs)
+  (let* ((xexprs (mapcar #'normalize-expr exprs))
+	 (axioms (apply #'append (mapcar #'car xexprs)))
+	 (nexprs (mapcar #'cdr xexprs)))
+    (cons axioms nexprs)))
+
+(defun normalize-expr (x)
+  (case (expr-class x)
+	(:literal-num (cons '() x))
+	(:variable (cons '() x))
+	(:quant (normalize-qexpr x))
+	(:array-app (normalize-aexpr x))
+	(:funct-app (normalize-fexpr x))))
+
+(defun normalize-qexpr (x)
+  (let ((op (quant-op x))
+	(var (quant-var x))
+	(bnds (quant-bounds x))
+	(body (quant-body x)))
+  (*** HERE ***)))
+
+(defun normalize-aexpr (x)
+  (destructuring-bind (iaxioms . nidxs) (normalize-iexprs (array-args x))
+  (destructuring-bind (aaxioms . narr) (normalize-expr (array-op x))
+  (destructuring-bind (saxioms . sfct)
+		      (array-slice-axioms (mapcar #'index-class (array-args x)))
+    (cons (append iaxioms aaxioms saxioms)
+	  (funcall sfct narr nidxs))))))
+
+#| ; this is broken
+(defun array-slice-axioms (index-classes)
+  (if (every (lambda (x) (eq :index x)) index-classes)
+    (cons '() #'make-arr-expr)
+    (let ((sfct-name (slice-fct-name index-classes))
+	  (axioms (make-slice-axioms sfct-name index-classes)))
+      (cons axioms #'make-fct-expr))))
+
+(defun slice-fct-name (index-classes)
+  (flet ((ic-char (x) (case x (:all "a") (:range "r") (:index "i"))))
+    (intern (apply #'strcat "@" (mapcar #'ic-char index-classes)) "KEYWORD")))
+
+(defun make-slice-axioms (fct-name index-classes)
+  (lambda (op args) (list 
 |#
+
+(defun normalize-iexprs (iexprs)
+  (let ((x (mapcar #'normalize-iexpr iexprs)))
+    (cons (apply #'append (mapcar #'car x)) (mapcar #'cdr x))))
+
+(defun normalize-iexpr (ie)
+  (case (index-class ie)
+	(:all
+	  (cons '() ie))
+	(:range
+	  (destructuring-bind (lo-axioms . lo) (normalize-expr (range-lo ie))
+	  (destructuring-bind (hi-axioms . hi) (normalize-expr (range-hi ie))
+            (cons (append lo-axioms hi-axioms) (make-index-range lo hi)))))
+	(:index (normalize-expr ie))))
+
+(defun make-index-range (lo hi) (list :range lo hi))
+
+(defun normalize-fexpr (x)
+  (destructuring-bind (axioms . nargs) (normalize-exprs (fct-args x))
+    (cons axioms (make-fct-expr (fct-op x) nargs))))
+
+(defun make-fct-expr (op args) (cons op args))
