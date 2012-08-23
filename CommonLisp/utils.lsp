@@ -4,7 +4,7 @@
 	   :assoc-lookup
 	   :indent :print-indent :with-indent-amt
 	   :fmt :with-fmt-out
-	   :strcat :zip :flatten))
+	   :strcat :zip :flatten :standardize-symbols-in))
 (in-package :utils)
 
 ; read utils
@@ -36,7 +36,7 @@
 (defun assoc-lookup (key assoc-list)
   (let ((x (assoc key assoc-list)))
     (if (null x)
-	(error (format nil "Assoc lookup failed to find ~a" key))
+	(error (format nil "Assoc lookup failed to find ~w" key))
         (cdr x))))
 
 ; Indentation utils
@@ -75,3 +75,16 @@
 
 (defun zip (&rest lists) (apply #'mapcar #'list lists))
 (defun flatten (lists) (apply #'append lists))
+(defun map-range (beg end fct)
+  (do ((x nil (cons (funcall fct i) x))
+       (i beg (1+ i)))
+      ((< end i) (reverse x))))
+
+; miscellaneous
+
+(defun standardize-symbols-in (expr)
+  (cond ((consp expr) (cons (standardize-symbols-in (car expr))
+			    (standardize-symbols-in (cdr expr))))
+	((null expr) expr)
+	((symbolp expr) (symbol-downcase expr))
+	(t expr)))

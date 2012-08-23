@@ -1,5 +1,5 @@
 (defpackage :compile
-  (:use :common-lisp :model :print :utils)
+  (:use :common-lisp :model :print :expr :utils)
   (:export :compile-to-csharp))
 (in-package :compile)
 
@@ -7,7 +7,8 @@
 
 (defun compile-to-csharp (csharp-name-space class-name mdl os)
   (destructuring-bind (axioms . norm-mdl) (normalize-model mdl)
-    nil)
+    (let ((a-assums (args-assums norm-mdl)))
+      (format t "AXIOMS:~%~w~%~%MODEL:~%~w~%" axioms norm-mdl)))
   (with-fmt-out os
     (fmt "using System;")
     (fmt "using Common;")
@@ -167,7 +168,7 @@
   (destructuring-bind (var-ax . nvar) (normalize-expr (rel-var rel))
   (destructuring-bind (distr-ax . ndistr) (normalize-expr (rel-distr rel))
     (cons (append var-ax distr-ax)
-	  (make-stoch-rel nvar distr)))))
+	  (make-stoch-rel nvar ndistr)))))
 
 (defun make-stoch-rel (var distr) (list :~ var distr))
 
@@ -181,7 +182,7 @@
   (destructuring-bind (test-axioms . ntest)
 		      (normalize-expr (rel-if-condition rel))
   (destructuring-bind (then-axioms . nthen)
-		      (normalize-rel (rel-true-branch))
+		      (normalize-rel (rel-true-branch rel))
     (cons (append test-axioms then-axioms)
 	  (make-if-then-rel ntest nthen)))))
 
@@ -191,9 +192,9 @@
   (destructuring-bind (test-axioms . ntest)
 		      (normalize-expr (rel-if-condition rel))
   (destructuring-bind (then-axioms . nthen)
-		      (normalize-rel (rel-true-branch))
+		      (normalize-rel (rel-true-branch rel))
   (destructuring-bind (else-axioms . nelse)
-		      (normalize-rel (rel-false-branch))
+		      (normalize-rel (rel-false-branch rel))
     (cons (append test-axioms then-axioms else-axioms)
 	  (make-if-then-else-rel ntest nthen nelse))))))
 
@@ -224,39 +225,89 @@
 	(:funct-app (normalize-fexpr x))))
 
 (defun normalize-qexpr (x)
-  (let ((op (quant-op x))
-	(var (quant-var x))
-	(bnds (quant-bounds x))
-	(body (quant-body x)))
-  (*** HERE ***)))
+  (if (eq :qand (quant-op x))
+    (cons '() (normalize-qand x))
+    (error "Not implemented: normalize-qexpr")))
+
+(defun logical-var (x)
+  (intern (strcat "?" (symbol-name x)) "KEYWORD"))
+
+(defun normalize-qand (x)
+  (let* ((v0 (quant-var x))
+	 (v (logical-var v0))
+	 (bnds (quant-bounds x))
+	 (lo (qbnds-lo bnds))
+	 (hi (qbnds-hi bnds))
+	 (body0 (quant-body x))
+	 (body (subst v v0 body0)))
+    `(:|all| (,v) (:=> (:|and| (:|is-integer| ,v)
+		               (:<= ,lo ,v) (:<= ,v ,hi))
+		       ,body))))
 
 (defun normalize-aexpr (x)
-  (destructuring-bind (iaxioms . nidxs) (normalize-iexprs (array-args x))
-  (destructuring-bind (aaxioms . narr) (normalize-expr (array-op x))
-  (destructuring-bind (saxioms . sfct)
-		      (array-slice-axioms (mapcar #'index-class (array-args x)))
-    (cons (append iaxioms aaxioms saxioms)
-	  (funcall sfct narr nidxs))))))
+  (destructuring-bind (iaxioms . nargs) (normalize-iexprs (array-args x))
+  (destructuring-bind (aaxioms . nop) (normalize-expr (array-op x))
+    (if (every (lambda (a) (eq :index (index-class a))) nargs)
+      (cons (append iaxioms aaxioms) (make-array-expr nop nargs))
+      (let* ((saxioms (array-slice-axioms (mapcar #'index-class nargs)))
+	     (axioms (append iaxioms aaxioms saxioms))
+	     (sargs (mapcar #'iexpr->expr nargs)))
+	(cons axioms (make-fct-expr :|@-slice| (cons nop sargs))))))))
 
-#| ; this is broken
+(defun make-array-expr (op args) (list* :@ op args))
+
 (defun array-slice-axioms (index-classes)
-  (if (every (lambda (x) (eq :index x)) index-classes)
-    (cons '() #'make-arr-expr)
-    (let ((sfct-name (slice-fct-name index-classes))
-	  (axioms (make-slice-axioms sfct-name index-classes)))
-      (cons axioms #'make-fct-expr))))
+  (assoc-lookup (symbolize index-classes) *asa-map*))
 
-(defun slice-fct-name (index-classes)
-  (flet ((ic-char (x) (case x (:all "a") (:range "r") (:index "i"))))
-    (intern (apply #'strcat "@" (mapcar #'ic-char index-classes)) "KEYWORD")))
+(defun symbolize (index-classes)
+  (intern (format nil "~{~a~^-~}" index-classes) "KEYWORD"))
 
-(defun make-slice-axioms (fct-name index-classes)
-  (lambda (op args) (list 
-|#
+(defparameter *asa-map-template*
+   '((:index-all
+       (all (?a ?i)
+         (=> (and
+                (= (num-dims ?a) 2) (is-integerp ?i)
+                (<= ?i (array-length 1 ?a)))
+              (and
+                (= (num-dims *ia-slice*) 1)
+                (= (array-length 1 *ia-slice*) (array-length 2 ?a))
+                (all (?j)
+                  (=> 
+                    (and (is-integerp ?j) (<= ?j (array-length 2 ?a)))
+                    (= (@ *ia-slice* ?j) (@ ?a ?i ?j))))))))
+    (:index-range
+       (all (?a ?i ?j1 ?j2)
+         (=> (and
+                (= (num-dims ?a) 2)
+                (is-integerp ?i) (<= ?i (array-length 1 ?a))
+                (is-integerp ?j1) (<= ?j1 (+ 1 ?j2))
+                (is-integerp ?j2) (<= ?j2 (array-length 2 ?a)))
+              (and
+                (= (num-dims *ir-slice* 1))
+                (= (array-length 1 *ir-slice*) (+ 1 (- ?j2 ?j1)))
+                (all (?j)
+                  (=>
+                    (and (is-integerp ?j) (<= ?j (+ 1 (- ?j2 ?j1))))
+                    (= (@ *ir-slice* ?j)
+                        (@ ?a ?i (+ ?j (- ?j1 1))))))))))))
+
+(defparameter *asa-map*
+  (let ((ia-slice '(@-slice ?a ?i @-all))
+	(ir-slice '(@-slice ?a ?i (list ?j1 ?j2))))
+    (mapcar (lambda (x) (cons (car x) (standardize-symbols-in (cdr x))))
+      (subst ir-slice '*ir-slice*
+        (subst ia-slice '*ia-slice* *asa-map-template*)))))
+
+(defun iexpr->expr (iexpr)
+  (case (index-class iexpr)
+	(:range (make-fct-expr :list (list (range-lo iexpr) (range-hi iexpr))))
+	(:index iexpr)
+	(:all :@-all)))
 
 (defun normalize-iexprs (iexprs)
   (let ((x (mapcar #'normalize-iexpr iexprs)))
-    (cons (apply #'append (mapcar #'car x)) (mapcar #'cdr x))))
+    (cons (apply #'append (mapcar #'car x))
+	  (mapcar #'cdr x))))
 
 (defun normalize-iexpr (ie)
   (case (index-class ie)
@@ -274,4 +325,4 @@
   (destructuring-bind (axioms . nargs) (normalize-exprs (fct-args x))
     (cons axioms (make-fct-expr (fct-op x) nargs))))
 
-(defun make-fct-expr (op args) (cons op args))
+(defun make-fct-expr (fct args) (cons fct args))

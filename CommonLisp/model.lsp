@@ -6,7 +6,7 @@
     :rel-class :rel-var :rel-val :rel-distr :rel-block-body
     :rel-if-condition :rel-true-branch :rel-false-branch
     :rel-loop-var :rel-loop-bounds :rel-loop-body :bounds-lo :bounds-hi
-    :args-base-decls :vars-base-decls :args-checks))
+    :args-base-decls :vars-base-decls :args-checks :args-assums))
 (in-package :model)
 
 ; TODO: fuller check of model structure?
@@ -333,6 +333,10 @@
   (append (flatten (mapcar #'decl-checks (extract-args mdl)))
 	  (extract-reqs mdl)))
 
+(defun args-assums (mdl)
+  (append (flatten (mapcar #'decl-assums (extract-args mdl)))
+	  (extract-reqs mdl)))
+
 (defun decl-checks (decl)
   (let ((var (decl-var decl))
 	(typ (decl-typ decl)))
@@ -340,11 +344,21 @@
 	  (:scalar (scalar-type-checks var typ))
 	  (:array (array-type-checks var typ)))))
 
+(defun decl-assums (decl)
+  (let ((var (decl-var decl))
+	(typ (decl-typ decl)))
+    (case (type-class typ)
+	  (:scalar (scalar-type-assums var typ))
+	  (:array (array-type-assums var typ)))))
+
 (defun scalar-type-checks (var typ)
   (let ((btyp (base-scalar-type typ)))
     (if (eq btyp typ)
 	nil
         (list (simplify-check (list (type-predicate typ) var))))))
+
+(defun scalar-type-assums (var typ)
+  (list (list (type-predicate typ) var)))
 
 (defun type-predicate (typ)
   (assoc-lookup typ *type-predicates*))
@@ -371,6 +385,12 @@
     (append (array-length-checks var dims 1)
 	    (array-element-checks var etyp dims idxvars idxvars))))
 
+(defun array-type-assums (var typ)
+  (let* ((etyp (elem-type typ))
+	 (dims (type-dims typ)))
+    (append (array-length-assums var dims 1)
+	    (array-element-assums var etyp dims))))
+
 (defun index-vars (n expr &optional (pfx "i"))
   (do ((result nil)
        (k 1 (1+ k)))
@@ -396,6 +416,12 @@
       (cons `(:= (:array-length ,n ,var) ,(car dims))
 	    (array-length-checks var (cdr dims) (1+ n)))))
 
+(defun array-length-assums (var dims n)
+  (if (null dims)
+      nil
+      (cons `(:= (:array-length ,n ,var) ,(car dims))
+	    (array-length-assums var (cdr dims) (1+ n)))))
+
 (defun array-element-checks (var etyp dims idxvars all-idxvars)
   (if (null dims)
       (scalar-type-checks `(:@ ,var ,@all-idxvars) etyp)
@@ -405,7 +431,14 @@
 	(mapcar (lambda (x) `(:qand ,iv (1 ,(car dims)) ,x))
 		(array-element-checks var etyp dims1 idxvars1 all-idxvars)))))
 
+(defun aidx-reqs (v len)
+  `((:is-integerp ,v) (:<= ,v ,len)))
 
-
-
-
+(defun array-element-assums (var etyp dims)
+  (let ((idx-vars (loop for d in dims collect (gensym "?")))
+	(idx-reqs (flatten (mapcar #'aidx-reqs idx-vars dims)))
+	(antecedent (if (= 1 (length idx-reqs))
+		      (car idx-reqs)
+		      (cons :and idx-reqs)))
+	(tpred (type-predicate etyp)))
+    `(:all (,@idx-vars) (:=> ,antecedent (,tpred (:@ ,var ,@idx-vars))))))
