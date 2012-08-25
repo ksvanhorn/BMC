@@ -6,14 +6,14 @@
     :rel-class :rel-var :rel-val :rel-distr :rel-block-body
     :rel-if-condition :rel-true-branch :rel-false-branch
     :rel-loop-var :rel-loop-bounds :rel-loop-body :bounds-lo :bounds-hi
-    :args-base-decls :vars-base-decls :args-checks :args-assums))
+    :args-base-decls :vars-base-decls :args-checks :args-assums
+    :type-predicate))
 (in-package :model)
 
 ; TODO: fuller check of model structure?
 
 (defun read-model (ifname)
-  (let* ((uc (append *model-keywords* *quantifiers*))
- 	 (mdl (read-file-upcasing-only uc ifname))
+  (let* ((mdl (read-file ifname))
 	 (dups (duplicate-vars mdl))
 	 (badv (bad-rel-vars mdl))
 	 (shadow (remove-duplicates (shadowing-indices mdl)))
@@ -32,14 +32,6 @@
 
 (defun error-with-list (format lst)
   (error (format nil (strcat format ": ~{~a~^, ~}") lst)))
-
-(defparameter *scalar-types*
-  `(:realp :realnn :real :realx :realxn :integerp :integernn :integer :boolean))
-
-(defparameter *model-keywords*
-  (append
-    '(:model :args :reqs :vars :body :for :if :block :range :all)
-    *scalar-types*))
 
 (defun extract-args (mdl) (cdr (second mdl)))
 (defun extract-reqs (mdl) (cdr (third mdl)))
@@ -366,10 +358,12 @@
 (defparameter *type-predicates*
   '((:integerp . :is-integerp)
     (:integernn . :is-integernn)
+    (:integer . :is-integer)
     (:realp . :is-realp)
     (:realnn . :is-realnn)
     (:real . :is-real)
-    (:realx . :is-realx)))
+    (:realx . :is-realx)
+    (:realxn . :is-realxn)))
 
 (defun simplify-check (check-expr)
   (destructuring-bind (pred var) check-expr
@@ -435,10 +429,10 @@
   `((:is-integerp ,v) (:<= ,v ,len)))
 
 (defun array-element-assums (var etyp dims)
-  (let ((idx-vars (loop for d in dims collect (gensym "?")))
-	(idx-reqs (flatten (mapcar #'aidx-reqs idx-vars dims)))
-	(antecedent (if (= 1 (length idx-reqs))
-		      (car idx-reqs)
-		      (cons :and idx-reqs)))
-	(tpred (type-predicate etyp)))
+  (let* ((idx-vars (loop for d in dims collect (gensym "?")))
+ 	 (idx-reqs (flatten (mapcar #'aidx-reqs idx-vars dims)))
+	 (antecedent (if (= 1 (length idx-reqs))
+	 	       (car idx-reqs)
+		       (cons :and idx-reqs)))
+	 (tpred (type-predicate etyp)))
     `(:all (,@idx-vars) (:=> ,antecedent (,tpred (:@ ,var ,@idx-vars))))))

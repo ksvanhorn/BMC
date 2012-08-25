@@ -1,14 +1,17 @@
 (defpackage :compile
-  (:use :common-lisp :model :print :expr :utils)
+  (:use :common-lisp :prove :model :print :expr :utils)
   (:export :compile-to-csharp))
 (in-package :compile)
 
 ; Main function
 
 (defun compile-to-csharp (csharp-name-space class-name mdl os)
-  (destructuring-bind (axioms . norm-mdl) (normalize-model mdl)
-    (let ((a-assums (args-assums norm-mdl)))
-      (format t "AXIOMS:~%~w~%~%MODEL:~%~w~%" axioms norm-mdl)))
+  (destructuring-bind (norm-axioms . norm-mdl) (normalize-model mdl)
+    (let* ((assums0 (append (args-assums norm-mdl) norm-axioms *basic-axioms*))
+	   (thms0 (var-lengths-stmts norm-mdl))
+	   (failed (prove-thms-axs thms0 assums0)))
+      (if (not (null failed))
+	(error "The following could not be proven:~%~{  ~a~^~%~}" failed))))
   (with-fmt-out os
     (fmt "using System;")
     (fmt "using Common;")
@@ -294,9 +297,8 @@
 (defparameter *asa-map*
   (let ((ia-slice '(@-slice ?a ?i @-all))
 	(ir-slice '(@-slice ?a ?i (list ?j1 ?j2))))
-    (mapcar (lambda (x) (cons (car x) (standardize-symbols-in (cdr x))))
-      (subst ir-slice '*ir-slice*
-        (subst ia-slice '*ia-slice* *asa-map-template*)))))
+    (subst ir-slice '*ir-slice*
+      (subst ia-slice '*ia-slice* *asa-map-template*))))
 
 (defun iexpr->expr (iexpr)
   (case (index-class iexpr)
@@ -326,3 +328,36 @@
     (cons axioms (make-fct-expr (fct-op x) nargs))))
 
 (defun make-fct-expr (fct args) (cons fct args))
+
+(defun var-lengths-stmts (mdl)
+  (let ((exprs (flatten (mapcar #'length-exprs (extract-vars mdl)))))
+    (remove-duplicates
+      (mapcar (lambda (x) (list (type-predicate :integernn) x)) exprs)
+      :test #'equal)))
+
+(defun length-exprs (decl)
+  (let ((typ (decl-typ decl)))
+    (unless (eq :array (type-class typ))
+      (return-from length-exprs '()))
+    (type-dims typ)))	  
+
+(defparameter *basic-axioms*
+  (to-kw
+    '((is-integer 0)
+      (is-integer 1)
+      (is-integer 2)
+      (is-integer 3)
+      (all (?x) (=> (and (is-integer ?x) (<= 0 ?x)) (is-integernn ?x)))
+      (<= 0 3)
+      (<= 0 2)
+      (<= 0 1)
+      (all (?x ?y ?z) (=> (and (is-integer ?x) (is-integer ?y) (is-integer ?z)
+  			     (<= ?x ?y) (<= ?y ?z))
+  			(<= ?x ?z)))
+      (all (?x ?y) (=> (and (is-integer ?x) (is-integer ?y))
+  		     (is-integer (- ?x ?y))))
+      (is-integer 1)
+      (all (?x ?y) (=> (and (is-integer ?x) (is-integer ?y)
+  			  (<= ?y ?x))
+  		     (<= 0 (- ?x ?y))))
+      (<= 1 3))))

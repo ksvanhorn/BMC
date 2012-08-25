@@ -24,7 +24,7 @@
     (assert (stringp ofname))
     (setf mdl (read-model ifname))
     (with-open-file (ostrm ofname :direction :output)
-      (with-indent-amt 2
+      (with-indent-size 2
         (pretty-print-model mdl ostrm)))))
 
 (defun pretty-print-model (mdl ostrm)

@@ -1,35 +1,36 @@
 (defpackage :utils
   (:use :common-lisp)
-  (:export :read-file-upcasing-only :read-file-preserve-case
+  (:export :read-file :to-kw
 	   :assoc-lookup
-	   :indent :print-indent :with-indent-amt
+	   :indent :with-indent-size
 	   :fmt :with-fmt-out
-	   :strcat :zip :flatten :standardize-symbols-in))
+	   :strcat
+	   :zip :flatten :map-range))
 (in-package :utils)
 
 ; read utils
 
-(defun read-file-upcasing-only (symbols ifname)
-  (force-upcase symbols (read-file-preserve-case ifname)))
+(defun read-file (ifname)
+  (with-open-file (is ifname)
+    (let ((*package* (find-package "KEYWORD")))
+      (read is))))
 
+#|
 (defun read-file-preserve-case (ifname)
   (with-open-file (is ifname)
     (let ((*readtable* (copy-readtable nil))
-	  (*package* *package*))
+	  (*package* (find-package "KEYWORD")))
       (setf (readtable-case *readtable*) :preserve)
-      (in-package "KEYWORD")
       (read is))))
+|#
 
-(defun symbol-downcase (s)
-  (intern (string-downcase s) "KEYWORD"))
+; symbol utils
 
-(defun symbol-upcase (s)
-  (intern (string-upcase s) "KEYWORD"))
-
-(defun force-upcase (symbols sexpr)
-  (dolist (s symbols)
-    (setf sexpr (subst (symbol-upcase s) (symbol-downcase s) sexpr)))
-  sexpr)
+(defun to-kw (e)
+  (cond ((consp e) (cons (to-kw (car e)) (to-kw (cdr e))))
+	((null e) nil)
+	((symbolp e) (intern (symbol-name e) "KEYWORD"))
+	(t e)))
 
 ; assoc utils
 
@@ -48,7 +49,7 @@
 (defun print-indent (&optional (s *standard-output*))
   (dotimes (i (* *indent-amt* *indent-level*)) (princ #\Space s)))
 
-(defmacro with-indent-amt (n &rest body)
+(defmacro with-indent-size (n &rest body)
   `(let ((*indent-amt* ,n)) ,@body))
 
 (defparameter *indent-amt* 4)
@@ -74,17 +75,10 @@
 ; list utils
 
 (defun zip (&rest lists) (apply #'mapcar #'list lists))
+
 (defun flatten (lists) (apply #'append lists))
+
 (defun map-range (beg end fct)
   (do ((x nil (cons (funcall fct i) x))
        (i beg (1+ i)))
       ((< end i) (reverse x))))
-
-; miscellaneous
-
-(defun standardize-symbols-in (expr)
-  (cond ((consp expr) (cons (standardize-symbols-in (car expr))
-			    (standardize-symbols-in (cdr expr))))
-	((null expr) expr)
-	((symbolp expr) (symbol-downcase expr))
-	(t expr)))
