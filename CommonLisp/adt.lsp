@@ -1,7 +1,5 @@
-(defpackage :adt
-  (:use :common-lisp)
-  (:export :defadt :adt-case))
 (in-package :adt)
+; Algebraic data types
 
 (defun compound-symbol (x y)
   (intern (format nil "~a-~a" x y)))
@@ -95,9 +93,30 @@
   (let ((subtypes (remove nil (mapcar #'get-subtype subtype-forms))))
     (unless (has-no-duplicates subtypes)
       (error "In (defadt ~W~{ ~S~}): duplicate subtypes not allowed"
-	     base-type subtye-forms))
+	     base-type subtype-forms))
   (let* ((pname (pred-name base-type))
 	 (base-type-def `(defstruct (,base-type (:predicate ,pname))))
 	 (subtype-defs
 	   (mapcar (lambda (x) (defadt-subtype base-type x)) subtype-forms)))
     `(progn ,base-type-def ,@subtype-defs nil)))))
+
+(defun check-defadt1(typ args)
+  (unless (and (symbolp typ) (every #'symbolp args))
+    (error "In (defadt1 ~W ~{~W~^ ~}): ~
+            arguments must be nonempty list of symbols." typ args))
+  (unless (has-no-duplicates (cons typ args))
+    (error "In (defadt1 ~W ~{~W~^ ~}): ~
+            argument list must not have duplicate symbols." typ args)))
+
+; Example:
+; (defadt1 foo bar baz)
+; =>
+; (defstruct (foo (:predicate is-foo))
+;   (bar nil :read-only t)
+;   (baz nil :read-only t))
+
+(defmacro defadt1 (typ &rest args)
+  (check-defadt1 typ args)
+  (let ((pname (pred-name typ))
+	(field-decls (mapcar #'field-decl args)))
+    `(defstruct (,typ (:predicate ,pname)) ,@field-decls)))

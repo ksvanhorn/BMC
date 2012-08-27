@@ -14,17 +14,17 @@
   ;; VARS is a list of universally quantified variables that P is in scope of.
   (setf p (eliminate-implications (logic p)))
   (case (op p)
-    (:NOT (let ((p2 (move-not-inwards (arg1 p))))
+    (NOT (let ((p2 (move-not-inwards (arg1 p))))
 	   (if (literal-clause? p2) p2 (->cnf p2 vars))))
-    (:AND (conjunction (mappend #'(lambda (q) (conjuncts (->cnf q vars)))
+    (AND (conjunction (mappend #'(lambda (q) (conjuncts (->cnf q vars)))
 				(args p))))
-    (:OR  (merge-disjuncts (mapcar #'(lambda (q) (->cnf q vars))
+    (OR  (merge-disjuncts (mapcar #'(lambda (q) (->cnf q vars))
 				  (args p))))
-    (:ALL (let ((new-vars (mapcar #'new-variable  (mklist (arg1 p)))))
+    (ALL (let ((new-vars (mapcar #'new-variable  (mklist (arg1 p)))))
 	   (->cnf (sublis (mapcar #'cons  (mklist (arg1 p)) new-vars)
 			  (arg2 p))
 		  (append new-vars vars))))
-    (:EXI (->cnf (skolemize (arg2 p) (arg1 p) vars) vars))
+    (EXI (->cnf (skolemize (arg2 p) (arg1 p) vars) vars))
     (t   p) ; p is atomic
     ))
 
@@ -42,35 +42,35 @@
   ;; where a,b,c,d ... are positive atomic clauses
   (let ((lhs (mapcar #'arg1 (remove-if-not #'negative-clause? (disjuncts p))))
 	(rhs (remove-if #'negative-clause? (disjuncts p))))
-    `(:=> ,(conjunction lhs) ,(disjunction rhs))))
+    `(=> ,(conjunction lhs) ,(disjunction rhs))))
 
 (defun eliminate-implications (p)
   (if (literal-clause? p)
       p
     (case (op p)
-      (:=>  `(:or ,(arg2 p) (:not ,(arg1 p))))
-      (:<=> `(:or (:and ,(arg1 p) ,(arg2 p))
-		(:and (:not ,(arg1 p)) (:not ,(arg2 p)))))
+      (=>  `(or ,(arg2 p) (not ,(arg1 p))))
+      (<=> `(or (and ,(arg1 p) ,(arg2 p))
+		(and (not ,(arg1 p)) (not ,(arg2 p)))))
       (t   (cons (op p) (mapcar #'eliminate-implications (args p)))))))
 
 (defun move-not-inwards (p)
   "Given P, return ~P, but with the negation moved as far in as possible."
   (case (op p)
-    (:TRUE :false)
-    (:FALSE :true)
-    (:NOT (arg1 p))
-    (:AND (disjunction (mapcar #'move-not-inwards (args p))))
-    (:OR  (conjunction (mapcar #'move-not-inwards (args p))))
-    (:ALL (make-exp :EXI (arg1 p) (move-not-inwards (arg2 p))))
-    (:EXI (make-exp :ALL (arg1 p) (move-not-inwards (arg2 p))))
-    (t (make-exp :not p))))
+    (TRUE 'false)
+    (FALSE 'true)
+    (NOT (arg1 p))
+    (AND (disjunction (mapcar #'move-not-inwards (args p))))
+    (OR  (conjunction (mapcar #'move-not-inwards (args p))))
+    (ALL (make-exp 'EXI (arg1 p) (move-not-inwards (arg2 p))))
+    (EXI (make-exp 'ALL (arg1 p) (move-not-inwards (arg2 p))))
+    (t (make-exp 'not p))))
 
 (defun merge-disjuncts (disjuncts)
   "Return a CNF expression for the disjunction."
   ;; The argument is a list of disjuncts, each in CNF.
   ;; The second argument is a list of conjuncts built so far.
   (case (length disjuncts)
-    (0 :false)
+    (0 'false)
     (1 (first disjuncts))
     (t (conjunction
 	(loop for y in (conjuncts (merge-disjuncts (rest disjuncts))) append
@@ -111,8 +111,8 @@
 
 ;;;; Utility Predicates and Accessors
 
-(defconstant +logical-connectives+ '(:and :or :not :=> :<=>))
-(defconstant +logical-quantifiers+ '(:all :exi))
+(defconstant +logical-connectives+ '(and or not => <=>))
+(defconstant +logical-quantifiers+ '(all exi))
 
 (defun atomic-clause? (sentence)
   (not (or (member (op sentence) +logical-connectives+)
@@ -120,44 +120,44 @@
 
 (defun literal-clause? (sentence)
   (or (atomic-clause? sentence)
-      (and (eq (op sentence) :not) (atomic-clause? (arg1 sentence)))))
+      (and (eq (op sentence) 'not) (atomic-clause? (arg1 sentence)))))
 
 (defun negative-clause? (sentence)
-  (eq (op sentence) :not))
+  (eq (op sentence) 'not))
 
 (defun conjunction? (sentence)
-  (eq (op sentence) :and))
+  (eq (op sentence) 'and))
 
 (defun horn-clause? (sentence)
-  (and (eq (op sentence) :=>)
+  (and (eq (op sentence) '=>)
        (every #'atomic-clause? (conjuncts (arg1 sentence)))
        (atomic-clause? (arg2 sentence))))
 
 (defun conjuncts (sentence)
   "Return a list of the conjuncts in this sentence."
-  (cond ((eq (op sentence) :and) (args sentence))
-	((eq sentence :true) nil)
+  (cond ((eq (op sentence) 'and) (args sentence))
+	((eq sentence 'true) nil)
 	(t (list sentence))))
 
 (defun disjuncts (sentence)
   "Return a list of the disjuncts in this sentence."
-  (cond ((eq (op sentence) :or) (args sentence))
-	((eq sentence :false) nil)
+  (cond ((eq (op sentence) 'or) (args sentence))
+	((eq sentence 'false) nil)
 	(t (list sentence))))
 
 (defun conjunction (args)
   "Form a conjunction with these args."
   (case (length args)
-    (0 :true)
+    (0 'true)
     (1 (first args))
-    (t (cons :and args))))
+    (t (cons 'and args))))
 
 (defun disjunction (args)
   "Form a disjunction with these args."
   (case (length args)
-    (0 :false)
+    (0 'false)
     (1 (first args))
-    (t (cons :or args))))
+    (t (cons 'or args))))
 
 ;;; An expression is a list consisting of a prefix operator followed by args,
 ;;; Or it can be a symbol, denoting an operator with no arguments.

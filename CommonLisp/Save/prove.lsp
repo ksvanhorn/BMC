@@ -1,10 +1,8 @@
-(defpackage :prove (:use :common-lisp :model) (:export :prove-thms-axs))
 (in-package :prove)
 
-(push #P"./Classic-rtp/" custom:*load-paths*)
-(load "unify")
-(load "cnf")
-(load "prover")
+(load "Classic-rtp/unify")
+(load "Classic-rtp/cnf")
+(load "Classic-rtp/prover")
 
 (setq *resource-limit* 50000)
 

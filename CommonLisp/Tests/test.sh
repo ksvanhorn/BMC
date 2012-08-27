@@ -1,3 +1,3 @@
 #!/bin/bash
 
-clisp -ansi -i testinit.lsp
+clisp -ansi -i Tests/testinit.lsp

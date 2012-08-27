@@ -225,7 +225,7 @@
 
 (defun theorem-prover (theorem axiom-clauses)
   (setf *renaming-table* (make-hash-table))
-  (let* ((theorem-clauses (convert-to-cnf (list :not theorem)))
+  (let* ((theorem-clauses (convert-to-cnf (list 'not theorem)))
 	 (theorem-nodes (loop for c in theorem-clauses
 		      collect (make-proof-node :clause c
 					       :setofsupport t)))
@@ -349,15 +349,15 @@
   (let ((cnf (->cnf p)) clauses)
     (cond ((literal-clause? cnf)
 	    (setf clauses (list (list cnf))))
-	  ((eql (first cnf) :or)
+	  ((eql (first cnf) 'or)
 	   (setf clauses (list (rest cnf))))
 	  (t 
-	   (when (eql (first cnf) :and)
+	   (when (eql (first cnf) 'and)
 		 (setf cnf (rest cnf)))
 	   (setf clauses
 		 (loop for c in cnf collect
 		       (cond ((literal-clause? c)(list c))
-			     ((eql (first c) :or)(rest c))
+			     ((eql (first c) 'or)(rest c))
 			     (t c))))))
     (loop for clause in clauses
 	  when (tautology-filter clause)
@@ -408,7 +408,7 @@
 
 (defun negative-literal (literal)
   "Returns true if a negative literal."
-  (eql (first literal) :not))
+  (eql (first literal) 'not))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; get-clause-candidates
@@ -468,7 +468,7 @@
 							       cand)))))))
 
 
-(defun without-not (exp)(if (eql (first exp) :not)(second exp)exp))
+(defun without-not (exp)(if (eql (first exp) 'not)(second exp)exp))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; eliminate-duplicates

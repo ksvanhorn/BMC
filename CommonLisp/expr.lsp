@@ -1,44 +1,70 @@
-(defpackage :expr
-  (:use :common-lisp :utils)
-  (:export
-    :expr-class
-    :fct-op :fct-args
-    :quant-op :quant-var :quant-bounds :qbnds-lo :qbnds-hi :quant-body
-    :*quantifiers*
-    :array-op :array-args :index-class :range-lo :range-hi))
 (in-package :expr)
 
-(defun expr-class (expr)
-  (cond ((numberp expr) :literal-num)
-	((symbolp expr) :variable)
-	((is-qexpr expr) :quant)
-	((is-aexpr expr) :array-app)
-	((could-be-fexpr expr) :funct-app))) ; must come at end!
+(defadt expr
+  (literal value)
+  (const symbol)
+  (variable symbol)
+  (quantifier op lo hi var body)
+  (apply fct args))
 
-(defun could-be-fexpr (e) (and (listp e) (symbolp (first e))))
-(defun fct-op (fexpr) (first fexpr))
-(defun fct-args (fexpr) (rest fexpr))
-
-(defun is-aexpr (e) (and (listp e) (eq :@ (first e)))) 
-(defun array-op (aexpr) (second aexpr))
-(defun array-args (aexpr) (nthcdr 2 aexpr))
-
-(defun is-qexpr (x)
-  (and (listp x) (member (first x) *quantifiers*)))
-(defparameter *quantifiers* '(:qsum :qprod :qand :qor))
-(defun quant-op (x) (first x))
-(defun quant-var (x) (second x))
-(defun quant-bounds (x) (third x))
-(defun quant-body (x) (fourth x))
-(defun qbnds-lo (x) (first x))
-(defun qbnds-hi (x) (second x))
-
-(defun index-class (e)
+(defun sexpr->expr (x)
   (cond
-   ((eq :all e) :all)
-   ((is-range e) :range)
-   (t :index)))
+    ((is-literal-value x)
+     (make-expr-literal :value x))
+    ((is-const-symbol x)
+     (make-expr-const :symbol x))
+    ((symbolp x)
+     (make-expr-variable :symbol x))
+    ((consp x)
+     (destructuring-bind (op args) x
+       (cond ((is-fquant-symbol op)
+	      (sexpr->expr-quantifier op args))
+	     ((eq '@ op)
+	      (sexpr->expr-array-app op args))
+	     ((is-fct-symbol op)
+	      (make-expr-apply :fct op :args (mapcar #'sexpr->expr args)))
+	     (t
+	      (error "Illegal symbol (~W) at beginning of expression" op)))))
+    (t
+     (error "Unrecognized expression type: ~W" x))))
 
-(defun is-range (iexpr) (and (consp iexpr) (eq :range (first iexpr))))
-(defun range-lo (rexpr) (second rexpr))
-(defun range-hi (rexpr) (third rexpr))
+(defun sexpr->expr-quantifier (op args)
+  (destructuring-bind (lo-x hi-x var body-x) args
+    (let ((lo (sexpr->expr lo-x))
+	  (hi (sexpr->expr hi-x))
+	  (body (sexpr->expr body-x)))
+      (unless (is-variable-symbol var)
+	(error "Index var ~W of quantifier expression ~W ~
+                is not a valid variable symbol" var (cons op args)))
+      (make-expr-quantifier :op op :lo lo :hi hi :var var :body body))))
+
+(defun sexpr->expr-array-app (_ args)
+  (unless (and (consp args) (< 1 (length args)))
+    (error "Invalid array application: ~W." (cons '@ args)))
+  (destructuring-bind (arr-x . indices) args
+    (let ((arr (sexpr->expr) arr-x))
+      (if (every #'is-scalar-index indices)
+	  (make-expr-apply
+	    :fct '@ :args (cons arr (mapcar #'sexpr->expr args)))
+	  (make-expr-apply
+	    :fct '@-slice :args (cons arr (mapcar #'sexpr->slice-arg args)))))))
+
+(defun is-scalar-index (x)
+  (not (or (is-slice-all x) (is-slice-range x))))
+
+(defun sexpr->slice-arg (x)
+  (cond ((is-slice-all x) (make-expr-const :symbol '@-all))
+	((is-slice-range x)
+	 (destructuring-bind (lo-x hi-x) (cdr x)
+	   (let ((lo (sexpr->expr lo-x))
+		 (hi (sexpr->expr hi-x)))
+	     (make-expr-apply :fct '@-rng :args (list lo hi)))))
+	(t
+	 (make-expr-apply :fct '@-idx :args (list (sexpr->expr x))))))
+
+(defun is-slice-all (x) (eq 'all x))
+
+(defun is-slice-range (x) (starts-with 'range x))
+
+(defun is-literal-value (x)
+  (or (realp x) (eq x 'true) (eq x 'false)))

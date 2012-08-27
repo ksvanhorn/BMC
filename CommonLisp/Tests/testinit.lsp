@@ -1,2 +1,2 @@
-(load "../../../lisp-unit/lisp-unit")
+(load "../../lisp-unit/lisp-unit")
 (use-package :lisp-unit)

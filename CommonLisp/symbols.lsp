@@ -1,20 +1,30 @@
-(defpackage :symbols
-  (:use :common-lisp) (:export :def-symbols-package))
 (in-package :symbols)
 
-; Usage: (def-symbols-package <name> <sym_1> ... <sym_n>).
-; Defines a package <name> which exports symbols <sym_1>, ... <sym_n>,
-; as well as defining and exporting a constant +<name>+, which is
-; the list (<sym_1> ... <sym_n>). Typically <name> will have the form
-; <something>-symbols.
+(defun is-fquant-symbol (s)
+  (member s '(qand qor qsum qprod)))
 
-(defmacro def-symbols-package (name &rest symbols)
-  (let* ((pkg (make-package name))
-         (const-sym
-	   (intern (concatenate 'string "+" (symbol-name name) "+") pkg))
-	 (syms
-	   (mapcar (lambda (s) (intern (symbol-name s) pkg)) symbols)))
-    `(progn
-       (defpackage ,name (:export ,const-sym ,@syms) (:use :cl))
-       (in-package ,name)
-       (defconstant ,const-sym '(,@syms)))))
+(defun is-const-symbol (s)
+  (member s '(@-all true false)))
+
+(defun is-variable-symbol (s)
+  (and (symbolp s) (not (is-const-symbol s))))
+
+(defun is-fct-symbol (s)
+  (member s +fct-symbols+))
+
+(defconstant +fct-symbols+
+  '(and or not => <=>
+    is-boolean is-integer is-integerp0 is-integerp
+    is-realxn is-realx is-real is-realp0 is-realp
+    = < <= > >= is_sym_pd
+    @ @-slice vec array-length num-dims
+    + - * / ^ neg exp tanh sqrt
+    sum dot inv
+    ddirch-density dcat-density dinterval-density
+    dnorm-density dmvnorm-density dgamma-density dwishart-density))
+
+(defun is-distr-symbol (x)
+  (member x +distr-symbols+))
+
+(defconstant +distr-symbols+
+  '(ddirch dcat dinterval dnorm dmvnorm dgamma dwishart))
