@@ -1,0 +1,6 @@
+(:model
+  (:vars
+    (mu_tls (real 2))
+    (nvars (integer))
+  )
+)

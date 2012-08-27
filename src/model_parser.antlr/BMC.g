@@ -1,6 +1,28 @@
 grammar BMC;
 
 
+@members {
+	public String getErrorMessage(RecognitionException e,
+			String[] tokenNames)
+	{
+		List stack = getRuleInvocationStack(e, this.getClass().getName());
+		String msg = null;
+		if ( e instanceof NoViableAltException ) {
+			NoViableAltException nvae = (NoViableAltException)e;
+			msg = " no viable alt; token="+e.token+
+				" (decision="+nvae.decisionNumber+
+				" state "+nvae.stateNumber+")"+
+				" decision=<<"+nvae.grammarDecisionDescription+">>";
+		}
+		else {
+			msg = super.getErrorMessage(e, tokenNames);
+		}
+		return stack+" "+msg;
+	}
+	public String getTokenErrorDisplay(Token t) {
+		return t.toString();
+	}
+}
 
 POW	:	('^'|'**');
 SPECIAL	:	'%'+ ~('%'|' '|'\t'|'\r'|'\n')* '%';
@@ -18,9 +40,12 @@ WS  :   ( ' '
     ;
 
 DOUBLE
-    :   ('0'..'9')+ '.' ('0'..'9')* EXPONENT?
-    |   '.' ('0'..'9')+ EXPONENT?
-    |   ('0'..'9')+ EXPONENT
+    :   DIGIT+ '.' DIGIT* EXPONENT?
+    |   '.' DIGIT+ EXPONENT?
+    |   DIGIT+ EXPONENT
+    ;
+
+INT: 	DIGIT+
     ;
 
 NAME:	('a'..'z'|'A'..'Z') ('a'..'z'|'A'..'Z'|'0'..'9'|'_'|'.')*
@@ -28,20 +53,20 @@ NAME:	('a'..'z'|'A'..'Z') ('a'..'z'|'A'..'Z'|'0'..'9'|'_'|'.')*
 
 
 
-fragment
-EXPONENT : ('e'|'E') ('+'|'-')? ('0'..'9')+ ;
+fragment EXPONENT : ('e'|'E') ('+'|'-')? ('0'..'9')+ ;
+fragment DIGIT : ('0'..'9') ;
 
 
-input: var_stmt? data_stmt? model_stmt?
+input: {System.out.print("(:model"); } var_stmt? data_stmt? model_stmt? {System.out.print("\n)\n");}
 ;
 
-var_stmt: 'var' dec_list ';'?
+var_stmt: 'var' {System.out.print("\n  (:vars");} dec_list ';'? {System.out.print("\n  )");}
 ;
 
 dec_list: node_dec (',' node_dec)*
 ;
 
-node_dec: NAME ( '[' dim_list ']' )?
+node_dec: type=NAME name=NAME {System.out.print("\n    (" + $name.text + " (" + $type.text);} ( '[' dim_list ']' )? {System.out.print("))");}
 ;
 
 dim_list: expression (',' expression)*
@@ -132,7 +157,7 @@ comparison_expression
 	;
 
 sum_expression
-	:	product_expression ( ('+'|'-') product_expression)*
+	:	exps += product_expression ( ('+'|'-') exps += product_expression)*
 	;
 
 product_expression
@@ -151,11 +176,12 @@ power_expression
 	:	atom ('^' power_expression)? // right-associative via tail recursion
 	;
 
-atom	:	var
-	|	DOUBLE
+atom	:	var { System.out.print(" " + $var.text); }
+	|	DOUBLE { System.out.print(" " + $DOUBLE.text); }
+	|	INT { System.out.print(" " + $INT.text); }
 	|	'length' '(' var ')'
 	|	'dim' '(' var ')'
-	|	NAME '(' expression_list ')'
+	|	( NAME '(' )=> NAME '(' expression_list ')'
 	|	'(' expression ')'
 	;
 	
@@ -180,3 +206,5 @@ interval: 'I' '(' expression? ','  expression? ')'
 
 var: NAME ( '[' range_list ']' )?
 ;
+
+
