@@ -39,22 +39,22 @@
     :dnorm-density :dmvnorm-density :dgamma-density :dwishart-density
 
     ;; model symbols
-    :model :args :reqs :vars :body
-    :<- :~ :for :if :block
-    :range))
+    :<- :~
+    ))
 
 (defpackage :adt
   (:use :cl)
-  (:export :defadt :defadt1 :adt-case))
+  (:export :defadt :defadt1 :adt-case :match-adt1))
 
 (defpackage :utils
   (:use :cl)
-  (:export :starts-with))
+  (:export :starts-with :assoc-lookup :zip))
 
 (defpackage :expr
   (:use :cl :symbols :adt :utils)
   (:export
-   :sexpr->expr :is-scalar-index :is-slice-all :is-slice-range
+   :sexpr->expr :expr->string :is-scalar-index :is-slice-all :is-slice-range
+   :with-print-options :default-is-binop :default-fct-name :default-quant-format
    :is-expr
    :is-expr-literal :make-expr-literal :expr-literal-value
    :is-expr-const :make-expr-const :expr-const-symbol

@@ -1,5 +1,3 @@
-(load "packages")
-(load "adt")
 (use-package :adt)
 
 (define-test adt-expansion-tests
@@ -17,18 +15,18 @@
 
   (assert-expands
    '(let ((foo some-expression))
-     (cond foo
-	   ((is-foo-bar foo)
-	    (let ((a (foo-bar-a foo)))
-	      (format t "OK")
-	      (f foo a)))
-	   ((is-foo-baz foo)
-	    (let ((a (foo-baz-a foo))
-		  (b (foo-baz-b foo)))
-	      (g foo a b)))
-	   ((is-foo-bop foo)
-	    (h foo))
-	   (t (error "No match in adt-case."))))
+     (cond
+       ((is-foo-bar foo)
+	(let ((a (foo-bar-a foo)))
+	  (format t "OK")
+	  (f foo a)))
+       ((is-foo-baz foo)
+	(let ((a (foo-baz-a foo))
+	      (b (foo-baz-b foo)))
+	  (g foo a b)))
+       ((is-foo-bop foo)
+	(h foo))
+       (t (error "No match in adt-case."))))
    (adt-case foo some-expression
      ((bar a) 
       (format t "OK")
@@ -43,4 +41,14 @@
      (bar nil :read-only t)
      (baz nil :read-only t))
    (defadt1 foo bar baz))
+
+  (assert-expands
+   '(let ((foo expr)
+	  (a (foo-a foo))
+	  (b (foo-b foo)))
+      (side-effect a foo b)
+      (main-val b a foo))
+   (match-adt1 (foo a b) expr
+     (side-effect a foo b)
+     (main-val b a foo)))
 )

@@ -53,7 +53,7 @@
 ;   ((bop) (h foo)))
 ; =>
 ; (let ((foo some-expression))
-;   (cond foo
+;   (cond
 ;     ((is-foo-bar foo)
 ;      (let ((a (foo-bar-a foo)))
 ;        (format t "OK")
@@ -70,8 +70,7 @@
   (let ((clause-expansions
 	  (mapcar (lambda (c) (expand-clause base-type c)) clauses)))
     `(let ((,base-type ,x))
-       (cond ,base-type
-	     ,@clause-expansions
+       (cond ,@clause-expansions
 	     (t (error "No match in adt-case."))))))
 
 ; Example:
@@ -120,3 +119,22 @@
   (let ((pname (pred-name typ))
 	(field-decls (mapcar #'field-decl args)))
     `(defstruct (,typ (:predicate ,pname)) ,@field-decls)))
+
+; Example:
+; (match-adt1 (foo a b) expr
+;   (side-effect a foo b)
+;   (main-val b a foo))
+; =>
+; (let ((foo expr)
+;       (a (foo-a foo))
+;       (b (foo-b foo)))
+;   (side-effect a foo b)
+;   (main-val b a foo))
+
+(defmacro match-adt1 ((typ &rest fields) x &rest body)
+  (flet ((field-var-def (field)
+	   (let ((accessor (compound-symbol typ field)))
+	     `(,field (,accessor ,typ)))))
+    (let ((field-var-defs (mapcar #'field-var-def fields)))
+      `(let ((,typ ,x) ,@field-var-defs) ,@body))))
+
