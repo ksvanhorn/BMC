@@ -3,6 +3,8 @@
 (load "code-to-test")
 (load "../../lisp-unit/lisp-unit")
 (use-package :lisp-unit)
+(load "Tests/testing-utilities")
+(in-package :cl-user)
 
 (load "Tests/adt-tests")
 (load "Tests/utils-tests")
