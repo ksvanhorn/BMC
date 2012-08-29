@@ -3,10 +3,11 @@
   (:export
     ;; symbol classes
     :is-fquant-symbol :is-const-symbol :is-fct-symbol :is-distr-symbol
-    :is-variable-symbol
+    :is-variable-symbol :is-scalar-type-symbol
 
     ;; logical symbols
     :and :or :not :all :exi :=> :<=>
+    :.and :.or :.not :.=> :.<=>
 
     ;; constants
     :@-all :true :false
@@ -20,9 +21,13 @@
     :is-boolean
     :is-integer :is-integerp0 :is-integerp
     :is-realxn :is-realx :is-real :is-realp0 :is-realp
+    :.is-boolean
+    :.is-integer :.is-integerp0 :.is-integerp
+    :.is-realxn :.is-realx :.is-real :.is-realp0 :.is-realp
 
     ;; other predicates
-    := :< :<= :> :>= :is_symm_pd
+    := :!= :< :<= :> :>= :is-symm-pd
+    :.= :.!= :.< :.<= :.> :.>= :.is-symm-pd
     
     ;; functions
     :@ :@-slice :@-rng :@-idx :vec :array-length :num-dims
@@ -31,6 +36,7 @@
 
     ;; finite quantifiers
     :qand :qor :qsum :qprod
+    :.qand :.qor
 
     ;; distributions
     :ddirch :dcat :dinterval :dnorm :dmvnorm :dgamma :dwishart
@@ -48,13 +54,15 @@
 
 (defpackage :utils
   (:use :cl)
-  (:export :starts-with :assoc-lookup :zip))
+  (:export :starts-with :assoc-lookup :zip :strcat :read-file
+	   :indent :fmt :*indent-level* :*indent-amount* :*fmt-ostream*))
 
 (defpackage :expr
   (:use :cl :symbols :adt :utils)
   (:export
    :sexpr->expr :expr->string :is-scalar-index :is-slice-all :is-slice-range
    :with-print-options :default-is-binop :default-fct-name :default-quant-format
+   :*convert-boolean-functions*
    :is-expr
    :is-expr-literal :make-expr-literal :expr-literal-value
    :is-expr-const :make-expr-const :expr-const-symbol
@@ -67,13 +75,19 @@
 (defpackage :model
   (:use :cl :symbols :adt :utils :expr)
   (:export
+   :read-model :sexpr->model
+   :sexpr->vtype :sexpr->decl :sexpr->distr :sexpr->rellhs :sexpr->rel
+   :vtype->string :distr->string :rellhs->string :pp-decl :pp-rel :pp-model
+
    :is-model :make-model :model-args :model-reqs :model-vars :model-body
 
    :is-decl :make-decl :decl-var :decl-typ
 
-   :is-type
-   :is-type-scalar :make-type-scalar :type-scalar-stype
-   :is-type-array :make-type-array :type-array-elem-type :type-array-dims
+   :is-vtype
+   :is-vtype-scalar :make-vtype-scalar :vtype-scalar-stype
+   :is-vtype-array :make-vtype-array :vtype-array-elem-type :vtype-array-dims
+
+   :is-distribution :make-distribution :distribution-name :distribution-args
 
    :is-relation
    :is-relation-deterministic :make-relation-deterministic
@@ -81,13 +95,12 @@
    :is-relation-stochastic :make-relation-stochastic
    :relation-stochastic-lhs :relation-stochastic-rhs
    :is-relation-block :make-relation-block :relation-block-members
-   :is-relation-if-then :make-relation-if-then
-   :relation-if-then-condition :relation-if-then-body
-   :is-relation-if-then-else :make-relation-if-then-else
-   :relation-if-then-else-condition
-   :relation-if-then-else-true-branch :relation-if-then-else-false-branch
+   :is-relation-if :make-relation-if
+   :relation-if-condition 
+   :relation-if-true-branch :relation-if-false-branch
    :is-relation-loop :make-relation-loop :relation-loop-var
    :relation-loop-lo :relation-loop-hi :relation-loop-body
+   :is-relation-skip :make-relation-skip
 
    :is-rellhs
    :is-rellhs-simple :make-rellhs-simple :rellhs-simple-var
@@ -103,4 +116,6 @@
    :array-slice-index-range-lo :array-slice-index-range-hi
    :is-array-slice-index-all :make-array-slice-index-all))
 
-
+(defpackage :compile
+  (:use :cl :model :expr :utils :adt :symbols)
+  (:export :compile-to-csharp))

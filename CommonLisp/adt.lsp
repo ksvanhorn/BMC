@@ -68,7 +68,8 @@
 
 (defmacro adt-case (base-type x &rest clauses)
   (let ((clause-expansions
-	  (mapcar (lambda (c) (expand-clause base-type c)) clauses)))
+	  (mapcar (lambda (c) (expand-clause base-type c)) clauses))
+	(errinfo (list* 'adt-case base-type x clauses)))
     `(let ((,base-type ,x))
        (cond ,@clause-expansions
 	     (t (error "No match in adt-case."))))))
@@ -125,7 +126,7 @@
 ;   (side-effect a foo b)
 ;   (main-val b a foo))
 ; =>
-; (let ((foo expr)
+; (let* ((foo expr)
 ;       (a (foo-a foo))
 ;       (b (foo-b foo)))
 ;   (side-effect a foo b)
@@ -136,5 +137,5 @@
 	   (let ((accessor (compound-symbol typ field)))
 	     `(,field (,accessor ,typ)))))
     (let ((field-var-defs (mapcar #'field-var-def fields)))
-      `(let ((,typ ,x) ,@field-var-defs) ,@body))))
+      `(let* ((,typ ,x) ,@field-var-defs) ,@body))))
 

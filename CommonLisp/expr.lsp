@@ -24,7 +24,9 @@
 	     ((eq '@ op)
 	      (sexpr->expr-array-app op args))
 	     ((is-fct-symbol op)
-	      (make-expr-apply :fct op :args (mapcar #'sexpr->expr args)))
+	      (make-expr-apply
+	        :fct (convert-function-symbol op)
+		:args (mapcar #'sexpr->expr args)))
 	     (t
 	      (error "Illegal symbol (~W) at beginning of expression" op)))))
     (t
@@ -169,14 +171,17 @@
 
 ; (precedences op)
 
-(defun precedences (op) (assoc-lookup op *precedences*))
+(defun precedences (op) (assoc-lookup op +precedences+))
 
-(defparameter *precedences*
-  '((<  5 . 5) (<= 5 . 5) (= 5 . 5) (!= 5 . 5) (> 5 . 5) (>= 5 . 5)
-    (+ 10 . 11) (- 10 . 11) (* 20 . 21) (/ 20 . 21) (^ 31 . 30)))
+(defconstant +precedences+
+  '((<  50 . 50) (<= 50 . 50) (= 50 . 50) (!= 50 . 50) (> 50 . 50) (>= 50 . 50)
+    (.<  50 . 50) (.<= 50 . 50) (.= 50 . 50) (.!= 50 . 50) (.> 50 . 50) (.>= 50 . 50)
+    (and 40 . 41) (or 30 . 31) (=> 20 . 21)  (<=> 10 . 11)
+    (.and 40 . 41) (.or 30 . 31) (.=> 20 . 21)  (.<=> 10 . 11)
+    (+ 100 . 101) (- 100 . 101) (* 110 . 111) (/ 110 . 111) (^ 121 . 120)))
 
 (defun is-binop (x) (funcall *is-binop* x))
-(defun default-is-binop (x) (assoc x *precedences*))
+(defun default-is-binop (x) (assoc x +precedences+))
 (defparameter *is-binop* #'default-is-binop)
 
 (defun fct-name (x) (funcall *fct-name* x))
@@ -188,6 +193,16 @@
 (defun default-quant-format (op-s lo-s hi-s var-s body-s)
   (format nil "~a(~a, ~a : ~a, ~a)" op-s var-s lo-s hi-s body-s))
 (defparameter *quant-format* #'default-quant-format)
+
+(defun convert-function-symbol (s)
+  (if (and *convert-boolean-functions* (member s +boolean-functions+))
+      (intern (strcat "." (symbol-name s)))
+      s))
+(defparameter *convert-boolean-functions* nil)
+(defconstant +boolean-functions+
+  '(= != < <= > >= and or not => <=> qand qor is-symm-pd
+    is-boolean is-integer is-integerp0 is-integerp
+    is-realxn is-realx is-real is-realp0 is-realp))
 
 (defmacro with-print-options (is-binop-kw is-binop-fct
 			      fct-name-kw fct-name-fct

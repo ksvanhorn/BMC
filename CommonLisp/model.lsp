@@ -4,7 +4,7 @@
 
 (defadt1 decl var typ)
 
-(defadt type
+(defadt vtype
   (scalar stype)
   (array elem-type dims))
 
@@ -28,63 +28,63 @@
   (range lo hi)
   (all))
 
+(defun read-model (ifname)
+  (sexpr->model (read-file ifname)))
+
 (defun sexpr->model (x)
   (check-model-top-level x)
-  (let ((mdl (make-model :args (mapcar #'sexpr->decl (cdr (second x)))
-			 :reqs (mapcar sexpr->expr (cdr (third x)))
-			 :vars (mapcar sexpr->decl (cdr (fourth x)))
-			 :body (mapcar sexpr->rel (cdr (fifth x))))))
+  (let ((mdl (let ((*convert-boolean-functions* nil))
+               (make-model :args (mapcar #'sexpr->decl (cdr (second x)))
+			   :reqs (mapcar #'sexpr->expr (cdr (third x)))
+			   :vars (mapcar #'sexpr->decl (cdr (fourth x)))
+			   :body (let ((*convert-boolean-functions* t))
+				   (mapcar #'sexpr->rel (cdr (fifth x))))))))
     (check-model mdl)
     mdl))
 
 (defun check-model-top-level (x)
-  (unless (and (starts-with 'model x)
+  (unless (and (starts-with :model x)
 	       (= 5 (length x))
-	       (starts-with 'args (second x))
-	       (starts-with 'reqs (third x))
-	       (starts-with 'vars (fourth x))
-	       (starts-with 'body (fifth x)))
+	       (starts-with :args (second x))
+	       (starts-with :reqs (third x))
+	       (starts-with :vars (fourth x))
+	       (starts-with :body (fifth x)))
     (error "Model must have form ~
-            '(model (args ...) (reqs ...) (vars ...) (body ...))'.")))
+            '(:model (:args ...) (:reqs ...) (:vars ...) (:body ...))'.")))
 
 (defun sexpr->decl (x)
   (when (and (consp x) (= 2 (length x)))
     (destructuring-bind (var typ) x
       (when (is-var-symbol var)
 	(return-from sexpr->decl
-	  (make-decl :var var :typ (sexpr->type typ))))))
+	  (make-decl :var var :typ (sexpr->vtype typ))))))
   (error "Invalid declaration: ~W." x))
 
 (defun is-var-symbol (x)
-  (and (symbolp var) (not (is-const-symbol var))))
+  (and (symbolp x) (not (is-const-symbol x))))
 
-(defun sexpr->type (x)
+(defun sexpr->vtype (x)
   (cond ((is-scalar-type-symbol x)
-	 (make-type-scalar :stype x))
+	 (make-vtype-scalar :stype x))
 	((is-array-type-sexpr x)
-	 (sexpr->type-array x))
+	 (sexpr->vtype-array x))
 	(t
 	 (error "Invalid type ~W." x))))
-
-(defun is-scalar-type-symbol (x) (member x +scalar-types+))
-
-(defconst +scalar-types+
-  '(boolean integer integerp0 integerp realxn realx real realp0 realp))
 
 (defun is-array-type-sexpr (x)
   (and (consp x) (< 1 (length x)) (is-scalar-type-symbol (car x))))
 
-(defun sexpr->type-array (x)
-  (make-type-array
+(defun sexpr->vtype-array (x)
+  (make-vtype-array
     :elem-type (car x)
     :dims (mapcar #'sexpr->expr (cdr x))))
 
 (defun sexpr->rel (x)
   (cond ((starts-with '<- x) (sexpr->determ-rel (cdr x)))
 	((starts-with '~ x) (sexpr->stoch-rel (cdr x)))
-	((starts-with 'block x) (sexpr->block-rel (cdr x)))
-	((starts-with 'if x) (sexpr->if-rel (cdr x)))
-	((starts-with 'for x) (sexpr->loop-rel (cdr x)))
+	((starts-with :block x) (sexpr->block-rel (cdr x)))
+	((starts-with :if x) (sexpr->if-rel (cdr x)))
+	((starts-with :for x) (sexpr->loop-rel (cdr x)))
 	(t (error "Invalid relation: ~W." x))))
 
 (defun sexpr->determ-rel (x)
@@ -211,7 +211,9 @@
 	       (= 2 (length (second x))))
     (error "Invalid loop (for) relation: ~W." (cons 'for x))))
 
-; TODO: fuller check of model structure?
+;;; Model checks.
+;;; TODO: fuller check of model structure?
+
 (defun check-model (mdl)
   (let ((dups (duplicate-vars mdl))
         (badv (bad-rel-vars mdl))
@@ -293,11 +295,10 @@
 	 (mapcar (lambda (d) (shadowing-indices-decl d names)) decls)))
 
 (defun shadowing-indices-decl (d names)
-  (append (shadowing-indices-expr (decl-var d) names)
-	  (shadowing-indices-type (decl-typ d) names)))
+  (shadowing-indices-vtype (decl-typ d) names))
 
-(defun shadowing-indices-type (typ names)
-  (adt-case type typ
+(defun shadowing-indices-vtype (typ names)
+  (adt-case vtype typ
     ((scalar stype)
      '())
     ((array elem-type dims)
@@ -307,13 +308,12 @@
   (apply #'append (mapcar (lambda (r) (shadowing-indices-rel r names)) rels)))
 
 (defun shadowing-indices-rel (r names)
-  (adt-case relation
+  (adt-case relation r
     ((deterministic lhs rhs)
-     (append (shadowing-indices-rellhs lhs names)
-	     (shadowing-indices-expr rhs names)))
+     (shadowing-indices-exprs (list (rellhs->expr lhs) rhs) names))
     ((stochastic lhs rhs)
-     (append (shadowing-indices-rellhs lhs names)
-	     (shadowing-indices-exprs (distribution-args rhs) names)))
+     (shadowing-indices-exprs
+       (cons (rellhs->expr lhs) (distribution-args rhs)) names))
     ((block members)
      (shadowing-indices-rels members names))
     ((if condition true-branch false-branch)
@@ -324,23 +324,28 @@
      (shadowing-indices-loop var lo hi body names))
     ((skip) '())))
 
-(defun shadowing-indices-rellhs (lhs names)
+(defun rellhs->expr (lhs)
   (adt-case rellhs lhs
     ((simple var)
-     '())
+     (make-expr-variable :symbol var))
     ((array-elt var indices)
-     (shadowing-indices-exprs indices names))
+     (make-expr-apply
+       :fct '@
+       :args (cons (make-expr-variable :symbol var) indices)))
     ((array-slice var indices)
-     (shadowing-indices-arr-slice-idxs indices names))))
+     (make-expr-apply
+       :fct '@-slice 
+       :args (cons (make-expr-variable :symbol var)
+		   (mapcar #'idx-rellhs->expr indices))))))
 
-(defun shadowing-indices-arr-slice-idxs (indices names)
-  (adt-case array-slice-index
+(defun idx-rellhs->expr (index)
+  (adt-case array-slice-index index
     ((scalar value)
-     (shadowing-indices-expr value names))
+     value)
     ((range lo hi)
-     (shadowing-indices-expr (list lo hi) names))
+     (make-expr-apply :fct '@-rng :args (list lo hi)))
     ((all)
-     '())))
+     (make-expr-const :symbol '@-all))))
 
 (defun shadowing-indices-loop (var lo hi body names)
   (let ((maybe-var '())
@@ -380,43 +385,42 @@
 (defun bad-num-dimensions (mdl)
   (let* ((decls (append (model-args mdl) (model-vars mdl)))
 	 (ndim-map (decls->ndim-assoc decls)))
-    (append (bad-numdims-exprs (mapcar #'decl-var decls) ndim-map)
-	    (bad-numdims-types (mapcar #'decl-typ decls) ndim-map)
+    (append (bad-numdims-vtypes (mapcar #'decl-typ decls) ndim-map)
 	    (bad-numdims-exprs (model-reqs mdl) ndim-map)
 	    (bad-numdims-rels (model-body mdl) ndim-map))))
 
 (defun decls->ndim-assoc (decls)
   (let ((map nil))
     (dolist (x decls)
-      (setf map (acons (decl-var x) (num-dims-type (decl-typ x)) map)))))
+      (setf map (acons (decl-var x) (num-dims-vtype (decl-typ x)) map)))
+    map))
 
-(defun num-dims-type (typ)
-  (adt-case type typ
-    ((scalar styp) 0)
+(defun num-dims-vtype (typ)
+  (adt-case vtype typ
+    ((scalar stype) 0)
     ((array elem-type dims) (length dims))))
 
 (defun bad-numdims-exprs (elist ndmap)
   (apply #'append (mapcar (lambda (x) (bad-numdims-expr x ndmap)) elist)))
 
-(defun bad-numdims-types (tlist ndmap)
-  (apply #'append (mapcar (lambda (x) (bad-numdims-type x ndmap)) tlist)))
+(defun bad-numdims-vtypes (tlist ndmap)
+  (apply #'append (mapcar (lambda (x) (bad-numdims-vtype x ndmap)) tlist)))
 
 (defun bad-numdims-rels (rlist ndmap)
   (apply #'append (mapcar (lambda (x) (bad-numdims-rel x ndmap)) rlist)))
 
-(defun bad-numdims-type (typ ndmap)
-  (adt-case type typ
-    ((scalar styp) '())
-    ((array elem-type dims) (bad-numdims-exprs dims))))
+(defun bad-numdims-vtype (typ ndmap)
+  (adt-case vtype typ
+    ((scalar stype) '())
+    ((array elem-type dims) (bad-numdims-exprs dims ndmap))))
 
 (defun bad-numdims-rel (r ndmap)
   (adt-case relation r
     ((deterministic lhs rhs)
-     (append (bad-numdims-rellhs lhs ndmap)
-	     (bad-numdims-expr rhs ndmap)))
+     (bad-numdims-exprs (list (rellhs->expr lhs) rhs) ndmap))
     ((stochastic lhs rhs)
-     (append (bad-numdims-rellhs lhs ndmap)
-	     (bad-numdims-exprs (distribution-args rhs) ndmap)))
+     (bad-numdims-exprs
+       (cons (rellhs->expr lhs) (distribution-args rhs)) ndmap))
     ((block members)
      (bad-numdims-rels members ndmap))
     ((if condition true-branch false-branch)
@@ -429,32 +433,8 @@
     ((skip)
      '())))
 
-(defun bad-numdims-rellhs (lhs ndmap)
-  (adt-case rellhs lhs
-    ((simple var)
-     '())
-    ((array-elt var indices)
-     (append (bad-numdims-array-app var (length indices) ndmap)
-	     (bad-numdims-exprs indices ndmap)))
-    ((array-slice var indices)
-     (append (bad-numdims-array-app var (length indices) ndmap)
-	     (bad-numdims-arr-slice-idxs indices ndmap)))))
-
-(defun bad-numdims-array-app (var n ndmap)
-  (if (= n (assoc-lookup var ndmap)) '() (list var)))
-
-(defun bad-numdims-arr-slice-idxs (indices ndmap)
-  (apply #'append
-    (mapcar (lambda (idx) (bad-numdims-arr-slice-idx idx ndmap)) indices)))
-
-(defun bad-numdims-arr-slice-idx (idx ndmap)
-  (adt-case array-slice-index idx
-    ((scalar value)
-     (bad-numdims-expr value ndmap))
-    ((range lo hi)
-     (bad-numdims-exprs (list lo hi) ndmap))
-    ((all)
-     '())))
+(defun bad-numdims-exprs (xs ndmap)
+  (apply #'append (mapcar (lambda (x) (bad-numdims-expr x ndmap)) xs)))
 
 (defun bad-numdims-expr (x ndmap)
   (adt-case expr x
@@ -471,56 +451,106 @@
      (bad-numdims-apply fct args ndmap))))
 
 (defun bad-numdims-apply (fct args ndmap)
-  (if (member fct '(@ @-slice))
-      (if (= (length args) (1+ (assoc-lookup (first args) ndmap)))
-	  '()
-	  (list (first args)))
-      (bad-numdims-exprs args ndmap)))
-;*** HERE: The above isn't quite right ***
+  (let ((bad-numdims-args (bad-numdims-exprs args ndmap)))
+    (if (member fct '(@ @-slice))
+      (let ((arr-var (expr-variable-symbol (first args))))
+	(append bad-numdims-args
+		(if (= (length args) (1+ (ndims-var arr-var ndmap)))
+		  '()
+		  (list arr-var))))
+      bad-numdims-args)))
 
+(defun ndims-var (arr-var ndmap)
+  (let ((x (assoc arr-var ndmap)))
+    (if (null x) 0 (cdr x))))
 
-(defun bad-num-dimensions (mdl) ...)
+;;; Pretty-printing
 
-(defun extract-args (mdl) (cdr (second mdl)))
-(defun extract-reqs (mdl) (cdr (third mdl)))
-(defun extract-vars (mdl) (cdr (fourth mdl)))
-(defun extract-body (mdl) (cdr (fifth mdl)))
+(defun vtype->string (typ)
+  (adt-case vtype typ
+    ((scalar stype)
+     (scalar-type-name stype))
+    ((array elem-type dims)
+     (format nil "~a[~{~a~^, ~}]"
+	     (scalar-type-name elem-type)
+	     (mapcar #'expr->string dims)))))
 
-(defun decl-var (decl) (first decl))
-(defun decl-typ (decl) (second decl))
+(defun scalar-type-name (typ)
+  (unless (is-scalar-type-symbol typ)
+    (error "Invalid scalar type: ~a." typ))
+  (symbol-name typ))
 
-(defun type-class (typ)
-  (cond ((symbolp typ) :scalar)
-	((listp typ) :array)
-	(t (error (format nil "Invalid type: ~a" typ)))))
+(defun distr->string (d)
+  (match-adt1 (distribution name args) d
+    (format nil "~a(~{~a~^, ~})"
+	    (symbol-name name) (mapcar #'expr->string args))))
 
-(defun elem-type (typ) (car typ))
+(defun rellhs->string (lhs)
+  (expr->string (rellhs->expr lhs)))
 
-(defun type-dims (typ) (if (symbolp typ) '() (cdr typ)))
+(defun pp-decl (decl)
+  (fmt "~a : ~a"
+       (symbol-name (decl-var decl))
+       (vtype->string (decl-typ decl))))
 
-(defun rel-class (rel)
-  (case (first rel)
-	(:<- :deterministic)
-	(:~ :stochastic)
-	(:block :block)
-	(:if (case (length (rest rel))
-		   (2 :if-then)
-		   (3 :if-then-else)))
-	(:for :loop)))
+(defun pp-rel (rel)
+  (adt-case relation rel
+    ((deterministic lhs rhs)
+     (pp-rel-deterministic lhs rhs))
+    ((stochastic lhs rhs)
+     (pp-rel-stochastic lhs rhs))
+    ((block members)
+     (pp-rel-block members))
+    ((if condition true-branch false-branch)
+     (pp-rel-if condition true-branch false-branch))
+    ((loop var lo hi body)
+     (pp-rel-loop var lo hi body))
+    ((skip))))
 
-(defun rel-var (rel) (second rel))
-(defun rel-val (rel) (third rel))
-(defun rel-distr (rel) (third rel))
-(defun rel-block-body (rel) (rest rel))
-(defun rel-if-condition (rel) (second rel))
-(defun rel-true-branch (rel) (third rel))
-(defun rel-false-branch (rel) (fourth rel))
-(defun rel-loop-var (rel) (second rel))
-(defun rel-loop-bounds (rel) (third rel))
-(defun rel-loop-body (rel) (fourth rel))
-(defun bounds-lo (bnds) (first bnds))
-(defun bounds-hi (bnds) (second bnds))
+(defun pp-rel-deterministic (lhs rhs)
+  (fmt "~a <- ~a" (rellhs->string lhs) (expr->string rhs)))
 
+(defun pp-rel-stochastic (lhs rhs)
+  (fmt "~a ~~ ~a" (rellhs->string lhs) (distr->string rhs)))
+
+(defun pp-rel-block (members)
+  (mapc #'pp-rel members))
+
+(defmacro pp-hdr-block (header &rest body)
+  `(progn
+     (fmt "~a {" ,header)
+     (indent ,@body)
+     (fmt "}")))
+
+(defun pp-rel-if (condition true-branch false-branch)
+  (pp-hdr-block
+    (format nil "if (~a)" (expr->string condition))
+    (pp-rel true-branch))
+  (unless (is-relation-skip false-branch)
+    (pp-hdr-block "else" (pp-rel false-branch))))
+
+(defun pp-rel-loop (var lo hi body)
+  (pp-hdr-block
+    (format nil "for (~a in ~a : ~a)"
+	    (symbol-name var) (expr->string lo) (expr->string hi))
+    (pp-rel body)))
+
+(defun pp-expr (x)
+  (fmt  "~a" (expr->string x)))
+
+(defun pp-model (mdl)
+  (match-adt1 (model args reqs vars body) mdl
+    (pp-hdr-block "args"
+      (dolist (x args) (pp-decl x)))
+    (pp-hdr-block "reqs"
+      (dolist (x reqs) (pp-expr x)))
+    (pp-hdr-block "vars"
+      (dolist (x vars) (pp-decl x)))
+    (pp-hdr-block "model"
+      (dolist (x body) (pp-rel x)))))
+   
+
+#|
 (defun rel-vars-0 (rel)
   (list (base-var (rel-var rel))))
 
@@ -845,3 +875,4 @@
 		       (cons :and idx-reqs)))
 	 (tpred (type-predicate etyp)))
     `(:all (,@idx-vars) (:=> ,antecedent (,tpred (:@ ,var ,@idx-vars))))))
+|#

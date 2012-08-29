@@ -69,18 +69,6 @@
     :quant-format #'default-quant-format
     (expr->string x)))
 
-(defun pretty-print-rel (rel)
-  (case (rel-class rel)
-	(:deterministic (pp-rel-deterministic rel))
-	(:stochastic (pp-rel-stochastic rel))
-	(:block (pretty-print-block rel))
-	(:if-then (pretty-print-if-then rel))
-	(:if-then-else (pretty-print-if-then-else rel))
-	(:loop (pretty-print-loop rel))))
-
-(defun pp-rel-deterministic (rel)
-  (fmt "~a <- ~a" (expr-string (rel-var rel)) (expr-string (rel-val rel))))
-
 (defun pp-rel-stochastic (rel)
   (fmt "~a ~~ ~a" (expr-string (rel-var rel)) (expr-string (rel-distr rel))))
 

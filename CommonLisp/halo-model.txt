@@ -26,7 +26,7 @@
     (<= 3 nlevels)
     (qand k (1 (- nlevels 2)) (< (@ cp k) (@ cp (+ 1 k))))
     (< (- nvars 2) dof_Sigma_x_form)
-    (is_symm_pd inverse_scale_Sigma_x_form)
+    (is-symm-pd inverse_scale_Sigma_x_form))
   (:vars
     (mu_tls (real 2))
     (Sigma_tls (real 2 2))

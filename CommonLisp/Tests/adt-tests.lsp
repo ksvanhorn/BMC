@@ -43,7 +43,7 @@
    (defadt1 foo bar baz))
 
   (assert-expands
-   '(let ((foo expr)
+   '(let* ((foo expr)
 	  (a (foo-a foo))
 	  (b (foo-b foo)))
       (side-effect a foo b)
