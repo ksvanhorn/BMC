@@ -293,3 +293,6 @@ model {
 		      (~ z (dwishart nu V)))))))
       :indent-amount 2))
 )
+
+; TODO: write and test a function that verifies that dimensions of a
+;   variable only depend on variables preceding it.

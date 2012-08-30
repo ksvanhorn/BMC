@@ -1,4 +1,4 @@
-#!/usr/bin/env clisp -ansi
+#!/usr/bin/env clisp
 
 (load "packages")
 (load "symbols")
@@ -7,10 +7,10 @@
 (load "expr")
 (load "model")
 ;(load "prove")
-;(load "compile")
+(load "compile")
 
 (defpackage :bmc
-  (:use :cl :symbols :adt :utils :expr :model))
+  (:use :cl :symbols :utils :model :compile))
 (in-package :bmc)
 
 (assert (<= 3 (length ext:*args*)))
@@ -25,9 +25,9 @@
   (assert (stringp csharp-namespace))
   (setf mdl (read-model ifname))
   (with-open-file (ostrm ofname :direction :output)
-    (let ((*indent-amount* 2)
+    (let ((*indent-amount* 4)
 	  (*fmt-ostream* ostrm))
-    (compile-to-csharp csharp-namespace class-name mdl)))
+    (compile-to-csharp csharp-namespace class-name mdl))))
 
   ; TODO: rework unit tests
   ; TODO: validation of initial Markov chain state

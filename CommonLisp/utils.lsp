@@ -11,6 +11,12 @@
 
 (defun zip (&rest lists) (apply #'mapcar #'list lists))
 
+(defun int-range (lo hi)
+  (let ((result '()))
+    (loop for i from hi downto lo do
+      (push i result))
+    result))
+
 (defun strcat (&rest args)
   (apply #'concatenate 'string args))
 
@@ -36,3 +42,5 @@
   (format *fmt-ostream* "~%"))
 
 (defparameter *fmt-ostream* *standard-output*)
+
+; TODO: add def for common pattern (apply #'append (mapcar <fct> <list>))

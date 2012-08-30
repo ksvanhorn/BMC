@@ -1,4 +1,4 @@
-#!/usr/bin/env clisp -ansi
+#!/usr/bin/env clisp
 
 (load "code-to-test")
 (load "../../lisp-unit/lisp-unit")

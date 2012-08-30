@@ -2,7 +2,11 @@
 
 ;;; Main function
 
-(defun write-csharp-class-skeleton (csharp-name-space class-name write-body)
+(defun compile-to-csharp (csharp-name-space class-name mdl)
+  (write-csharp-class csharp-name-space class-name
+		      (lambda () (write-csharp-class-body mdl))))
+
+(defun write-csharp-class (csharp-name-space class-name write-body)
   (fmt "using System;")
   (fmt "using Common;")
   (fmt "")
@@ -13,9 +17,255 @@
     (fmt "public class ~a" class-name)
     (fmt "{")
     (indent
-      (funcall write-body))
+      (with-print-options 
+        :is-binop #'is-binop :fct-name #'fct-name :quant-format #'quant-format
+	(funcall write-body)))
     (fmt "}"))
   (fmt "}"))
+
+(defun is-binop (op)
+  (and (default-is-binop op) (not (member op +excluded-binops-csharp+))))
+
+(defconstant +excluded-binops-csharp+ '(=> ^))
+
+(defun fct-name (op)
+  (let ((a (assoc op +oper-names+)))
+    (if (null a) (symbol-name op) (cdr a))))
+
+(defconstant +oper-names+
+  '((array-length . "BMC.Length")
+    (qand . "BMC.ForAll")
+    (qsum . "BMC.Sum")
+    (=> . "BMC.Implies")
+    (^ . "Math.Pow")
+    (exp . "Math.Exp")
+    (= . "==")
+    (is-realp . "BMC.IsRealp")
+    (is-realnn . "BMC.IsRealnn")
+    (is-real . "BMC.IsReal")
+    (is-realx . "BMC.IsRealx")
+    (is-symm-pd . "BMC.IsSymmetricPositiveDefinite")))
+
+(defun quant-format (op-str lo-str hi-str var-str body-str)
+  (format nil "~a(~a, ~a, ~a => ~a)"
+	  op-str lo-str hi-str var-str body-str))
+
+(defun write-csharp-class-body (mdl)
+  (write-csharp-declarations mdl)
+  (fmt "")
+  (write-csharp-load-arguments (model-args mdl))
+  (fmt "")
+  (write-csharp-validate-arguments mdl)
+  (fmt "")
+  (write-csharp-allocate-vars (model-vars mdl))
+  (fmt "")
+  ; ... more ...
+)
+
+(defun write-csharp-declarations (mdl)
+  (gen-decls "Model Arguments" (model-args mdl))
+  (fmt "")
+  (gen-decls "Model Variables" (model-vars mdl)))
+
+(defun gen-decls (comment decls)
+  (fmt "// ~a" comment)
+  (dolist (x decls)
+    (gen-decl x)))
+
+(defun gen-decl (d)
+  (match-adt1 (decl var typ) d
+    (fmt "public ~a ~a;" (type-string typ) (symbol-name var))))
+
+(defun type-string (typ)
+  (adt-case vtype typ
+    ((scalar stype)
+     (csharp-scalar-type-name stype))
+    ((array elem-type dims)
+     (csharp-arr-type-name elem-type (length dims)))))
+
+(defun base-type (stype)
+  (assoc-lookup stype +base-types-from-scalar-types+))
+
+(defconstant +base-types-from-scalar-types+
+  '((boolean . boolean)
+    (integer . integer) (integerp0 . integer) (integerp . integer)
+    (realxn . realxn) (realx . realxn) (real . realxn)
+    (realp0 . realxn) (realp . realxn)))
+
+(defun csharp-scalar-type-name (stype)
+  (assoc-lookup (base-type stype) +csharp-names-for-base-types+))
+
+(defconstant +csharp-names-for-base-types+
+  '((boolean . "bool") (integer . "int") (realxn . "double")))
+
+(defun csharp-arr-type-name (etype ndim)
+  (case ndim
+	(1 (format nil "~a[]" (csharp-scalar-type-name etype)))
+	(2 (csharp-matrix-type-name etype))
+	(otherwise (error "Unimplemented case (ndim=~a) in ~
+                           csharp-arr-type-name." ndim))))
+
+(defun csharp-matrix-type-name (typ)
+  (assoc-lookup (base-type typ) +csharp-names-for-base-matrix-types+))
+
+(defconstant +csharp-names-for-base-matrix-types+
+  '((boolean . "BMatrix") (integer . "IMatrix") (realxn . "DMatrix")))
+
+(defun write-csharp-allocate-vars (var-decls)
+  (fmt "public void AllocateModelVariables()")
+  (fmt "{")
+  (indent (wcs-allocate-vars var-decls))
+  (fmt "}"))
+
+(defun wcs-allocate-vars (var-decls)
+  (dolist (d var-decls)
+    (match-adt1 (decl var typ) d
+      (when (is-vtype-array typ)
+	(fmt "~a = ~a;" (symbol-name var) (csharp-new-string typ))))))
+
+(defun csharp-new-string (typ)
+  (adt-case vtype typ
+    ((array elem-type dims)
+       (cond
+	 ((= 1 (length dims))
+	  (format nil "new ~a[~a]"
+		  (csharp-scalar-type-name elem-type)
+		  (expr->string (first dims))))
+	 ((= 2 (length dims))
+	  (format nil "new ~a(~a, ~a)"
+		  (csharp-matrix-type-name elem-type)
+		  (expr->string (first dims))
+		  (expr->string (second dims))))
+	 (otherwise (error "Unimplemented case in csharp-new-string"))))))
+
+(defun write-csharp-load-arguments (arg-decls)
+  (fmt "public void LoadArguments(BMC.Loader loader)")
+  (fmt "{")
+  (indent
+    (dolist (d arg-decls)
+      (match-adt1 (decl var typ) d
+	(let ((vname (symbol-name var))
+	      (infix (csharp-load-type-name typ)))
+	  (fmt "~a = loader.Load~a(\"~a\");" vname infix vname)))))
+  (fmt "}"))
+
+(defun csharp-load-type-name (typ)
+  (adt-case vtype typ
+    ((scalar stype) (csharp-load-scalar-type-name stype))
+    ((array elem-type dims)
+     (case (length dims)
+	   (1 (strcat (csharp-load-scalar-type-name elem-type) "Array"))
+	   (2 (csharp-matrix-type-name elem-type))
+	   (otherwise
+	     (error "Unimplemented case in csharp-load-type-name."))))))
+
+(defun csharp-load-scalar-type-name (stype)
+  (assoc-lookup (base-type stype) +csharp-load-type-names+))
+
+(defconstant +csharp-load-type-names+
+  '((boolean . "Boolean") (integer . "Integer") (realxn . "Real")))
+
+(defun write-csharp-validate-arguments (mdl)
+  (fmt "public void ValidateArguments()")
+  (fmt "{")
+  (indent
+    (dolist (x (args-checks mdl))
+      (let ((bool-expr (expr->string x)))
+      (fmt "BMC.Check(~a, " bool-expr)
+      (fmt "          \"~a\");" bool-expr))))
+  (fmt "}"))
+
+(defun args-checks (mdl)
+  (append (apply #'append (mapcar #'decl-checks (model-args mdl)))
+	  (model-reqs mdl)))
+
+(defun decl-checks (d)
+  (match-adt1 (decl var typ) d
+    (adt-case vtype typ
+      ((scalar stype) (scalar-type-checks (expr-var var) stype))
+      ((array elem-type dims) (array-type-checks var elem-type dims)))))
+
+(defun scalar-type-checks (expr styp)
+  (let ((x (assoc styp +scalar-base-type-checks+)))
+    (if (null x)
+      '()
+      (list (apply-template (cdr x) expr)))))
+
+(defconstant +scalar-base-type-checks+
+  '((integerp0 <= 0) (integerp < 0) (realx is-realx)
+    (real is-real) (realp0 is-realp0) (realp is-realp)))
+
+(defun apply-template (template x)
+  (destructuring-bind (fct-sym . args1) template
+    (let ((eargs1 (mapcar #'sexpr->expr args1)))
+      (expr-app fct-sym (append eargs1 (list x))))))
+
+(defun array-type-checks (var-sym etype-sym dims)
+  (append (array-length-checks var-sym dims)
+	  (array-element-checks var-sym etype-sym dims)))
+
+(defun array-length-checks (var-sym dims)
+  (let ((vexpr (expr-var var-sym)))
+    (mapcar (lambda (n d)
+	      (expr-call '=
+		(expr-call 'array-length (expr-lit n) vexpr)
+		d))
+	    (int-range 1 (length dims)) dims)))
+
+(defun array-element-checks (var-sym etype-sym dims)
+  (let* ((idxvar-symbols (index-var-symbols var-sym dims))
+	 (idxvars (mapcar #'expr-var idxvar-symbols))
+	 (var (expr-var var-sym))
+	 (checks (scalar-type-checks
+		   (expr-app '@ (cons var idxvars))
+		   etype-sym)))
+    (mapcar (lambda (ch) (array-element-check ch dims idxvar-symbols))
+	    checks)))
+
+(defun array-element-check (ch dims idxvars)
+  (let ((di-list (reverse (zip dims idxvars))))
+    (dolist (x di-list)
+      (destructuring-bind (dim idxvar) x
+	(setf ch (make-expr-quantifier
+		   :op 'qand
+		   :lo (expr-lit 1)
+		   :hi dim
+		   :var idxvar
+		   :body ch))))
+    ch))    
+
+(defun index-var-symbols (var-symbol dims &optional (prefix "i"))
+  (let* ((test (fully-free-of var-symbol dims))
+	 (gen-next (next-idx-var-symbol test prefix))
+	 (result nil))
+    (dotimes (i (length dims))
+      (push (funcall gen-next) result))
+    (reverse result)))
+
+(defun next-idx-var-symbol (test prefix)
+  (let ((suffix 0))
+    (lambda ()
+      (loop
+        (incf suffix)
+	(let ((idx-var-sym (intern (strcat prefix (write-to-string suffix)))))
+	  (when (funcall test idx-var-sym)
+	    (return idx-var-sym)))))))
+
+(defun fully-free-of (v dims)
+  (assert (symbolp v))
+  (labels
+    ((ffo (s x)
+       (adt-case expr x
+	 ((literal value) t)
+	 ((const symbol) (not (eq s symbol)))
+	 ((variable symbol) (not (eq s symbol)))
+	 ((quantifier op lo hi var body)
+	  (and (not (eq s op)) (not (eq s var))
+	       (ffo s lo) (ffo s hi) (ffo s body)))
+	 ((apply fct args)
+	  (and (not (eq s fct)) (every (lambda (a) (ffo s a)) args))))))
+    (lambda (s)
+      (and (not (eq s v)) (every (lambda (d) (ffo s d)) dims)))))
 
 #|
 (defun compile-to-csharp (csharp-name-space class-name mdl os)
@@ -25,53 +275,7 @@
 	   (failed (prove-thms-axs thms0 assums0)))
       (if (not (null failed))
 	(error "The following could not be proven:~%~{  ~a~^~%~}" failed))))
-  (with-fmt-out os
-    (fmt "using System;")
-    (fmt "using Common;")
-    (fmt "")
-    (fmt "namespace ~a" csharp-name-space)
-    (fmt "{")
-    (indent
-      (fmt "[Serializable]")
-      (fmt "public class ~a" class-name)
-      (fmt "{")
-      (indent
-         (gen-class-body mdl))
-      (fmt "}"))
-    (fmt "}")))
-
-(defun gen-class-body (mdl)
-  (gen-args mdl)
-  (fmt "")
-  (gen-vars mdl)
-  (fmt "")
-  (gen-args-checks mdl)
 )
-
-(defun gen-args (mdl)
-  (fmt *lcom-fmt* "Inputs")
-  (dolist (x (args-base-decls mdl))
-    (gen-decl x)))
-
-(defun gen-vars (mdl)
-  (fmt *lcom-fmt* "Model variables")
-  (dolist (x (vars-base-decls mdl))
-    (gen-decl x)))
-
-(defparameter *lcom-fmt* "// ~a")
-
-(defun gen-decl (decl)
-  (destructuring-bind (var typ ndim) decl
-    (fmt "public ~a ~a;" (type-string typ ndim) var)))
-
-(defun type-string (typ ndim)
-  (let ((elem-type-str (assoc-lookup typ *csharp-scalar-types*)))
-    (if (zerop ndim)
-	elem-type-str
-	(format nil "Array~aD<~a>" ndim elem-type-str))))
-
-(defparameter *csharp-scalar-types*
-  '((:realxn . "double") (:integer . "int") (:boolean . "bool")))
 
 (defun gen-args-checks (mdl)
   (let ((checks (args-checks mdl)))
@@ -91,30 +295,6 @@
     :quant-format #'quant-format
     (expr->string x)))
 
-(defun is-binop (op)
-  (and (default-is-binop op) (not (member op *excluded-binops*))))
-
-(defparameter *excluded-binops* '(=> ^))
-
-(defun fct-name (op)
-  (let ((a (assoc op *oper-names*)))
-    (if (null a) (symbol-name op) (cdr a))))
-
-(defun quant-format (op-str var-str lo-str hi-str body-str)
-  (format nil "~a(~a, ~a, ~a => ~a)"
-	  op-str lo-str hi-str var-str body-str))
-
-(defparameter *oper-names*
-  '((:array-length . "BMC.Length")
-    (:qand . "BMC.ForAll")
-    (:qsum . "BMC.Sum")
-    (:=> . "BMC.Implies")
-    (:= . "==")
-    (:is-realp . "BMC.IsRealp")
-    (:is-realnn . "BMC.IsRealnn")
-    (:is-real . "BMC.IsReal")
-    (:is-realx . "BMC.IsRealx")
-    (:|is_symm_pd| . "BMC.IsSymmPD")))
 
 (defun normalize-model (mdl)
   (destructuring-bind (args-ax . new-args)

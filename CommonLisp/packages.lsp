@@ -54,7 +54,7 @@
 
 (defpackage :utils
   (:use :cl)
-  (:export :starts-with :assoc-lookup :zip :strcat :read-file
+  (:export :starts-with :assoc-lookup :zip :strcat :read-file :int-range
 	   :indent :fmt :*indent-level* :*indent-amount* :*fmt-ostream*))
 
 (defpackage :expr
@@ -63,6 +63,7 @@
    :sexpr->expr :expr->string :is-scalar-index :is-slice-all :is-slice-range
    :with-print-options :default-is-binop :default-fct-name :default-quant-format
    :*convert-boolean-functions*
+   :expr-call :expr-app :expr-lit :expr-var
    :is-expr
    :is-expr-literal :make-expr-literal :expr-literal-value
    :is-expr-const :make-expr-const :expr-const-symbol
@@ -76,7 +77,8 @@
   (:use :cl :symbols :adt :utils :expr)
   (:export
    :read-model :sexpr->model
-   :sexpr->vtype :sexpr->decl :sexpr->distr :sexpr->rellhs :sexpr->rel
+   :sexpr->vtype :sexpr->decl :sexpr->decls :sexpr->distr
+   :sexpr->rellhs :sexpr->rel
    :vtype->string :distr->string :rellhs->string :pp-decl :pp-rel :pp-model
 
    :is-model :make-model :model-args :model-reqs :model-vars :model-body

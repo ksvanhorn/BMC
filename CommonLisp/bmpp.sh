@@ -1,4 +1,4 @@
-#!/usr/bin/env clisp -ansi
+#!/usr/bin/env clisp
 
 (load "packages")
 (load "symbols")

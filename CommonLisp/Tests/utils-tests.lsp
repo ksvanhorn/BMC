@@ -39,5 +39,9 @@ ind-f
 	  (indent
 	    (fmt "ind-~a" #\e)))
 	(fmt "ind-~a" #\f))))
+
+  (assert-equal '(3 4 5) (int-range 3 5))
+  (assert-equal '(5) (int-range 5 5))
+  (assert-equal '() (int-range 4 3))
 	
 )

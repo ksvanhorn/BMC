@@ -7,6 +7,18 @@
   (quantifier op lo hi var body)
   (apply fct args))
 
+(defun expr-call (fct-symbol &rest args)
+  (expr-app fct-symbol args))
+
+(defun expr-app (fct-symbol args)
+  (make-expr-apply :fct fct-symbol :args args))
+
+(defun expr-lit (x)
+  (make-expr-literal :value x))
+
+(defun expr-var (v)
+  (make-expr-variable :symbol v))
+
 ;;; Converting s-expressions to exprs
 
 (defun sexpr->expr (x)
