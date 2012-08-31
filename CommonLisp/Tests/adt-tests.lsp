@@ -26,7 +26,7 @@
 	  (g foo a b)))
        ((is-foo-bop foo)
 	(h foo))
-       (t (error "No match in adt-case."))))
+       (t (error "No match in adt-case FOO."))))
    (adt-case foo some-expression
      ((bar a) 
       (format t "OK")

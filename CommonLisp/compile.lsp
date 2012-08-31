@@ -17,16 +17,107 @@
     (fmt "public class ~a" class-name)
     (fmt "{")
     (indent
-      (with-print-options 
-        :is-binop #'is-binop :fct-name #'fct-name :quant-format #'quant-format
-	(funcall write-body)))
+      (funcall write-body))
     (fmt "}"))
   (fmt "}"))
 
-(defun is-binop (op)
-  (and (default-is-binop op) (not (member op +excluded-binops-csharp+))))
+;;; Printing expressions
 
-(defconstant +excluded-binops-csharp+ '(=> ^))
+(defun expr->string (e &optional (lprec -1) (rprec -1))
+  (adt-case expr e
+    ((literal value)
+     (literal->string value))
+    ((const symbol)
+     (const->string symbol))
+    ((variable symbol)
+     (variable->string symbol))
+    ((quantifier op lo hi var body)
+     (qexpr->string op lo hi var body))
+    ((apply fct args)
+     (aexpr->string fct args lprec rprec))))
+
+(defun literal->string (x)
+  (cond ((integerp x) (format nil "~d" x))
+	((realp x) (format nil "~,,,,,,eE" x))
+	(t (error "Unimplemented case in compile::literal->string: ~a." x))))
+
+(defun const->string (x)
+  (case x
+	('true "true")
+	('false "false")
+	('@-all "BMC.FullRange")
+	(otherwise
+	  (error "Unimplemented case in compile::const->string: ~a." x))))
+
+(defun variable->string (x) (symbol-name x))
+
+(defun qexpr->string (op lo hi var body)
+  (let ((op-s (fct-name op))
+	(lo-s (expr->string lo))
+	(hi-s (expr->string hi))
+	(var-s (variable->string var))
+	(body-s (expr->string body)))
+    (format nil "~a(~a, ~a, ~a => ~a)" op-s lo-s hi-s var-s body-s)))
+
+(defun aexpr->string (fct args lprec rprec)
+  (case fct
+	('@ (@expr->string args))
+	(otherwise (fexpr->string fct args lprec rprec))))
+
+(defun @expr->string (args)
+  (unless (and (consp args) (< 1 (length args)))
+    (error "@ expression must have at least two arguments"))
+  (format nil "~a[~{~a~^, ~}]"
+	 (array-expr->string (first args))
+	 (mapcar #'expr->string (rest args))))
+
+(defun array-expr->string (e)
+  (if (or (is-expr-const e) (is-expr-variable e))
+    (expr->string e)
+    (format t "(~a)" (expr->string e))))
+
+(defun fexpr->string (fct args lprec rprec)
+  (cond ((is-binop fct)
+	 (bexpr->string fct args lprec rprec))
+	((eq '@-idx fct)
+	 (apply #'expr->string (append args (list lprec rprec))))
+	(t
+	 (format nil "~a(~{~a~^, ~})"
+		 (fct-name fct) (mapcar #'expr->string args)))))
+
+(defun bexpr->string (op args lprec rprec)
+  (let* ((op-prec (precedences op))
+	 (op-lprec (car op-prec))
+	 (op-rprec (cdr op-prec))
+	 (use-parens (or (< op-lprec lprec) (< op-rprec rprec)))
+	 (len (length args))
+	 (len1 (if (< len 2)
+		   (error "Binary operator must have at least two args")
+		   (1- len)))
+	 (lprec-list (cons (if use-parens -1 lprec)
+			   (make-list len1 :initial-element op-rprec)))
+	 (rprec-list (append (make-list len1 :initial-element op-lprec)
+			     (list (if use-parens -1 rprec))))
+	 (aplist (zip lprec-list args rprec-list)))
+    (with-output-to-string (s)
+      (when use-parens (princ #\( s))
+      (destructuring-bind (lpr e rpr) (car aplist)
+	 (format s "~a" (expr->string e lpr rpr)))
+      (dolist (x (cdr aplist))
+	(destructuring-bind (lpr e rpr) x
+	   (format s " ~a ~a" (fct-name op) (expr->string e lpr rpr))))
+      (when use-parens (princ #\) s)))))
+
+(defun precedences (op) (assoc-lookup op +precedences+))
+
+(defun is-binop (x) (assoc x +precedences+))
+
+(defconstant +precedences+
+  '((<  50 . 50) (<= 50 . 50) (= 50 . 50) (!= 50 . 50) (> 50 . 50) (>= 50 . 50)
+    (.<  50 . 50) (.<= 50 . 50) (.= 50 . 50) (.!= 50 . 50) (.> 50 . 50) (.>= 50 . 50)
+    (and 40 . 41) (or 30 . 31)
+    (.and 40 . 41) (.or 30 . 31)
+    (+ 100 . 101) (- 100 . 101) (* 110 . 111) (/ 110 . 111)))
 
 (defun fct-name (op)
   (let ((a (assoc op +oper-names+)))
@@ -37,18 +128,27 @@
     (qand . "BMC.ForAll")
     (qsum . "BMC.Sum")
     (=> . "BMC.Implies")
+    (<=> . "BMC.Iff")
     (^ . "Math.Pow")
     (exp . "Math.Exp")
+    (sqrt . "Math.Sqrt")
+    (tanh . "Math.Tanh")
+    (neg . "-")
+    (inv . "BMC.MatrixInverse")
+    (vec . "BMC.Vec")
     (= . "==")
+    (.= . "==")
+    (@-slice . "BMC.ArraySlice")
+    (@-idx . "BMC.Idx")
     (is-realp . "BMC.IsRealp")
     (is-realnn . "BMC.IsRealnn")
     (is-real . "BMC.IsReal")
     (is-realx . "BMC.IsRealx")
-    (is-symm-pd . "BMC.IsSymmetricPositiveDefinite")))
+    (is-integerp0 . "BMC.IsIntegerp0")
+    (is-integerp . "BMC.IsIntegerp")
+    (is-symm-pd . "BMC.IsSymmetricPositiveDefinite")))	 
 
-(defun quant-format (op-str lo-str hi-str var-str body-str)
-  (format nil "~a(~a, ~a, ~a => ~a)"
-	  op-str lo-str hi-str var-str body-str))
+;;; End printing expressions
 
 (defun write-csharp-class-body (mdl)
   (write-csharp-declarations mdl)
@@ -145,9 +245,16 @@
     (dolist (d arg-decls)
       (match-adt1 (decl var typ) d
 	(let ((vname (symbol-name var))
-	      (infix (csharp-load-type-name typ)))
-	  (fmt "~a = loader.Load~a(\"~a\");" vname infix vname)))))
+	      (infix (csharp-load-type-name typ))
+	      (dim-strings (type->dim-strings typ)))
+	  (fmt "~a = loader.Load~a(\"~a\"~{, ~a~});"
+	       vname infix vname dim-strings)))))
   (fmt "}"))
+
+(defun type->dim-strings (typ)
+  (adt-case vtype typ
+    ((scalar stype) '())
+    ((array elem-type dims) (mapcar #'expr->string dims))))
 
 (defun csharp-load-type-name (typ)
   (adt-case vtype typ
@@ -176,8 +283,39 @@
   (fmt "}"))
 
 (defun args-checks (mdl)
+  (remove-if #'is-trivially-true
+	     (remove-duplicates (args-checks-raw mdl) :test #'equalp)))
+
+(defun is-trivially-true (e)
+  (adt-case expr e
+    ((literal value)
+     nil)
+    ((const symbol)
+     (eq 'true symbol))
+    ((variable symbol)
+     nil)
+    ((quantifier op lo hi var body)
+     nil)
+    ((apply fct args)
+     (is-trivially-true-app fct args))))
+
+(defun is-trivially-true-app (fct args)
+  (and (eq 'is-integerp0 fct) (= 1 (length args))
+    (let ((e (first args)))
+      (and (is-expr-literal e)
+	   (let ((val (expr-literal-value e)))
+	     (and (integerp val) (<= 0 val)))))))
+
+(defun args-checks-raw (mdl)
   (append (apply #'append (mapcar #'decl-checks (model-args mdl)))
-	  (model-reqs mdl)))
+	  (model-reqs mdl)
+	  (apply #'append (mapcar #'dim-checks (model-vars mdl)))))
+
+(defun dim-checks (d)
+  (adt-case vtype (decl-typ d)
+    ((scalar stype) '())
+    ((array elem-type dims)
+     (mapcar (lambda (e) (expr-call 'is-integerp0 e)) dims))))
 
 (defun decl-checks (d)
   (match-adt1 (decl var typ) d
@@ -266,6 +404,41 @@
 	  (and (not (eq s fct)) (every (lambda (a) (ffo s a)) args))))))
     (lambda (s)
       (and (not (eq s v)) (every (lambda (d) (ffo s d)) dims)))))
+
+(defun write-ljd-accum-rel (accum rel)
+  (adt-case relation rel
+    ((deterministic lhs rhs)
+     (write-ljd-accum-rel-determ lhs rhs))
+    ((stochastic lhs rhs)
+     (write-ljd-accum-rel-stoch lhs rhs accum))
+    ((block members))
+    ((if condition true-branch false-branch))
+    ((loop var lo hi body))
+    ((skip))))
+
+(defun write-ljd-accum-rel-stoch (lhs rhs accum)
+  (match-adt1 (distribution name args) rhs
+    (let ((lhs-str (rellhs->string lhs))
+	  (dname (csharp-distr-name name))
+	  (args-str-list (mapcar #'expr->string args)))
+      (fmt "~a += ~a(~a~{, ~a~});" accum dname lhs-str args-str-list))))
+
+(defun csharp-distr-name (distr-symbol)
+  (assoc-lookup distr-symbol +csharp-distr-name-assoc+))
+
+(defconstant +csharp-distr-name-assoc+
+  '((ddirch . "BMC.LogDensityDirichlet")
+    (dcat . "BMC.LogDensityCat")
+    (dgamma . "BMC.LogDensityGamma")
+    (dnorm . "BMC.LogDensityNorm")
+    (dwishart . "BMC.LogDensityWishart")
+    (dmvnorm . "BMC.LogDensityMVNorm")
+    (dinterval . "BMC.LogDensityInterval")))
+
+(defun write-ljd-accum-rel-determ (lhs rhs)
+  (let ((lhs-str (rellhs->string lhs))
+	(rhs-str (expr->string rhs)))
+    (fmt "~a = ~a;" lhs-str rhs-str)))
 
 #|
 (defun compile-to-csharp (csharp-name-space class-name mdl os)

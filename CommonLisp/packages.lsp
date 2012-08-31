@@ -61,8 +61,8 @@
   (:use :cl :symbols :adt :utils)
   (:export
    :sexpr->expr :expr->string :is-scalar-index :is-slice-all :is-slice-range
-   :with-print-options :default-is-binop :default-fct-name :default-quant-format
-   :*convert-boolean-functions*
+   :default-print-options :make-print-options :default-is-binop
+   :*print-options* :*convert-boolean-functions*
    :expr-call :expr-app :expr-lit :expr-var
    :is-expr
    :is-expr-literal :make-expr-literal :expr-literal-value
@@ -120,4 +120,4 @@
 
 (defpackage :compile
   (:use :cl :model :expr :utils :adt :symbols)
-  (:export :compile-to-csharp))
+  (:export :compile-to-csharp :compile-print-options))

@@ -2,6 +2,7 @@
 
 (defun sexpr->decls (decls) (mapcar #'model:sexpr->decl decls))
 (defun sexpr->exprs (se) (mapcar #'sexpr->expr se))
+(defun sexpr->rels (se) (mapcar #'sexpr->rel se))
 
 (define-test compile-util-tests
   (assert-equalp
@@ -125,7 +126,8 @@
 		    (= (array-length 1 y) m)
 		    (= (array-length 2 y) n)
 		    (< m n)
-		    (qand i (1 m) (< (@ v i) 100))))
+		    (qand i (1 m) (< (@ v i) 100))
+		    (is-integerp0 n)))
     (compile::args-checks
       (sexpr->model '(:model
 		      (:args (n integerp)
@@ -137,8 +139,98 @@
 			     (y (integer m n)))
 		      (:reqs (< m n)
 			     (qand i (1 m) (< (@ v i) 100)))
-		      (:vars)
+		      (:vars (foo integer)
+			     (bar (realp n)))
 		      (:body)))))
+
+  (assert-equalp
+    (sexpr->exprs '((is-integerp0 n)))
+    (compile::args-checks
+      (sexpr->model '(:model
+		      (:args (n integer))
+		      (:reqs)
+		      (:vars (foo integer)
+			     (bar (realp n))
+			     (baz (real 5))
+			     (bip (integer n)))
+		      (:body)))))
+
+)
+
+(defun cexpr->string (e)
+  (let ((*print-options* (compile::compile-print-options)))
+    (expr->string e)))
+
+(define-test compile-expression-test
+  (assert-equal "Math.Sqrt(x)"
+		(cexpr->string (sexpr->expr '(sqrt |x|))))
+  (assert-equal "BMC.MatrixInverse(x)"
+		(cexpr->string (sexpr->expr '(inv |x|))))
+  (assert-equal "BMC.ArraySlice(x, i, BMC.Range(lo, hi), BMC.FullRange)"
+		(cexpr->string
+		  (sexpr->expr '(@ |x| |i| (:range |lo| |hi|) :all))))
+  (assert-equal "Math.Exp(x / 2)"
+		(cexpr->string (sexpr->expr '(exp (/ |x| 2)))))
+  (assert-equal "Math.Tanh(y)"
+		(cexpr->string (sexpr->expr '(tanh |y|))))
+  (assert-equal "BMC.Vec(x, y, 0.0)"
+		(cexpr->string (sexpr->expr '(vec |x| |y| 0.0))))
+  (assert-equal "BMC.Vec(x, y)"
+		(cexpr->string (sexpr->expr '(vec |x| |y|))))
+  (assert-equal "x - y"
+		(cexpr->string (sexpr->expr '(- |x| |y|))))
+  (assert-equal "-(X) * Y + -(Z)"
+		(cexpr->string (sexpr->expr '(+ (* (neg x) y) (neg z)))))
+)
+
+(define-test compile-ljd-tests
+  (assert-equal
+    "ljd += BMC.LogDensityDirichlet(p, alpha_p);
+"
+    (cppstr (compile::write-ljd-accum-rel "ljd"
+	     (sexpr->rel '(~ |p| (ddirch |alpha_p|))))))
+
+  (assert-equal
+    "ljd += BMC.LogDensityCat(x, p);
+"
+    (cppstr (compile::write-ljd-accum-rel "ljd"
+	     (sexpr->rel '(~ |x| (dcat |p|))))))
+
+  (assert-equal
+    "ljd += BMC.LogDensityNorm(x[i], MU, SIGMA);
+"
+    (cppstr (compile::write-ljd-accum-rel "ljd"
+	     (sexpr->rel '(~ (@ |x| |i|) (dnorm mu sigma))))))
+
+  (assert-equal
+    "ll += BMC.LogDensityGamma(x[i], A * C, B / D);
+"
+    (cppstr (compile::write-ljd-accum-rel "ll"
+	     (sexpr->rel '(~ (@ |x| |i|) (dgamma (* a c) (/ b d)))))))
+
+  (assert-equal
+    "ljd += BMC.LogDensityMVNorm(x, MU, SIGMA);
+"
+    (cppstr (compile::write-ljd-accum-rel "ljd"
+	     (sexpr->rel '(~ |x| (dmvnorm mu sigma))))))
+
+  (assert-equal
+    "ljd += BMC.LogDensityWishart(Lambda, nu + 3, V);
+"
+    (cppstr (compile::write-ljd-accum-rel "ljd"
+	     (sexpr->rel '(~ |Lambda| (dwishart (+ |nu| 3) V))))))
+
+  (assert-equal
+    "lp += BMC.LogDensityInterval(v, x, c);
+"
+    (cppstr (compile::write-ljd-accum-rel "lp"
+	      (sexpr->rel '(~ |v| (dinterval |x| |c|))))))
+
+  (assert-equal
+    "sigma = 1 / Math.Sqrt(lambda);
+"
+    (cppstr (compile::write-ljd-accum-rel "lp"
+	    (sexpr->rel '(<- |sigma| (/ 1 (sqrt |lambda|)))))))
 )
 
 (define-test compile-tests
@@ -155,7 +247,7 @@ namespace Foo
     }
 }
 "
-    (ppstr (compile::write-csharp-class
+    (cppstr (compile::write-csharp-class
 	     "Foo" "Bar" (lambda () (fmt "<class body>")))))
 
   (let ((decls '((|b| boolean)
@@ -174,7 +266,7 @@ public double rc;
 public double rd;
 public double re;
 "
-      (ppstr (compile::gen-decls "Blah blah" (sexpr->decls decls)))))
+      (cppstr (compile::gen-decls "Blah blah" (sexpr->decls decls)))))
 
   (let ((decls '((|a| (integerp |n|))
 		 (|b| (realxn |m| |n|)))))
@@ -183,7 +275,7 @@ public double re;
 public int[] a;
 public DMatrix b;
 "
-      (ppstr (compile::gen-decls "Array vars" (sexpr->decls decls)))))
+      (cppstr (compile::gen-decls "Array vars" (sexpr->decls decls)))))
 
   (let ((vars '((|a| (real 2)) (|b| (real 2 2)) (|c| (realp n))
 		(|d| (real n (- m 1))) (|e| real)
@@ -202,7 +294,7 @@ public DMatrix b;
     i = new BMatrix(M, K);
 }
 "
-      (ppstr (compile::write-csharp-allocate-vars (sexpr->decls vars)))))
+      (cppstr (compile::write-csharp-allocate-vars (sexpr->decls vars)))))
 
   (let ((args '((n integer)
 		(k integerp)
@@ -221,27 +313,47 @@ public DMatrix b;
     K = loader.LoadInteger(\"K\");
     A = loader.LoadReal(\"A\");
     B = loader.LoadBoolean(\"B\");
-    MU = loader.LoadRealArray(\"MU\");
-    IDX = loader.LoadIntegerArray(\"IDX\");
-    BVEC = loader.LoadBooleanArray(\"BVEC\");
-    Sigma = loader.LoadDMatrix(\"Sigma\");
-    FOO = loader.LoadIMatrix(\"FOO\");
-    Bar = loader.LoadBMatrix(\"Bar\");
+    MU = loader.LoadRealArray(\"MU\", N + 1);
+    IDX = loader.LoadIntegerArray(\"IDX\", 5);
+    BVEC = loader.LoadBooleanArray(\"BVEC\", N);
+    Sigma = loader.LoadDMatrix(\"Sigma\", N - 1, N - 1);
+    FOO = loader.LoadIMatrix(\"FOO\", N, K);
+    Bar = loader.LoadBMatrix(\"Bar\", K, K * N);
 }
 "
-      (ppstr (compile::write-csharp-load-arguments (sexpr->decls args)))))
+      (cppstr (compile::write-csharp-load-arguments (sexpr->decls args)))))
 
-  ; (args-checks mdl)
-  ; (write-csharp-validate-arguments mdl)
-
+#|
+  (assert-equal
+"
+"
+    (ppstr
+      (compile::write-log-joint-density-function
+        (sexpr->rels
+	 '((p ~ (ddirch alpha_p))
+	   (:for i (1 n) (~ (@ x i) ~ dcat(p)))
+	   (~ lambda (dgamma a b))
+	   (<- sigma (/ 1 (sqrt lambda)))
+	   (:for i (1 n)
+	      (~ (@ logz i) (dnorm (neg (/ sigma 2)) (/ sigma 3)))
+	      (<- (@ z i) <- (exp (@ logz i)))
+	      (if (.= (@ x i) 1)
+		  (~ (@ y i) (dnorm 0 sigma)))
+	      (if (.= (@ x i) 2)
+		  (~ (@ y i) (dgamma (@ z i) (@ z i)))))))))
+|#
+; log joint density function
+; updating deterministic vars
 )
 
+; TODO!!!: test that indices in array expressions have 1 subtracted when
+;   expr->string called for generating C# code.
+; TODO: write code that verifies that args, vars not used before defined.
+; TODO: write and test code to verify DAG
 ; TODO: test to verify correct print options used in write-csharp-class
 ; TODO: test for case when model language name and C# name for function
 ;   are different, or where there is no C# operator corresponding to
 ;   a binary operator in the model language
-; TODO: test that indices in array expressions have 1 subtracted when
-;   expr->string called for generating C# code.
 ; TODO: Extend loading of model arguments to allow use of defaults.
 ; TODO: Extend loading of model arguments so that some integer parameters
 ;   can be obtained from the dimensions of the data.

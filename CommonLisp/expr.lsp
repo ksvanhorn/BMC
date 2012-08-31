@@ -90,23 +90,32 @@
 (defun expr->string (e &optional (lprec -1) (rprec -1))
   (adt-case expr e
     ((literal value)
-     (write-to-string value))
+     (literal->string value))
     ((const symbol)
-     (symbol-name symbol))
+     (const->string symbol))
     ((variable symbol)
-     (symbol-name symbol))
+     (variable->string symbol))
     ((quantifier op lo hi var body)
      (qexpr->string op lo hi var body))
     ((apply fct args)
      (aexpr->string fct args lprec rprec))))
 
+(defun literal->string (x)
+  (cond ((integerp x) (format nil "~d" x))
+	((realp x) (format nil "~,,,,,,EE" x))
+	(t (error "Unimplemented case in expr::literal->string: ~a." x))))
+
+(defun const->string (x) (symbol-name x))
+
+(defun variable->string (x) (symbol-name x))
+
 (defun qexpr->string (op lo hi var body)
   (let ((op-s (fct-name op))
 	(lo-s (expr->string lo))
 	(hi-s (expr->string hi))
-	(var-s (symbol-name var))
+	(var-s (variable->string var))
 	(body-s (expr->string body)))
-    (quant-format op-s lo-s hi-s var-s body-s)))
+    (format nil "~a(~a, ~a : ~a, ~a)" op-s var-s lo-s hi-s body-s)))
 
 (defun aexpr->string (fct args lprec rprec)
   (case fct
@@ -122,12 +131,9 @@
 	 (mapcar arg->string (rest args))))
 
 (defun array-expr->string (e)
-  (cond ((is-expr-literal e)
-	 (error "Cannot dereference a literal: ~W." e))
-	((or (is-expr-const e) (is-expr-variable e))
-	 (expr->string e))
-	(t
-	 (format t "(~a)" (expr->string e)))))
+  (if (or (is-expr-const e) (is-expr-variable e))
+    (expr->string e)
+    (format t "(~a)" (expr->string e))))
 
 (defun iexpr->string (e)
   (when (or (is-expr-literal e) (is-expr-variable e) (is-expr-quantifier e))
@@ -178,12 +184,12 @@
 	 (format s "~a" (expr->string e lpr rpr)))
       (dolist (x (cdr aplist))
 	(destructuring-bind (lpr e rpr) x
-	   (format s " ~a ~a" (fct-name op) (expr->string e lpr rpr))))
+	   (format s " ~a ~a" (symbol-name op) (expr->string e lpr rpr))))
       (when use-parens (princ #\) s)))))
 
-; (precedences op)
-
 (defun precedences (op) (assoc-lookup op +precedences+))
+
+(defun is-binop (x) (assoc x +precedences+))
 
 (defconstant +precedences+
   '((<  50 . 50) (<= 50 . 50) (= 50 . 50) (!= 50 . 50) (> 50 . 50) (>= 50 . 50)
@@ -192,19 +198,7 @@
     (.and 40 . 41) (.or 30 . 31) (.=> 20 . 21)  (.<=> 10 . 11)
     (+ 100 . 101) (- 100 . 101) (* 110 . 111) (/ 110 . 111) (^ 121 . 120)))
 
-(defun is-binop (x) (funcall *is-binop* x))
-(defun default-is-binop (x) (assoc x +precedences+))
-(defparameter *is-binop* #'default-is-binop)
-
-(defun fct-name (x) (funcall *fct-name* x))
-(defun default-fct-name (x) (symbol-name x))
-(defparameter *fct-name* #'default-fct-name)
-
-(defun quant-format (op-s lo-s hi-s var-s body-s)
-  (funcall *quant-format* op-s lo-s hi-s var-s body-s))
-(defun default-quant-format (op-s lo-s hi-s var-s body-s)
-  (format nil "~a(~a, ~a : ~a, ~a)" op-s var-s lo-s hi-s body-s))
-(defparameter *quant-format* #'default-quant-format)
+(defun fct-name (op) (symbol-name op))
 
 (defun convert-function-symbol (s)
   (if (and *convert-boolean-functions* (member s +boolean-functions+))
@@ -215,16 +209,3 @@
   '(= != < <= > >= and or not => <=> qand qor is-symm-pd
     is-boolean is-integer is-integerp0 is-integerp
     is-realxn is-realx is-real is-realp0 is-realp))
-
-(defmacro with-print-options (is-binop-kw is-binop-fct
-			      fct-name-kw fct-name-fct
-                              quant-format-kw quant-format
-			      &rest body)
-  (unless (and (eq :is-binop is-binop-kw)
-	       (eq :fct-name fct-name-kw)
-	       (eq :quant-format quant-format-kw))
-    (error "with-print-options macro: bad argument list"))
-  `(let ((*is-binop* ,is-binop-fct)
- 	 (*fct-name* ,fct-name-fct)
-	 (*quant-format* ,quant-format))
-     ,@body))

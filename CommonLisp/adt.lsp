@@ -64,15 +64,15 @@
 ;        (g foo a b)))
 ;     ((is-foo-bop foo)
 ;      (h foo))
-;     (t (error "No match in adt-case."))))
+;     (t (error "No match in adt-case FOO."))))
 
 (defmacro adt-case (base-type x &rest clauses)
   (let ((clause-expansions
 	  (mapcar (lambda (c) (expand-clause base-type c)) clauses))
-	(errinfo (list* 'adt-case base-type x clauses)))
+	(errstr (format nil "No match in adt-case ~a." base-type)))
     `(let ((,base-type ,x))
        (cond ,@clause-expansions
-	     (t (error "No match in adt-case."))))))
+	     (t (error ,errstr))))))
 
 ; Example:
 ; (defadt foo (bar a) (baz a b) (bop))

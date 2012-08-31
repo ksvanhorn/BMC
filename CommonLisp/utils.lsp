@@ -22,7 +22,8 @@
 
 (defun read-file (ifname)
   (with-open-file (is ifname)
-    (read is)))
+    (let ((*read-default-float-format* 'long-float))
+      (read is))))
 
 ; Indented output utils
 
