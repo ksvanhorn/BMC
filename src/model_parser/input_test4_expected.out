@@ -1,0 +1,13 @@
+(:model
+(:args
+(nresp integernn)
+(mu_nu (real 3))
+(cp (real (- nlevels 1)))
+)
+(:reqs
+)
+(:vars
+)
+(:body
+)
+)

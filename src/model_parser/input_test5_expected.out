@@ -1,0 +1,14 @@
+(:model
+(:args
+(nresp integernn)
+(mu_nu (real 3))
+(cp (real (- nlevels 1)))
+(inverse_scale_Sigma_x_form (real (- nvars 1) (- nvars 1)))
+)
+(:reqs
+)
+(:vars
+)
+(:body
+)
+)
