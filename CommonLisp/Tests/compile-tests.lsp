@@ -4,24 +4,60 @@
 (defun sexpr->exprs (se) (mapcar #'sexpr->expr se))
 (defun sexpr->rels (se) (mapcar #'sexpr->rel se))
 
+(defun sort-unique (symbols)
+  (remove-duplicates (sort (copy-list symbols) #'string<)))
+
 (define-test compile-util-tests
-  (assert-equalp
-    '(|i1| |i2|)
-    (compile::index-var-symbols 'v (sexpr->exprs '(j (+ k 3)))))
+  (assert-equal
+    '(a b c) (sort-unique '(b c b b a c c a)))
 
-  (assert-equalp
+  (assert-equal
+    '(* + - / < false i4 k m n qand sqrt v x ^)
+    (sort-unique
+      (compile::symbols-in-sym-exprs
+        'v (sexpr->exprs
+	     '((* (/ x 4) (+ k 3) (- m n))
+	       (qand i4 (1 n) (< i4 k))
+	       (sqrt (^ x 6))
+	       false)))))
+
+  (assert-equal
+    '(* + .< .AND .IS-INTEGER < @ A AA ALPHA B BB BOOLEAN DNORM EXP FOO I II
+      INTEGER K M N NMAX NMIN REAL REALP TRUE UPPER-X V W X Z ZZ)
+    (sort-unique
+      (compile::symbols-in-model
+        (sexpr->model '(:model
+			 (:args (x real)
+				(n integer))
+			 (:reqs (< n nmax)
+				(< nmin n))
+			 (:vars (v (real n))
+				(w (realp n))
+				(z integer)
+			        (alpha boolean))
+			 (:body
+			   (:for i (m k)
+			     (:block
+			       (~ (@ v i) (dnorm a b))
+			       (<- (@ w i) (exp (@ v i)))))
+			   (:for ii (1 1) (<- alpha true))
+			   (:if (and (< x upper-x) (is-integer (@ v 1)))
+			      (<- z (+ zz 8)))
+			   (:if (< 0 foo)
+			     (<- z (+ 3 aa))
+			     (<- z (* 4 bb)))))))))
+
+
+  (assert-equal
+    '(|i1| |i2|) (compile::n-symbols-not-in 2 '(v j k)))
+
+  (assert-equal
     '(|i1| |i3| |i6|)
-    (compile::index-var-symbols
-      '|i2| (sexpr->exprs '((qand |i4| (1 n) (< |i4| m))
-			    (+ (* |i5| 3) n)
-			    (sqrt (^ x 6))))))
+    (compile::n-symbols-not-in 3 '(|i2| qand |i4| n < |i4| m + * |i5| n)))
 
-  (assert-equalp
-    '(|i2| |i4| |i5|)
-    (compile::index-var-symbols
-      'w (sexpr->exprs '((+ z |i1|)
-			 (+ |i3| x y)
-			 (+ |i6| 27)))))
+  (assert-equal
+    '(|i2| |i4|)
+    (compile::n-symbols-not-in 2 '(+ x |i3| y |i1| w)))
 
   (assert-equalp
     (sexpr->expr '(qand i (1 (+ n 2))
@@ -157,9 +193,7 @@
 
 )
 
-(defun cexpr->string (e)
-  (let ((*print-options* (compile::compile-print-options)))
-    (expr->string e)))
+(defun cexpr->string (e) (compile::expr->string e))
 
 (define-test compile-expression-test
   (assert-equal "Math.Sqrt(x)"
@@ -173,7 +207,7 @@
 		(cexpr->string (sexpr->expr '(exp (/ |x| 2)))))
   (assert-equal "Math.Tanh(y)"
 		(cexpr->string (sexpr->expr '(tanh |y|))))
-  (assert-equal "BMC.Vec(x, y, 0.0)"
+  (assert-equal "BMC.Vec(x, y, 0.0e+0)"
 		(cexpr->string (sexpr->expr '(vec |x| |y| 0.0))))
   (assert-equal "BMC.Vec(x, y)"
 		(cexpr->string (sexpr->expr '(vec |x| |y|))))
@@ -183,54 +217,105 @@
 		(cexpr->string (sexpr->expr '(+ (* (neg x) y) (neg z)))))
 )
 
+(defun strcat-lines (&rest args)
+  (format nil "~{~a~%~}" args))
+
 (define-test compile-ljd-tests
+  (assert-equal
+"first line
+  second line
+third line
+"
+    (strcat-lines "first line" "  second line" "third line"))
+
   (assert-equal
     "ljd += BMC.LogDensityDirichlet(p, alpha_p);
 "
-    (cppstr (compile::write-ljd-accum-rel "ljd"
+    (ppstr (compile::write-ljd-accum-rel "ljd"
 	     (sexpr->rel '(~ |p| (ddirch |alpha_p|))))))
 
   (assert-equal
     "ljd += BMC.LogDensityCat(x, p);
 "
-    (cppstr (compile::write-ljd-accum-rel "ljd"
+    (ppstr (compile::write-ljd-accum-rel '|ljd|
 	     (sexpr->rel '(~ |x| (dcat |p|))))))
 
   (assert-equal
     "ljd += BMC.LogDensityNorm(x[i], MU, SIGMA);
 "
-    (cppstr (compile::write-ljd-accum-rel "ljd"
+    (ppstr (compile::write-ljd-accum-rel "ljd"
 	     (sexpr->rel '(~ (@ |x| |i|) (dnorm mu sigma))))))
 
   (assert-equal
     "ll += BMC.LogDensityGamma(x[i], A * C, B / D);
 "
-    (cppstr (compile::write-ljd-accum-rel "ll"
+    (ppstr (compile::write-ljd-accum-rel "ll"
 	     (sexpr->rel '(~ (@ |x| |i|) (dgamma (* a c) (/ b d)))))))
 
   (assert-equal
     "ljd += BMC.LogDensityMVNorm(x, MU, SIGMA);
 "
-    (cppstr (compile::write-ljd-accum-rel "ljd"
+    (ppstr (compile::write-ljd-accum-rel "ljd"
 	     (sexpr->rel '(~ |x| (dmvnorm mu sigma))))))
 
   (assert-equal
     "ljd += BMC.LogDensityWishart(Lambda, nu + 3, V);
 "
-    (cppstr (compile::write-ljd-accum-rel "ljd"
+    (ppstr (compile::write-ljd-accum-rel "ljd"
 	     (sexpr->rel '(~ |Lambda| (dwishart (+ |nu| 3) V))))))
 
   (assert-equal
     "lp += BMC.LogDensityInterval(v, x, c);
 "
-    (cppstr (compile::write-ljd-accum-rel "lp"
+    (ppstr (compile::write-ljd-accum-rel "lp"
 	      (sexpr->rel '(~ |v| (dinterval |x| |c|))))))
 
   (assert-equal
     "sigma = 1 / Math.Sqrt(lambda);
 "
-    (cppstr (compile::write-ljd-accum-rel "lp"
+    (ppstr (compile::write-ljd-accum-rel "lp"
 	    (sexpr->rel '(<- |sigma| (/ 1 (sqrt |lambda|)))))))
+
+  (assert-equal
+    (strcat-lines "lp += BMC.LogDensityCat(Y, P);"
+		  "X = Y;")
+    (ppstr (compile::write-ljd-accum-rel "lp"
+	     (sexpr->rel '(:block (~ y (dcat p)) (<- x y))))))
+
+  (assert-equal
+    (strcat-lines
+	    "if (X[I] == 1) {"
+	    "    acc += BMC.LogDensityNorm(Y[I], A, B);"
+            "}")
+    (ppstr (compile::write-ljd-accum-rel "acc"
+	     (sexpr->rel '(:if (= (@ x i) 1) (~ (@ y i) (dnorm a b)))))))
+
+  (assert-equal
+    (strcat-lines
+	    "if (V[I] < 4) {"
+	    "    acc += BMC.LogDensityNorm(Z[I], M, S);"
+            "}"
+	    "else {"
+	    "    acc += BMC.LogDensityCat(W[I], P);"
+	    "}")
+    (ppstr (compile::write-ljd-accum-rel "acc"
+	     (sexpr->rel '(:if (< (@ v i) 4)
+			    (~ (@ z i) (dnorm m s))
+			    (~ (@ w i) (dcat p)))))))
+
+  (assert-equal
+    (strcat-lines
+      "for (int i = M - 1; i <= (N + 2); ++i) {"
+      "    X[i] = Math.Sqrt(Y[i]);"
+      "}")
+    (ppstr (compile::write-ljd-accum-rel "lp"
+	     (sexpr->rel '(:for |i| ((- m 1) (+ n 2))
+                            (<- (@ x |i|) (sqrt (@ y |i|))))))))
+
+  (assert-equal
+    ""
+    (ppstr (compile::write-ljd-accum-rel "lp" (make-relation-skip))))
+
 )
 
 (define-test compile-tests
@@ -247,7 +332,7 @@ namespace Foo
     }
 }
 "
-    (cppstr (compile::write-csharp-class
+    (ppstr (compile::write-csharp-class
 	     "Foo" "Bar" (lambda () (fmt "<class body>")))))
 
   (let ((decls '((|b| boolean)
@@ -266,7 +351,7 @@ public double rc;
 public double rd;
 public double re;
 "
-      (cppstr (compile::gen-decls "Blah blah" (sexpr->decls decls)))))
+      (ppstr (compile::gen-decls "Blah blah" (sexpr->decls decls)))))
 
   (let ((decls '((|a| (integerp |n|))
 		 (|b| (realxn |m| |n|)))))
@@ -275,7 +360,7 @@ public double re;
 public int[] a;
 public DMatrix b;
 "
-      (cppstr (compile::gen-decls "Array vars" (sexpr->decls decls)))))
+      (ppstr (compile::gen-decls "Array vars" (sexpr->decls decls)))))
 
   (let ((vars '((|a| (real 2)) (|b| (real 2 2)) (|c| (realp n))
 		(|d| (real n (- m 1))) (|e| real)
@@ -294,7 +379,7 @@ public DMatrix b;
     i = new BMatrix(M, K);
 }
 "
-      (cppstr (compile::write-csharp-allocate-vars (sexpr->decls vars)))))
+      (ppstr (compile::write-csharp-allocate-vars (sexpr->decls vars)))))
 
   (let ((args '((n integer)
 		(k integerp)
@@ -321,28 +406,54 @@ public DMatrix b;
     Bar = loader.LoadBMatrix(\"Bar\", K, K * N);
 }
 "
-      (cppstr (compile::write-csharp-load-arguments (sexpr->decls args)))))
+      (ppstr (compile::write-csharp-load-arguments (sexpr->decls args)))))
 
-#|
   (assert-equal
-"
+"public double LogJointDensity()
+{
+    double ljd1 = 0.0;
+    ljd1 += BMC.LogDensityDirichlet(P, ALPHA_P);
+    for (int i = 1; i <= (N); ++i) {
+        ljd1 += BMC.LogDensityCat(X[i], P);
+    }
+    ljd1 += BMC.LogDensityGamma(LAMBDA, A, B);
+    SIGMA = 1 / Math.Sqrt(LAMBDA);
+    for (int i = 1; i <= (N); ++i) {
+        if (X[i] == 1) {
+            ljd1 += BMC.LogDensityNorm(Y[i], 0, SIGMA);
+        }
+        else {
+            ljd1 += BMC.LogDensityGamma(Y[i], B, A);
+        }
+    }
+    return (Double.IsNaN(ljd1) ? Double.NegativeInfinity : ljd1);
+}
 "
     (ppstr
-      (compile::write-log-joint-density-function
-        (sexpr->rels
-	 '((p ~ (ddirch alpha_p))
-	   (:for i (1 n) (~ (@ x i) ~ dcat(p)))
-	   (~ lambda (dgamma a b))
-	   (<- sigma (/ 1 (sqrt lambda)))
-	   (:for i (1 n)
-	      (~ (@ logz i) (dnorm (neg (/ sigma 2)) (/ sigma 3)))
-	      (<- (@ z i) <- (exp (@ logz i)))
-	      (if (.= (@ x i) 1)
-		  (~ (@ y i) (dnorm 0 sigma)))
-	      (if (.= (@ x i) 2)
-		  (~ (@ y i) (dgamma (@ z i) (@ z i)))))))))
-|#
-; log joint density function
+      (compile::write-csharp-log-joint-density
+        (sexpr->model
+	 '(:model
+	   (:args (a realp)
+		  (b realp)
+		  (n integerp0)
+		  (alpha_p (realp n)))
+	   (:reqs)
+	   (:vars (lambda realp)
+		  (p (realp n))
+		  (x (integerp n))
+		  (sigma realp)
+		  (y (real n)))
+	   (:body
+	     (~ p (ddirch alpha_p))
+	     (:for |i| (1 n)
+	       (~ (@ x |i|) (dcat p)))
+	     (~ lambda (dgamma a b))
+	     (<- sigma (/ 1 (sqrt lambda)))
+	     (:for |i| (1 n)
+	       (:if (= (@ x |i|) 1)
+		 (~ (@ y |i|) (dnorm 0 sigma))
+		 (~ (@ y |i|) (dgamma b a))))))))))
+
 ; updating deterministic vars
 )
 

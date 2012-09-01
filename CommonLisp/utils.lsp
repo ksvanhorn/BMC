@@ -11,6 +11,9 @@
 
 (defun zip (&rest lists) (apply #'mapcar #'list lists))
 
+(defun append-mapcar (fct lst)
+  (apply #'append (mapcar fct lst)))
+
 (defun int-range (lo hi)
   (let ((result '()))
     (loop for i from hi downto lo do
@@ -24,6 +27,9 @@
   (with-open-file (is ifname)
     (let ((*read-default-float-format* 'long-float))
       (read is))))
+
+(defun fdebug (format &rest args)
+  (apply #'format t (strcat "~&" format "~%") args))
 
 ; Indented output utils
 

@@ -38,7 +38,7 @@
 
 (defun literal->string (x)
   (cond ((integerp x) (format nil "~d" x))
-	((realp x) (format nil "~,,,,,,eE" x))
+	((realp x) (format nil "~,,,,,,'eE" x))
 	(t (error "Unimplemented case in compile::literal->string: ~a." x))))
 
 (defun const->string (x)
@@ -140,6 +140,7 @@
     (.= . "==")
     (@-slice . "BMC.ArraySlice")
     (@-idx . "BMC.Idx")
+    (@-rng . "BMC.Range")
     (is-realp . "BMC.IsRealp")
     (is-realnn . "BMC.IsRealnn")
     (is-real . "BMC.IsReal")
@@ -150,6 +151,85 @@
 
 ;;; End printing expressions
 
+(defun symbols-in-expr (x)
+  (adt-case expr x
+    ((literal value)
+     '())
+    ((const symbol)
+     (list symbol))
+    ((variable symbol)
+     (list symbol))
+    ((quantifier op lo hi var body)
+     (list* op var (symbols-in-expr-list (list lo hi body))))
+    ((apply fct args)
+     (symbols-in-sym-exprs fct args))))
+
+(defun symbols-in-expr-list (xlist)
+  (append-mapcar #'symbols-in-expr xlist))
+
+(defun symbols-in-sym-exprs (sym exprs)
+  (cons sym (symbols-in-expr-list exprs)))
+
+(defun symbols-in-model (mdl)
+  (match-adt1 (model args reqs vars body) mdl
+    (append (append-mapcar #'symbols-in-decl args)
+	    (append-mapcar #'symbols-in-expr reqs)
+	    (append-mapcar #'symbols-in-decl vars)
+	    (append-mapcar #'symbols-in-rel body))))
+
+(defun symbols-in-decl (d)
+  (match-adt1 (decl var typ) d
+    (cons var (symbols-in-vtype typ))))
+
+(defun symbols-in-vtype (typ)
+  (adt-case vtype typ
+    ((scalar stype)
+     (list stype))
+    ((array elem-type dims)
+     (symbols-in-sym-exprs elem-type dims))))
+
+(defun symbols-in-rel (rel)
+  (adt-case relation rel
+    ((deterministic lhs rhs)
+     (append (symbols-in-rellhs lhs)
+	     (symbols-in-expr rhs)))
+    ((stochastic lhs rhs)
+     (append (symbols-in-rellhs lhs)
+	     (symbols-in-distr rhs)))
+    ((block members)
+     (append-mapcar #'symbols-in-rel members))
+    ((if condition true-branch false-branch)
+     (append (symbols-in-expr condition)
+	     (symbols-in-rel true-branch)
+	     (symbols-in-rel false-branch)))
+    ((loop var lo hi body)
+     (append (symbols-in-sym-exprs var (list lo hi))
+	     (symbols-in-rel body)))
+    ((skip)
+     '())))
+
+(defun symbols-in-rellhs (lhs)
+  (adt-case rellhs lhs
+    ((simple var)
+     (list var))
+    ((array-elt var indices)
+     (symbols-in-sym-exprs var indices))
+    ((array-slice var indices)
+     (cons var (append-mapcar #'symbols-in-arr-slice-idx indices)))))
+
+(defun symbols-in-arr-slice-idx (x)
+  (adt-case array-slice-index x
+    ((scalar value)
+     (symbols-in-expr value))
+    ((range lo hi)
+     (symbols-in-expr-list (list lo hi)))
+    ((all)
+     '())))
+
+(defun symbols-in-distr (d)
+  (match-adt1 (distribution name args) d
+    (symbols-in-sym-exprs name args)))
+
 (defun write-csharp-class-body (mdl)
   (write-csharp-declarations mdl)
   (fmt "")
@@ -159,6 +239,7 @@
   (fmt "")
   (write-csharp-allocate-vars (model-vars mdl))
   (fmt "")
+  (write-csharp-log-joint-density mdl)
   ; ... more ...
 )
 
@@ -307,9 +388,9 @@
 	     (and (integerp val) (<= 0 val)))))))
 
 (defun args-checks-raw (mdl)
-  (append (apply #'append (mapcar #'decl-checks (model-args mdl)))
+  (append (append-mapcar #'decl-checks (model-args mdl))
 	  (model-reqs mdl)
-	  (apply #'append (mapcar #'dim-checks (model-vars mdl)))))
+	  (append-mapcar #'dim-checks (model-vars mdl))))
 
 (defun dim-checks (d)
   (adt-case vtype (decl-typ d)
@@ -351,7 +432,8 @@
 	    (int-range 1 (length dims)) dims)))
 
 (defun array-element-checks (var-sym etype-sym dims)
-  (let* ((idxvar-symbols (index-var-symbols var-sym dims))
+  (let* ((excluded (symbols-in-sym-exprs var-sym dims))
+	 (idxvar-symbols (n-symbols-not-in (length dims) excluded))
 	 (idxvars (mapcar #'expr-var idxvar-symbols))
 	 (var (expr-var var-sym))
 	 (checks (scalar-type-checks
@@ -372,56 +454,61 @@
 		   :body ch))))
     ch))    
 
-(defun index-var-symbols (var-symbol dims &optional (prefix "i"))
-  (let* ((test (fully-free-of var-symbol dims))
-	 (gen-next (next-idx-var-symbol test prefix))
+(defun n-symbols-not-in (n excluded &optional (prefix "i"))
+  (let* ((gen-next (next-symbol excluded prefix))
 	 (result nil))
-    (dotimes (i (length dims))
+    (dotimes (i n)
       (push (funcall gen-next) result))
     (reverse result)))
 
-(defun next-idx-var-symbol (test prefix)
+(defun next-symbol (excluded prefix)
   (let ((suffix 0))
     (lambda ()
       (loop
         (incf suffix)
-	(let ((idx-var-sym (intern (strcat prefix (write-to-string suffix)))))
-	  (when (funcall test idx-var-sym)
-	    (return idx-var-sym)))))))
+	(let ((sym (intern (strcat prefix (write-to-string suffix)))))
+	  (unless (member sym excluded)
+	    (return sym)))))))
 
-(defun fully-free-of (v dims)
-  (assert (symbolp v))
-  (labels
-    ((ffo (s x)
-       (adt-case expr x
-	 ((literal value) t)
-	 ((const symbol) (not (eq s symbol)))
-	 ((variable symbol) (not (eq s symbol)))
-	 ((quantifier op lo hi var body)
-	  (and (not (eq s op)) (not (eq s var))
-	       (ffo s lo) (ffo s hi) (ffo s body)))
-	 ((apply fct args)
-	  (and (not (eq s fct)) (every (lambda (a) (ffo s a)) args))))))
-    (lambda (s)
-      (and (not (eq s v)) (every (lambda (d) (ffo s d)) dims)))))
+(defun write-csharp-log-joint-density (mdl)
+  (let* ((excluded (symbols-in-model mdl))
+	 (accum-var (funcall (next-symbol excluded "ljd"))))
+    (fmt "public double LogJointDensity()")
+    (fmt "{")
+    (indent
+      (fmt "double ~a = 0.0;" accum-var)
+      (dolist (r (model-body mdl))
+	(write-ljd-accum-rel accum-var r))
+      (fmt "return (Double.IsNaN(~a) ? Double.NegativeInfinity : ~a);"
+	   accum-var accum-var))
+    (fmt "}")))
 
 (defun write-ljd-accum-rel (accum rel)
+  (let ((*ljd-accum* accum))
+    (write-ljd-acc-rel rel)))
+
+(defparameter *ljd-accum* nil)
+
+(defun write-ljd-acc-rel (rel)
   (adt-case relation rel
     ((deterministic lhs rhs)
-     (write-ljd-accum-rel-determ lhs rhs))
+     (write-ljd-acc-rel-determ lhs rhs))
     ((stochastic lhs rhs)
-     (write-ljd-accum-rel-stoch lhs rhs accum))
-    ((block members))
-    ((if condition true-branch false-branch))
-    ((loop var lo hi body))
+     (write-ljd-acc-rel-stoch lhs rhs))
+    ((block members)
+     (write-ljd-acc-rel-block members))
+    ((if condition true-branch false-branch)
+     (write-ljd-acc-rel-if condition true-branch false-branch))
+    ((loop var lo hi body)
+     (write-ljd-acc-rel-loop var lo hi body))
     ((skip))))
 
-(defun write-ljd-accum-rel-stoch (lhs rhs accum)
+(defun write-ljd-acc-rel-stoch (lhs rhs)
   (match-adt1 (distribution name args) rhs
     (let ((lhs-str (rellhs->string lhs))
 	  (dname (csharp-distr-name name))
 	  (args-str-list (mapcar #'expr->string args)))
-      (fmt "~a += ~a(~a~{, ~a~});" accum dname lhs-str args-str-list))))
+      (fmt "~a += ~a(~a~{, ~a~});" *ljd-accum* dname lhs-str args-str-list))))
 
 (defun csharp-distr-name (distr-symbol)
   (assoc-lookup distr-symbol +csharp-distr-name-assoc+))
@@ -435,10 +522,33 @@
     (dmvnorm . "BMC.LogDensityMVNorm")
     (dinterval . "BMC.LogDensityInterval")))
 
-(defun write-ljd-accum-rel-determ (lhs rhs)
+(defun write-ljd-acc-rel-determ (lhs rhs)
   (let ((lhs-str (rellhs->string lhs))
 	(rhs-str (expr->string rhs)))
     (fmt "~a = ~a;" lhs-str rhs-str)))
+
+(defun write-ljd-acc-rel-block (members)
+  (dolist (r members)
+    (write-ljd-acc-rel r)))
+
+(defun write-ljd-acc-rel-if (condition true-branch false-branch)
+  (fmt "if (~a) {" (expr->string condition))
+  (indent
+    (write-ljd-acc-rel true-branch))
+  (fmt "}")
+  (when (not (is-relation-skip false-branch))
+    (fmt "else {")
+    (indent
+      (write-ljd-acc-rel false-branch))
+    (fmt "}")))
+
+(defun write-ljd-acc-rel-loop (var lo hi body)
+  (let ((vstr (variable->string var)))
+    (fmt "for (int ~a = ~a; ~a <= (~a); ++~a) {"
+	 vstr (expr->string lo) vstr (expr->string hi) vstr)
+    (indent
+      (write-ljd-acc-rel body))
+    (fmt "}")))
 
 #|
 (defun compile-to-csharp (csharp-name-space class-name mdl os)
@@ -487,7 +597,7 @@
 
 (defun normalize-decls (decls)
   (let* ((xdecls (mapcar #'normalize-decl decls))
-	 (axioms (apply #'append (mapcar #'car xdecls)))
+	 (axioms (append-mapcar #'car xdecls))
 	 (ndecls (mapcar #'cdr xdecls)))
     (cons axioms ndecls)))
 
@@ -512,7 +622,7 @@
 
 (defun normalize-rels (rels)
   (let* ((xrels (mapcar #'normalize-rel rels))
-	 (axioms (apply #'append (mapcar #'car xrels)))
+	 (axioms (append-mapcar #'car xrels))
 	 (nrels (mapcar #'cdr xrels)))
     (cons axioms nrels)))
 

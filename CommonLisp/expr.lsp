@@ -105,7 +105,8 @@
 	((realp x) (format nil "~,,,,,,EE" x))
 	(t (error "Unimplemented case in expr::literal->string: ~a." x))))
 
-(defun const->string (x) (symbol-name x))
+(defun const->string (x) 
+(symbol-name x))
 
 (defun variable->string (x) (symbol-name x))
 
@@ -131,9 +132,11 @@
 	 (mapcar arg->string (rest args))))
 
 (defun array-expr->string (e)
+  (when (is-expr-literal e)
+    (error "Cannot apply array indexing to a literal: ~a." e))
   (if (or (is-expr-const e) (is-expr-variable e))
     (expr->string e)
-    (format t "(~a)" (expr->string e))))
+    (format nil "(~a)" (expr->string e))))
 
 (defun iexpr->string (e)
   (when (or (is-expr-literal e) (is-expr-variable e) (is-expr-quantifier e))

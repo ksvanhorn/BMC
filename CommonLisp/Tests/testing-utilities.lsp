@@ -14,7 +14,3 @@
 	     (*indent-amount* ,indent-amount)
 	     (*fmt-ostream* ,s))
 	 ,expr))))
-
-(defmacro cppstr (expr &key (indent-level 0) (indent-amount 4))
-  `(let ((*print-options* (compile-print-options)))
-    (ppstr ,expr :indent-level ,indent-level :indent-amount ,indent-amount)))

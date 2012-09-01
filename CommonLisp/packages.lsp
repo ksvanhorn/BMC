@@ -55,6 +55,7 @@
 (defpackage :utils
   (:use :cl)
   (:export :starts-with :assoc-lookup :zip :strcat :read-file :int-range
+	   :append-mapcar :fdebug
 	   :indent :fmt :*indent-level* :*indent-amount* :*fmt-ostream*))
 
 (defpackage :expr
@@ -120,4 +121,5 @@
 
 (defpackage :compile
   (:use :cl :model :expr :utils :adt :symbols)
-  (:export :compile-to-csharp :compile-print-options))
+  (:shadow :expr->string)
+  (:export :compile-to-csharp))

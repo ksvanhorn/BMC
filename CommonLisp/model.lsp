@@ -105,7 +105,7 @@
 
 (defun check-stoch-rel (x)
   (unless (and (consp x) (= 2 (length x)))
-    (error "Invalid stochastic relation ~W." (const '~ x))))
+    (error "Invalid stochastic relation ~W." (cons '~ x))))
 
 (defun sexpr->distr (x)
   (check-distr x)
@@ -255,7 +255,7 @@
 
 (defun bad-rel-vars (mdl)
   (let ((declared-vars (vars-names mdl))
-	(defined-vars (apply #'append (mapcar #'rel-vars (model-body mdl))))
+	(defined-vars (append-mapcar #'rel-vars (model-body mdl)))
 	(bad nil))
     (dolist (x defined-vars)
       (if (not (member x declared-vars))
@@ -269,7 +269,7 @@
     ((stochastic lhs rhs)
      (lhs-var lhs))
     ((block members)
-     (apply #'append (mapcar #'rel-vars members)))
+     (append-mapcar #'rel-vars members))
     ((if condition true-branch false-branch)
      (append (rel-vars true-branch) (rel-vars false-branch)))
     ((loop var lo hi body)
@@ -291,8 +291,7 @@
 	    (shadowing-indices-rels (model-body mdl) names))))
 
 (defun shadowing-indices-decls (decls names)
-  (apply #'append
-	 (mapcar (lambda (d) (shadowing-indices-decl d names)) decls)))
+  (append-mapcar (lambda (d) (shadowing-indices-decl d names)) decls))
 
 (defun shadowing-indices-decl (d names)
   (shadowing-indices-vtype (decl-typ d) names))
@@ -305,7 +304,7 @@
      (shadowing-indices-exprs dims names))))
 
 (defun shadowing-indices-rels (rels names)
-  (apply #'append (mapcar (lambda (r) (shadowing-indices-rel r names)) rels)))
+  (append-mapcar (lambda (r) (shadowing-indices-rel r names)) rels))
 
 (defun shadowing-indices-rel (r names)
   (adt-case relation r
@@ -359,7 +358,7 @@
 	    (shadowing-indices-rel body new-names))))
 
 (defun shadowing-indices-exprs (exprs names)
-  (apply #'append (mapcar (lambda (x) (shadowing-indices-expr x names)) exprs)))
+  (append-mapcar (lambda (x) (shadowing-indices-expr x names)) exprs))
 
 (defun shadowing-indices-expr (x names)
   (adt-case expr x
@@ -401,13 +400,13 @@
     ((array elem-type dims) (length dims))))
 
 (defun bad-numdims-exprs (elist ndmap)
-  (apply #'append (mapcar (lambda (x) (bad-numdims-expr x ndmap)) elist)))
+  (append-mapcar (lambda (x) (bad-numdims-expr x ndmap)) elist))
 
 (defun bad-numdims-vtypes (tlist ndmap)
-  (apply #'append (mapcar (lambda (x) (bad-numdims-vtype x ndmap)) tlist)))
+  (append-mapcar (lambda (x) (bad-numdims-vtype x ndmap)) tlist))
 
 (defun bad-numdims-rels (rlist ndmap)
-  (apply #'append (mapcar (lambda (x) (bad-numdims-rel x ndmap)) rlist)))
+  (append-mapcar (lambda (x) (bad-numdims-rel x ndmap)) rlist))
 
 (defun bad-numdims-vtype (typ ndmap)
   (adt-case vtype typ
@@ -434,7 +433,7 @@
      '())))
 
 (defun bad-numdims-exprs (xs ndmap)
-  (apply #'append (mapcar (lambda (x) (bad-numdims-expr x ndmap)) xs)))
+  (append-mapcar (lambda (x) (bad-numdims-expr x ndmap)) xs))
 
 (defun bad-numdims-expr (x ndmap)
   (adt-case expr x
