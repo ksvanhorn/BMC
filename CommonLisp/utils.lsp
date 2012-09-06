@@ -23,6 +23,9 @@
 (defun strcat (&rest args)
   (apply #'concatenate 'string args))
 
+(defun strcat-lines (&rest args)
+  (format nil "~{~a~%~}" args))
+
 (defun read-file (ifname)
   (with-open-file (is ifname)
     (let ((*read-default-float-format* 'long-float))
@@ -30,6 +33,9 @@
 
 (defun fdebug (format &rest args)
   (apply #'format t (strcat "~&" format "~%") args))
+
+(defun compound-symbol (x y)
+  (intern (format nil "~a-~a" x y)))
 
 ; Indented output utils
 

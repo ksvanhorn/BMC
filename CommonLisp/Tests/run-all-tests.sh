@@ -2,14 +2,20 @@
 
 (load "code-to-test")
 (load "../../lisp-unit/lisp-unit")
-(use-package :lisp-unit)
 (load "Tests/testing-utilities")
 (in-package :cl-user)
 
-(load "Tests/adt-tests")
-(load "Tests/utils-tests")
-(load "Tests/expr-tests")
-(load "Tests/model-tests")
-(load "Tests/compile-tests")
+(defmacro runtests (name)
+  (let* ((name-s (symbol-name name))
+	 (pkg-path (utils:strcat "Tests/" (string-downcase name-s) "-tests"))
+	 (pkg-name (intern (utils:strcat name-s "-TESTS"))))
+    `(progn
+       (load ,pkg-path)
+       (lisp-unit:run-all-tests ,pkg-name))))
 
-(lisp-unit:run-tests)
+(utils:fdebug "~w" (macroexpand-1 '(runtests adt))) ; debug
+(runtests adt)
+(runtests utils)
+(runtests expr)
+(runtests model)
+(runtests compile)

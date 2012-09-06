@@ -9,11 +9,11 @@
   (array elem-type dims))
 
 (defadt relation
-  (deterministic lhs rhs)
   (stochastic lhs rhs)
   (block members)
   (if condition true-branch false-branch)
   (loop var lo hi body)
+  (let var val body)
   (skip))
 
 (defadt1 distribution name args)
@@ -33,14 +33,17 @@
 
 (defun sexpr->model (x)
   (check-model-top-level x)
-  (let ((mdl (let ((*convert-boolean-functions* nil))
-               (make-model :args (mapcar #'sexpr->decl (cdr (second x)))
-			   :reqs (mapcar #'sexpr->expr (cdr (third x)))
-			   :vars (mapcar #'sexpr->decl (cdr (fourth x)))
-			   :body (let ((*convert-boolean-functions* t))
-				   (mapcar #'sexpr->rel (cdr (fifth x))))))))
+  (let ((mdl (raw-sexpr->model x)))
     (check-model mdl)
     mdl))
+
+(defun raw-sexpr->model (x)
+  (let ((*convert-boolean-functions* nil))
+    (make-model :args (mapcar #'sexpr->decl (cdr (second x)))
+		:reqs (mapcar #'sexpr->expr (cdr (third x)))
+		:vars (mapcar #'sexpr->decl (cdr (fourth x)))
+		:body (let ((*convert-boolean-functions* t))
+			(mapcar #'sexpr->rel (cdr (fifth x)))))))
 
 (defun check-model-top-level (x)
   (unless (and (starts-with :model x)
@@ -80,22 +83,26 @@
     :dims (mapcar #'sexpr->expr (cdr x))))
 
 (defun sexpr->rel (x)
-  (cond ((starts-with '<- x) (sexpr->determ-rel (cdr x)))
-	((starts-with '~ x) (sexpr->stoch-rel (cdr x)))
+  (cond ((starts-with '~ x) (sexpr->stoch-rel (cdr x)))
 	((starts-with :block x) (sexpr->block-rel (cdr x)))
 	((starts-with :if x) (sexpr->if-rel (cdr x)))
 	((starts-with :for x) (sexpr->loop-rel (cdr x)))
+	((starts-with :let x) (sexpr->let-rel (cdr x)))
 	(t (error "Invalid relation: ~W." x))))
 
-(defun sexpr->determ-rel (x)
-  (check-determ-rel x)
-  (make-relation-deterministic
-    :lhs (sexpr->rellhs (first x))
-    :rhs (sexpr->expr (second x))))
+(defun sexpr->let-rel (x)
+  (check-let-rel x)
+  (destructuring-bind ((var val) body) x
+    (make-relation-let
+      :var var
+      :val (sexpr->expr val)
+      :body (sexpr->rel body))))
 
-(defun check-determ-rel (x)
-  (unless (and (consp x) (= 2 (length x)))
-    (error "Invalid deterministic relation ~W." (cons '<- x))))
+(defun check-let-rel (x)
+  (unless (and (consp x) (= 2 (length x))
+	       (consp (first x)) (= 2 (length (first x)))
+	       (symbolp (first (first x))))
+    (error "Invalid let relation ~W." (cons :let x))))
 
 (defun sexpr->stoch-rel (x)
   (check-stoch-rel x)
@@ -126,6 +133,7 @@
        (expr-apply->rellhs #'errfct fct args))
       ((literal value) (errfct))
       ((const symbol) (errfct))
+      ((let var val body) (errfct))
       ((quantifier op lo hi var body) (errfct)))))
 
 (defun check-rellhs-expr (errfct fct args)
@@ -152,6 +160,8 @@
     ((literal value)
      (funcall errfct))
     ((variable symbol)
+     (funcall errfct))
+    ((let var val body)
      (funcall errfct))
     ((quantifier op lo hi var body)
      (funcall errfct))))
@@ -218,7 +228,9 @@
   (let ((dups (duplicate-vars mdl))
         (badv (bad-rel-vars mdl))
         (shadow (remove-duplicates (shadowing-indices mdl)))
-        (bad-ndims (remove-duplicates (bad-num-dimensions mdl))))
+        (bad-ndims (remove-duplicates (bad-num-dimensions mdl)))
+	(premature-usage (used-before-declared mdl))
+	(vars-in-dims (vars-used-in-dims mdl)))
     (unless (null dups)
       (error-with-list "Multiple declarations for var(s)" dups))
     (unless (null badv)
@@ -228,10 +240,66 @@
 		       shadow))
     (unless (null bad-ndims)
       (error-with-list "Variables used with wrong number of dimensions"
-		       bad-ndims))))
+		       bad-ndims))
+    (unless (null premature-usage)
+      (error-with-list "Variables used before declared" premature-usage))
+    (unless (null vars-in-dims)
+      (error-with-list "Model vars used to define array length" vars-in-dims))))
 
 (defun error-with-list (format lst)
   (error (format nil (strcat format ": ~{~a~^, ~}") lst)))
+
+(defun used-before-declared (mdl)
+  (let ((seen nil)
+	(undeclared nil))
+    (dolist (d (model-args mdl))
+      (match-adt1 (decl var typ) d
+	 (setf undeclared
+	       (undeclared-vars seen (vars-in-type typ) undeclared))
+	 (push var seen)))
+    (dolist (e (model-reqs mdl))
+      (setf undeclared (undeclared-vars seen (vars-in-expr e) undeclared)))
+    (dolist (d (model-vars mdl))
+      (match-adt1 (decl var typ) d
+	(setf undeclared
+	      (undeclared-vars seen (vars-in-type typ) undeclared))
+	(push var seen)))
+    (reverse undeclared)))
+
+(defun undeclared-vars (seen vars undeclared)
+  (dolist (v vars)
+    (when (not (member v seen))
+      (pushnew v undeclared)))
+  undeclared)
+
+(defun vars-in-type (typ)
+  (adt-case vtype typ
+    ((scalar stype) '())
+    ((array elem-type dims)
+     (append-mapcar #'vars-in-expr dims))))
+
+(defun vars-in-expr (e)
+  (adt-case expr e
+    ((literal value) '())
+    ((const symbol) '())
+    ((variable symbol) (list symbol))
+    ((quantifier op lo hi var body)
+     (append (vars-in-expr lo) (vars-in-expr hi)
+	     (remove var (vars-in-expr body))))
+    ((let var val body)
+     (append (vars-in-expr val) (remove var (vars-in-expr body))))
+    ((apply fct args)
+     (append-mapcar #'vars-in-expr args))))
+
+(defun vars-used-in-dims (mdl)
+  (let* ((vars (mapcar #'decl-var (model-vars mdl)))
+	 (typs (mapcar #'decl-typ (model-vars mdl)))
+	 (used (append-mapcar #'vars-in-type typs))
+	 (result nil))
+    (dolist (v vars)
+      (when (member v used)
+	(pushnew v result)))
+    (reverse result)))
 
 (defun duplicate-vars (mdl)
   (let* ((names (args-vars-names mdl))
@@ -264,8 +332,6 @@
 
 (defun rel-vars (rel)
   (adt-case relation rel
-    ((deterministic lhs rhs)
-     (lhs-var lhs))
     ((stochastic lhs rhs)
      (lhs-var lhs))
     ((block members)
@@ -273,6 +339,8 @@
     ((if condition true-branch false-branch)
      (append (rel-vars true-branch) (rel-vars false-branch)))
     ((loop var lo hi body)
+     (rel-vars body))
+    ((let var val body)
      (rel-vars body))
     ((skip)
      '())))
@@ -308,8 +376,6 @@
 
 (defun shadowing-indices-rel (r names)
   (adt-case relation r
-    ((deterministic lhs rhs)
-     (shadowing-indices-exprs (list (rellhs->expr lhs) rhs) names))
     ((stochastic lhs rhs)
      (shadowing-indices-exprs
        (cons (rellhs->expr lhs) (distribution-args rhs)) names))
@@ -321,6 +387,8 @@
 	     (shadowing-indices-rel false-branch names)))
     ((loop var lo hi body)
      (shadowing-indices-loop var lo hi body names))
+    ((let var val body)
+     (shadowing-indices-let-rel var val body names))
     ((skip) '())))
 
 (defun rellhs->expr (lhs)
@@ -340,7 +408,7 @@
 (defun idx-rellhs->expr (index)
   (adt-case array-slice-index index
     ((scalar value)
-     value)
+     (make-expr-apply :fct '@-idx :args (list value)))
     ((range lo hi)
      (make-expr-apply :fct '@-rng :args (list lo hi)))
     ((all)
@@ -349,11 +417,21 @@
 (defun shadowing-indices-loop (var lo hi body names)
   (let ((maybe-var '())
 	(new-names names))
-    (when (member var names)
+    (if (member var names)
       (push var maybe-var)
       (push var new-names))
     (append (shadowing-indices-expr lo names)
 	    (shadowing-indices-expr hi names)
+	    maybe-var
+	    (shadowing-indices-rel body new-names))))
+
+(defun shadowing-indices-let-rel (var val body names)
+  (let ((maybe-var '())
+	(new-names names))
+    (if (member var names)
+      (push var maybe-var)
+      (push var new-names))
+    (append (shadowing-indices-expr val names)
 	    maybe-var
 	    (shadowing-indices-rel body new-names))))
 
@@ -367,17 +445,29 @@
     ((variable symbol) '())
     ((quantifier op lo hi var body)
      (shadowing-indices-quant op lo hi var body names))
+    ((let var val body)
+     (shadowing-indices-let-expr var val body names))
     ((apply fct args) 
      (shadowing-indices-exprs args names))))
 
 (defun shadowing-indices-quant (op lo hi var body names)
   (let ((maybe-var '())
 	(new-names names))
-    (when (member var names)
+    (if (member var names)
       (push var maybe-var)
       (push var new-names))
     (append (shadowing-indices-expr lo names)
 	    (shadowing-indices-expr hi names)
+	    maybe-var
+	    (shadowing-indices-expr body new-names))))
+
+(defun shadowing-indices-let-expr (var val body names)
+  (let ((maybe-var '())
+	(new-names names))
+    (if (member var names)
+      (push var maybe-var)
+      (push var new-names))
+    (append (shadowing-indices-expr val)
 	    maybe-var
 	    (shadowing-indices-expr body new-names))))
 
@@ -415,8 +505,6 @@
 
 (defun bad-numdims-rel (r ndmap)
   (adt-case relation r
-    ((deterministic lhs rhs)
-     (bad-numdims-exprs (list (rellhs->expr lhs) rhs) ndmap))
     ((stochastic lhs rhs)
      (bad-numdims-exprs
        (cons (rellhs->expr lhs) (distribution-args rhs)) ndmap))
@@ -428,6 +516,9 @@
 	     (bad-numdims-rel false-branch ndmap)))
     ((loop var lo hi body)
      (append (bad-numdims-exprs (list lo hi) ndmap)
+	     (bad-numdims-rel body ndmap)))
+    ((let var val body)
+     (append (bad-numdims-expr val ndmap)
 	     (bad-numdims-rel body ndmap)))
     ((skip)
      '())))
@@ -444,19 +535,20 @@
     ((variable symbol)
      '())
     ((quantifier op lo hi var body)
-     (append (bad-numdims-exprs (list lo hi) ndmap)
-	     (bad-numdims-expr body ndmap)))
+     (bad-numdims-exprs (list lo hi body) ndmap))
+    ((let var val body)
+     (bad-numdims-exprs (list val body) ndmap))
     ((apply fct args)
      (bad-numdims-apply fct args ndmap))))
 
 (defun bad-numdims-apply (fct args ndmap)
   (let ((bad-numdims-args (bad-numdims-exprs args ndmap)))
     (if (member fct '(@ @-slice))
-      (let ((arr-var (expr-variable-symbol (first args))))
-	(append bad-numdims-args
-		(if (= (length args) (1+ (ndims-var arr-var ndmap)))
-		  '()
-		  (list arr-var))))
+      (let* ((arr-var (expr-variable-symbol (first args)))
+	     (n (cdr (assoc arr-var ndmap))))
+	(if (or (null n) (= (length args) (1+ n)))
+	   bad-numdims-args
+	   (cons arr-var bad-numdims-args)))
       bad-numdims-args)))
 
 (defun ndims-var (arr-var ndmap)
@@ -494,8 +586,6 @@
 
 (defun pp-rel (rel)
   (adt-case relation rel
-    ((deterministic lhs rhs)
-     (pp-rel-deterministic lhs rhs))
     ((stochastic lhs rhs)
      (pp-rel-stochastic lhs rhs))
     ((block members)
@@ -504,10 +594,14 @@
      (pp-rel-if condition true-branch false-branch))
     ((loop var lo hi body)
      (pp-rel-loop var lo hi body))
+    ((let var val body)
+     (pp-rel-let var val body))
     ((skip))))
 
-(defun pp-rel-deterministic (lhs rhs)
-  (fmt "~a <- ~a" (rellhs->string lhs) (expr->string rhs)))
+(defun pp-rel-let (var val body)
+  (fmt "let ~a = ~a in" (symbol-name var) (expr->string val))
+  (indent
+    (pp-rel body)))
 
 (defun pp-rel-stochastic (lhs rhs)
   (fmt "~a ~~ ~a" (rellhs->string lhs) (distr->string rhs)))

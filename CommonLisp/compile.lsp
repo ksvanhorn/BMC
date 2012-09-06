@@ -3,6 +3,10 @@
 ;;; Main function
 
 (defun compile-to-csharp (csharp-name-space class-name mdl)
+  (let ((stoch-vars (stochastic-vars (model-body mdl))))
+    (format t "Stochastic: ~a~%" stoch-vars))
+  (let ((e (rels->pdf (model-body mdl))))
+    (format t "PDF:~%~a~%" (expr:expr->string e)))
   (write-csharp-class csharp-name-space class-name
 		      (lambda () (write-csharp-class-body mdl))))
 
@@ -33,6 +37,8 @@
      (variable->string symbol))
     ((quantifier op lo hi var body)
      (qexpr->string op lo hi var body))
+    ((let var val body)
+     (error "Unimplemented case in compile::expr->string"))
     ((apply fct args)
      (aexpr->string fct args lprec rprec))))
 
@@ -62,6 +68,7 @@
 (defun aexpr->string (fct args lprec rprec)
   (case fct
 	('@ (@expr->string args))
+	('@-slice (@-slice-expr->string args))
 	(otherwise (fexpr->string fct args lprec rprec))))
 
 (defun @expr->string (args)
@@ -69,7 +76,28 @@
     (error "@ expression must have at least two arguments"))
   (format nil "~a[~{~a~^, ~}]"
 	 (array-expr->string (first args))
-	 (mapcar #'expr->string (rest args))))
+	 (mapcar #'expr->string (mapcar #'dec-expr (rest args)))))
+
+(defun dec-expr (expr)
+  (expr-call '- expr (expr-lit 1)))
+
+(defun @-slice-expr->string (args)
+  (unless (and (consp args) (< 1 (length args)))
+    (error "@-slice expression must have at least two arguments"))
+  (format nil "BMC.ArraySlice(~a~{, ~a~})"
+	 (array-expr->string (first args))
+	 (mapcar #'expr->string (mapcar #'slice-dec-expr (rest args)))))
+
+(defun slice-dec-expr (x)
+  (cond ((and (is-expr-apply x) (eq '@-rng (expr-apply-fct x)))
+	 (destructuring-bind (lo hi) (expr-apply-args x)
+	   (expr-call '@-rng (dec-expr lo) hi)))
+	((and (is-expr-apply x) (eq '@-idx (expr-apply-fct x)))
+	 (destructuring-bind (e) (expr-apply-args x)
+	   (dec-expr e)))
+	((and (is-expr-const x) (eq '@-all (expr-const-symbol x)))
+	 x)
+	(t (dec-expr x))))
 
 (defun array-expr->string (e)
   (if (or (is-expr-const e) (is-expr-variable e))
@@ -138,6 +166,10 @@
     (vec . "BMC.Vec")
     (= . "==")
     (.= . "==")
+    (.<= . "<=")
+    (.< . "<")
+    (.> . ">")
+    (.>= . ">=")
     (@-slice . "BMC.ArraySlice")
     (@-idx . "BMC.Idx")
     (@-rng . "BMC.Range")
@@ -161,6 +193,8 @@
      (list symbol))
     ((quantifier op lo hi var body)
      (list* op var (symbols-in-expr-list (list lo hi body))))
+    ((let var val body)
+     (cons var (symbols-in-expr-list (list val body))))
     ((apply fct args)
      (symbols-in-sym-exprs fct args))))
 
@@ -190,9 +224,6 @@
 
 (defun symbols-in-rel (rel)
   (adt-case relation rel
-    ((deterministic lhs rhs)
-     (append (symbols-in-rellhs lhs)
-	     (symbols-in-expr rhs)))
     ((stochastic lhs rhs)
      (append (symbols-in-rellhs lhs)
 	     (symbols-in-distr rhs)))
@@ -205,6 +236,8 @@
     ((loop var lo hi body)
      (append (symbols-in-sym-exprs var (list lo hi))
 	     (symbols-in-rel body)))
+    ((let var val body)
+     (cons var (append (symbols-in-expr val) (symbols-in-rel body))))
     ((skip)
      '())))
 
@@ -240,8 +273,19 @@
   (write-csharp-allocate-vars (model-vars mdl))
   (fmt "")
   (write-csharp-log-joint-density mdl)
+  (fmt "")
+  (flet ((f () (mapc #'write-prior-draw-rel (model-body mdl))))
+    (write-prior-draw #'f))
+  (fmt "")
+  (write-undefine-all-vars (model-vars mdl))
   ; ... more ...
 )
+
+(defun write-prior-draw (gen-body)
+  (fmt "void Draw() {")
+  (indent
+    (funcall gen-body))
+  (fmt "}"))  
 
 (defun write-csharp-declarations (mdl)
   (gen-decls "Model Arguments" (model-args mdl))
@@ -377,6 +421,8 @@
      nil)
     ((quantifier op lo hi var body)
      nil)
+    ((let var val body)
+     nil)
     ((apply fct args)
      (is-trivially-true-app fct args))))
 
@@ -491,8 +537,6 @@
 
 (defun write-ljd-acc-rel (rel)
   (adt-case relation rel
-    ((deterministic lhs rhs)
-     (write-ljd-acc-rel-determ lhs rhs))
     ((stochastic lhs rhs)
      (write-ljd-acc-rel-stoch lhs rhs))
     ((block members)
@@ -501,31 +545,39 @@
      (write-ljd-acc-rel-if condition true-branch false-branch))
     ((loop var lo hi body)
      (write-ljd-acc-rel-loop var lo hi body))
+    ((let var val body)
+     (write-ljd-acc-rel-let var val body))
     ((skip))))
+
+(defun write-ljd-acc-rel-let (var val body)
+  (fmt "{")
+  (indent
+    (fmt "var ~a = ~a;" (symbol-name var) (expr->string val))
+    (write-ljd-acc-rel body))
+  (fmt "}"))
 
 (defun write-ljd-acc-rel-stoch (lhs rhs)
   (match-adt1 (distribution name args) rhs
-    (let ((lhs-str (rellhs->string lhs))
-	  (dname (csharp-distr-name name))
+    (let ((lhs-str (crellhs->string lhs))
+	  (dname (csharp-distr-density-name name))
 	  (args-str-list (mapcar #'expr->string args)))
       (fmt "~a += ~a(~a~{, ~a~});" *ljd-accum* dname lhs-str args-str-list))))
 
-(defun csharp-distr-name (distr-symbol)
-  (assoc-lookup distr-symbol +csharp-distr-name-assoc+))
+(defun crellhs->string (lhs)
+  (expr->string (rellhs->expr lhs)))
+
+(defun csharp-distr-density-name (distr-symbol)
+  (strcat
+    "BMC.LogDensity" (assoc-lookup distr-symbol +csharp-distr-name-assoc+)))
 
 (defconstant +csharp-distr-name-assoc+
-  '((ddirch . "BMC.LogDensityDirichlet")
-    (dcat . "BMC.LogDensityCat")
-    (dgamma . "BMC.LogDensityGamma")
-    (dnorm . "BMC.LogDensityNorm")
-    (dwishart . "BMC.LogDensityWishart")
-    (dmvnorm . "BMC.LogDensityMVNorm")
-    (dinterval . "BMC.LogDensityInterval")))
-
-(defun write-ljd-acc-rel-determ (lhs rhs)
-  (let ((lhs-str (rellhs->string lhs))
-	(rhs-str (expr->string rhs)))
-    (fmt "~a = ~a;" lhs-str rhs-str)))
+  '((ddirch . "Dirichlet")
+    (dcat . "Cat")
+    (dgamma . "Gamma")
+    (dnorm . "Norm")
+    (dwishart . "Wishart")
+    (dmvnorm . "MVNorm")
+    (dinterval . "Interval")))
 
 (defun write-ljd-acc-rel-block (members)
   (dolist (r members)
@@ -543,12 +595,180 @@
     (fmt "}")))
 
 (defun write-ljd-acc-rel-loop (var lo hi body)
-  (let ((vstr (variable->string var)))
-    (fmt "for (int ~a = ~a; ~a <= (~a); ++~a) {"
-	 vstr (expr->string lo) vstr (expr->string hi) vstr)
+  (let ((var-str (variable->string var))
+	(lo-str (expr->string lo))
+	(term-str (termination-test-string var hi)))
+    (fmt "for (int ~a = ~a; ~a; ++~a) {" var-str lo-str term-str var-str)
     (indent
       (write-ljd-acc-rel body))
     (fmt "}")))
+
+(defun termination-test-string (var hi)
+  (expr->string (expr-call '.<= (expr-var var) hi)))
+
+(defun write-prior-draw-rel (rel)
+  (adt-case relation rel
+    ((stochastic lhs rhs)
+     (write-prior-draw-rel-stoch lhs rhs))
+    ((block members)
+     (mapc #'write-prior-draw-rel members))
+    ((if condition true-branch false-branch)
+     (write-prior-draw-rel-if condition true-branch false-branch))
+    ((loop var lo hi body)
+     (write-prior-draw-rel-loop var lo hi body))
+    ((let var val body)
+     (write-prior-draw-rel-let var val body))
+    ((skip)
+     )))
+
+(defun write-prior-draw-rel-let (var val body)
+  (fmt "{")
+  (indent
+    (fmt "var ~a = ~a;" (symbol-name var) (expr->string val))
+    (write-prior-draw-rel body))
+  (fmt "}"))
+
+(defun write-prior-draw-rel-stoch (lhs rhs)
+  (match-adt1 (distribution name args) rhs
+    (if (is-scalar-distr name)
+      (fmt "~a = ~a(~{~a~^, ~});"
+	   (crellhs->string lhs)
+	   (csharp-distr-draw-name name)
+	   (mapcar #'expr->string args))
+      (fmt "~a(~a~{, ~a~});"
+	   (csharp-distr-draw-name name)
+	   (crellhs->string lhs)
+	   (mapcar #'expr->string args)))))
+
+(defun is-scalar-distr (symbol)
+  (member symbol +scalar-distributions+))
+
+(defconstant +scalar-distributions+
+  '(dcat dnorm dgamma dinterval))
+
+(defun csharp-distr-draw-name (symbol)
+  (strcat
+    "BMC.Draw" (assoc-lookup symbol +csharp-distr-name-assoc+)))
+
+(defun write-prior-draw-rel-if (condition true-branch false-branch)
+  (fmt "if (~a) {" (expr->string condition))
+  (indent
+    (write-prior-draw-rel true-branch))
+  (fmt "}")
+  (when (not (is-relation-skip false-branch))
+    (fmt "else {")
+    (indent
+      (write-prior-draw-rel false-branch))
+    (fmt "}")))
+
+(defun write-prior-draw-rel-loop (var lo hi body)
+  (let ((var-str (variable->string var))
+	(lo-str (expr->string lo))
+	(term-str (expr->string (expr-call '.<= (expr-var var) hi))))
+    (fmt "for (int ~a = ~a; ~a; ++~a) {"
+	 var-str lo-str term-str var-str)
+    (indent
+      (write-prior-draw-rel body))
+    (fmt "}")))
+
+(defun write-undefine-all-vars (var-decls)
+  (fmt "private void UndefineAllVars() {")
+  (indent
+    (dolist (d var-decls)
+      (match-adt1 (decl var typ) d
+        (adt-case vtype typ
+	  ((scalar stype)
+	   (write-undefine-scalar-var var stype))
+	  ((array elem-type dims)
+	   (write-undefine-array-var var elem-type dims))))))
+  (fmt "}"))
+
+(defun write-undefine-scalar-var (var stype)
+  (let ((btyp (base-type stype)))
+    (let ((vname (variable->string var))
+	  (val (undefined-val btyp)))
+      (fmt "~a = ~a;" vname val))))
+
+(defun undefined-val (base-type)
+  (case base-type
+	('integer "BMC.InvalidInteger")
+	('realxn "Double.NaN")
+	(otherwise
+	   (error "Unimplemented case in undefined-val: ~a" base-type))))
+
+(defun write-undefine-array-var (var elem-type dims)
+  (let* ((used-vars (symbols-in-expr-list dims))
+	 (idx-vars (n-symbols-not-in (length dims) used-vars))
+	 (val (undefined-val (base-type elem-type)))
+	 (lhs (make-rellhs-array-elt
+	        :var var :indices (mapcar #'expr-var idx-vars)))
+	 (lhs-s (crellhs->string lhs)))
+    (labels ((f (iv-list dim-list)
+	       (if (null dim-list)
+		 (fmt "~a = ~a;" lhs-s val)
+		 (let* ((iv (first iv-list))
+			(iv-s (variable->string iv))
+			(term-s (termination-test-string iv (car dim-list))))
+		   (fmt "for (int ~a = 1; ~a; ++~a) {" iv-s term-s iv-s)
+		   (indent (f (rest iv-list) (rest dim-list)))
+		   (fmt "}")))))
+      (f idx-vars dims))))
+
+(defparameter *stoch-vars* nil)
+
+(defun stochastic-vars (rels)
+  (let ((*stoch-vars* '()))
+     (mapc #'stochastic-vars-rel rels)
+     (reverse *stoch-vars*)))
+
+(defun stochastic-vars-rel (rel)
+  (adt-case relation rel
+    ((stochastic lhs rhs)
+     (adt-case rellhs lhs
+       ((simple var) (pushnew var *stoch-vars*))
+       ((array-elt var indices) (pushnew var *stoch-vars*))
+       ((array-slice var indices) (pushnew var *stoch-vars*))))
+    ((block members)
+     (mapc #'stochastic-vars-rel members))
+    ((if condition true-branch false-branch)
+     (stochastic-vars-rel true-branch)
+     (stochastic-vars-rel false-branch))
+    ((loop var lo hi body)
+     (stochastic-vars-rel body))
+    ((let var val body)
+     (stochastic-vars-rel body))
+    ((skip))))
+
+(defun rels->pdf (rels)
+  (expr-app '* (mapcar #'rel->pdf rels)))
+
+(defun rel->pdf (rel)
+  (adt-case relation rel
+    ((stochastic lhs rhs)
+     (rel-stoch->pdf lhs rhs))
+    ((block members)
+     (rels->pdf members))
+    ((if condition true-branch false-branch)
+     (expr-call
+       'if-then-else condition (rel->pdf true-branch) (rel->pdf false-branch)))
+    ((loop var lo hi body)
+     (make-expr-quantifier
+       :op 'qprod :lo lo :hi hi :var var :body (rel->pdf body)))
+    ((let var val body)
+     (make-expr-let
+       :var var :val val :body (rel->pdf body)))
+    ((skip)
+     (expr-lit 1))
+))
+
+(defun rel-stoch->pdf (lhs rhs)
+  (let ((lhs-expr (rellhs->expr lhs)))
+    (match-adt1 (distribution name args) rhs
+      (expr-app (density-name name)
+		 (cons lhs-expr args)))))
+
+(defun density-name (distr-name)
+  (compound-symbol distr-name 'density))
 
 #|
 (defun compile-to-csharp (csharp-name-space class-name mdl os)

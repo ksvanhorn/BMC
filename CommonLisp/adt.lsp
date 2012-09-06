@@ -1,9 +1,6 @@
 (in-package :adt)
 ; Algebraic data types
 
-(defun compound-symbol (x y)
-  (intern (format nil "~a-~a" x y)))
-
 (defun pred-name (x) (intern (format nil "IS-~a" x)))
 
 (defun field-decl (x) `(,x nil :read-only t))

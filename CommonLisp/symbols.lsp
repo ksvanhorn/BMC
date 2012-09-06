@@ -1,7 +1,7 @@
 (in-package :symbols)
 
 (defun is-fquant-symbol (s)
-  (member s '(qand .qand qor .qor qsum qprod)))
+  (member s '(qand .qand qor .qor qsum qprod qvec)))
 
 (defun is-const-symbol (s)
   (member s '(@-all true false)))
@@ -23,7 +23,7 @@
     .= .!= .< .<= .> .>= .is-symm-pd
     @ @-slice vec array-length num-dims
     + - * / ^ neg exp tanh sqrt
-    sum dot inv
+    sum dot inv if-then-else
     ddirch-density dcat-density dinterval-density
     dnorm-density dmvnorm-density dgamma-density dwishart-density))
 

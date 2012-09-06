@@ -1,6 +1,6 @@
-(use-package :model)
-(use-package :symbols)
-(use-package :testing-utilities)
+(defpackage :model-tests
+  (:use :cl :lisp-unit :model :expr :symbols :utils :testing-utilities))
+(in-package :model-tests)
 
 (define-test sexpr->decl-tests
   ;; sexpr->vtype
@@ -46,7 +46,7 @@
 		 (sexpr->distr '(dnorm mu sigma)))
   (assert-error 'error (sexpr->distr '(not-a-distribution mu sigma)))
 
-  ;; LHS of deterministic or stochastic relation
+  ;; LHS of stochastic relation
   (assert-equalp (make-rellhs-simple :var 'x)
 		 (sexpr->rellhs 'x))
   (assert-equalp
@@ -70,16 +70,17 @@
 
   ;; relations
   (assert-equalp
-    (make-relation-deterministic
-      :lhs (sexpr->rellhs 'x)
-      :rhs (sexpr->expr '(+ y z)))
-    (sexpr->rel '(<- x (+ y z))))
+    (make-relation-let
+      :var 'x
+      :val (sexpr->expr '(+ y z))
+      :body (sexpr->rel '(~ v (dnorm x 1))))
+    (sexpr->rel '(:let (x (+ y z)) (~ v (dnorm x 1)))))
 
   (assert-equalp
-    (make-relation-deterministic
+    (make-relation-stochastic
       :lhs (sexpr->rellhs '(@ x i))
-      :rhs (sexpr->expr '(+ y z)))
-    (sexpr->rel '(<- (@ x i) (+ y z))))
+      :rhs (sexpr->distr '(dnorm (+ y z) 2)))
+    (sexpr->rel '(~ (@ x i) (dnorm (+ y z) 2))))
 
   (assert-equalp
     (make-relation-stochastic
@@ -93,10 +94,10 @@
 
   (assert-equalp
     (make-relation-block
-      :members (list (sexpr->rel '(<- x (+ y 2)))
+      :members (list (sexpr->rel '(~ x (dnorm (+ y 2) 1)))
 		     (sexpr->rel '(~ (@ y i) (dnorm mu sigma)))))
     (sexpr->rel '(:block
-		   (<- x (+ y 2))
+		   (~ x (dnorm (+ y 2) 1))
 		   (~ (@ y i) (dnorm mu sigma)))))
 
   (assert-error 'error (sexpr->rel '(:block (+ x y))))
@@ -112,16 +113,16 @@
   (assert-equalp
    (make-relation-if
      :condition (sexpr->expr '(@ good i))
-     :true-branch (sexpr->rel '(<- (@ x i) 3))
+     :true-branch (sexpr->rel '(~ (@ x i) (dcat q)))
      :false-branch (sexpr->rel '(~ (@ y i) (dcat p))))
    (sexpr->rel '(:if (@ good i)
-		  (<- (@ x i) 3)
+		  (~ (@ x i) (dcat q))
 		  (~ (@ y i) (dcat p)))))
 
   (assert-error 'error (sexpr->rel '(:if (x .< y))))
-  (assert-error 'error (sexpr->rel '(:if (<- x y) (~ x (dnorm m s)))))
+  (assert-error 'error (sexpr->rel '(:if (~ x (dnorm 0 1)) (~ x (dnorm m s)))))
   (assert-error 'error
-    (sexpr->rel '(:if (.= (@ x) 3) (<- x y) (+ a b))))
+    (sexpr->rel '(:if (.= (@ z i) 3) (~ x (dnorm 0 1)) (+ a b))))
 
   (assert-equalp
     (make-relation-loop
@@ -131,13 +132,25 @@
       :body (sexpr->rel '(~ (@ x k) (dgamma a b))))
     (sexpr->rel '(:for k (m (+ n 2)) (~ (@ x k) (dgamma a b)))))
   (assert-error 'error
-    (sexpr->rel '(:for (@ x i) (m n) (<- y 3))))
+    (sexpr->rel '(:for (@ x i) (m n) (~ y (dnorm 0 3)))))
   (assert-error 'error
-    (sexpr->rel '(:for j (m) (<- (@ x j) 3))))
+    (sexpr->rel '(:for j (m) (~ (@ x j) (dnorm 3 1)))))
   (assert-error 'error
-    (sexpr->rel '(for j (m n p) (<- (@ x j) 3))))
+    (sexpr->rel '(for j (m n p) (~ (@ x j) (dnorm 0 3)))))
   (assert-error 'error
     (sexpr->rel '(for j (m n) (* j 3))))
+)
+
+(define-test rellhs->expr-tests
+  (assert-equalp
+    (sexpr->expr 'v)
+    (rellhs->expr (sexpr->rellhs 'v)))
+  (assert-equalp
+    (sexpr->expr '(@ v i j))
+    (rellhs->expr (sexpr->rellhs '(@ v i j))))
+  (assert-equalp
+    (sexpr->expr '(@ x (:range m n) i :all))
+    (rellhs->expr (sexpr->rellhs '(@ x (:range m n) i :all))))
 )
 
 (define-test sexpr->model-tests
@@ -164,7 +177,6 @@
 		            (:if (= n 100)
 			      (~ z (dmvnorm mu Sigma))
 		              (~ z (dwishart nu V)))))))
-  ;; TODO: Add tests that verify error-checking
 )
 
 (define-test pp-decl-tests
@@ -191,23 +203,26 @@
 		(distr->string (sexpr->distr '(dnorm (+ |mu| |d|) |sigma|))))
 
   ;; LHS of relation
-  (assert-equal "x" (rellhs->string (sexpr->rellhs '|x|)))
-  (assert-equal "x[i]" (rellhs->string (sexpr->rellhs '(@ |x| |i|))))
+  (assert-equal "x" (model::rellhs->string (sexpr->rellhs '|x|)))
+  (assert-equal "x[i]" (model::rellhs->string (sexpr->rellhs '(@ |x| |i|))))
   (assert-equal "y[i, 1 : n, ]"
-		(rellhs->string
+		(model::rellhs->string
 		  (sexpr->rellhs '(@ |y| |i| (:range 1 |n|) :all))))
   (assert-equal "y[i + 2, m + 1 : n - 3]"
-		(rellhs->string
+		(model::rellhs->string
 		  (sexpr->rellhs
 		    '(@ |y| (+ |i| 2) (:range (+ |m| 1) (- |n| 3))))))
 
-  (assert-equal "x <- y + z
-"
-		(ppstr (pp-rel (sexpr->rel '(<- |x| (+ |y| |z|))))))
+  (assert-equal (strcat-lines
+		  "let x = y + z in"
+		  "    ind ~ DCAT(p)")
+		(ppstr (pp-rel (sexpr->rel '(:let (|x| (+ |y| |z|))
+					      (~ |ind| (dcat |p|)))))))
 
-  (assert-equal "x[i] <- y + z
+  (assert-equal "x[i] ~ DNORM(y + z, 1)
 "
-		(ppstr (pp-rel (sexpr->rel '(<- (@ |x| |i|) (+ |y| |z|))))))
+		(ppstr (pp-rel (sexpr->rel '(~ (@ |x| |i|)
+					       (dnorm (+ |y| |z|) 1))))))
 
   (assert-equal "y ~ DGAMMA(alpha, beta)
 "
@@ -215,11 +230,14 @@
 
   (assert-equal "" (ppstr (pp-rel (sexpr->rel '(:block)))))
 
-  (assert-equal (format nil "    X <- Y + 2~%    Y[i] ~~ DNORM(MU, SIGMA)~%")
-		(ppstr (pp-rel (sexpr->rel '(:block
-					      (<- x (+ y 2))
-					      (~ (@ y |i|) (dnorm mu sigma)))))
-		       :indent-level 1))
+  (assert-equal (strcat-lines "    X ~ DGAMMA(Y + 2, 1)"
+			      "    Y[i] ~ DNORM(MU, SIGMA)")
+		(ppstr
+		  (pp-rel
+		    (sexpr->rel '(:block
+				   (~ x (dgamma (+ y 2) 1))
+				   (~ (@ y |i|) (dnorm mu sigma)))))
+		  :indent-level 1))
 
   (assert-equal
 "if (X[i] .= 1) {
@@ -231,14 +249,14 @@
 
   (assert-equal
 "if (good[i]) {
-    x[i] <- 3
+    x[i] ~ DCAT(q)
 }
 else {
     y[i] ~ DCAT(p)
 }
 "
     (ppstr (pp-rel (sexpr->rel '(:if (@ |good| |i|)
-				  (<- (@ |x| |i|) 3)
+				  (~ (@ |x| |i|) (dcat |q|))
 				  (~ (@ |y| |i|) (dcat |p|)))))))
 
   (assert-equal
@@ -294,5 +312,40 @@ model {
       :indent-amount 2))
 )
 
-; TODO: write and test a function that verifies that dimensions of a
-;   variable only depend on variables preceding it.
+(define-test model-error-check-tests
+  (assert-equal
+    '(c n e m k chi z)
+    (model::used-before-declared
+      (model::raw-sexpr->model
+        '(:model
+	  (:args (a (integer (+ c 2)))
+		 (b (real n))
+		 (n integerp0))
+	  (:reqs (<= 3 e)
+		 (= 1 (qsum i ((+ m 1) (- k 1)) (@ chi i))))
+	  (:vars (c realp)
+		 (d (integer n (@ z 1)))
+		 (e integer)
+		 (i integer)
+		 (m integer)
+		 (k integer)
+		 (x (real n n))
+		 (chi (integer 5))
+		 (z (integer 3)))
+	  (:body)))))
+
+  (assert-equal
+    '(n m)
+    (model::vars-used-in-dims
+      (model::raw-sexpr->model
+        '(:model
+	   (:args)
+	   (:reqs)
+	   (:vars (n integer)
+		  (m integer)
+		  (k integer)
+		  (x (real n))
+		  (y (real 3 m)))))))
+)
+
+;; TODO: Add tests that verify error-checking (check-model)

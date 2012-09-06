@@ -1,4 +1,6 @@
-(use-package :adt)
+(defpackage :adt-tests
+  (:use :cl :lisp-unit :adt))
+(in-package :adt-tests)
 
 (define-test adt-expansion-tests
   (assert-expands 

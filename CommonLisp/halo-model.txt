@@ -28,30 +28,21 @@
     (< (- nvars 2) dof_Sigma_x_form)
     (is-symm-pd inverse_scale_Sigma_x_form))
   (:vars
-    (mu_tls (real 2))
-    (Sigma_tls (real 2 2))
     (nu (real 3))
     (tls (real nresp 2))
-    (tau (real nresp))
-    (scale (realp nresp))
     (v (integer nresp nvars))
-    (c (real nresp (- nlevels 1)))
     (x (real nresp nvars))
     (segment (integerp nresp))
     (mu_y_form real)
-    (sigma_y_form realp)
     (lambda_y_form realp)
     (beta (real (- nvars 1)))
     (mu_x_form (real (- nvars 1)))
-    (Sigma_x_form (real (- nvars 1) (- nvars 1)))
     (Lambda_x_form (real (- nvars 1) (- nvars 1)))
     (ksi (real nresp))
     (mu_x_halo (real nvars))
     (gamma (real nvars))
-    (sigma_x_halo (realp nvars))
     (lambda_x_halo (realp nvars))
     (mu_x_garb (real nvars))
-    (sigma_x_garb (realp nvars))
     (lambda_x_garb (realp nvars))
     (p_segment (realp 3)))
   (:body
@@ -62,10 +53,8 @@
 
     ; formers
     (~ lambda_y_form (dgamma alpha_lambda_y_form beta_lambda_y_form))
-    (<- sigma_y_form (/ 1 (sqrt lambda_y_form)))
     (~ mu_y_form (dnorm 0 sigma_mu_y_form))
     (~ Lambda_x_form (dwishart dof_Sigma_x_form inverse_scale_Sigma_x_form))
-    (<- Sigma_x_form (inv Lambda_x_form))	
     (:for j (1 (- nvars 1))
       (:block
         (~ (@ beta j) (dnorm 0 sigma_beta))
@@ -74,10 +63,10 @@
       (:if (= 1 (@ segment i))
         (:block
           (~ (@ x i (:range 2 nvars))
-             (dmvnorm mu_x_form Sigma_x_form))
-          (~ (@ x i 1)
-             (dnorm (+ mu_y_form (dot (@ x i (:range 2 nvars)) beta))
-                    sigma_y_form)))))
+             (dmvnorm mu_x_form (inv Lambda_x_form)))
+	  (:let (sigma (/ 1 (sqrt lambda_y_form)))
+          (:let (mu (+ mu_y_form (dot (@ x i (:range 2 nvars)) beta)))
+            (~ (@ x i 1) (dnorm mu sigma)))))))
 
     ; haloers
     (:for j (1 nvars)
@@ -85,51 +74,42 @@
         (~ (@ gamma j) (dnorm 0 sigma_gamma))
         (~ (@ mu_x_halo j)(dnorm 0 (@ sigma_mu_x_halo j)))
         (~ (@ lambda_x_halo j)
-           (dgamma alpha_sigma_x_halo beta_sigma_x_halo))
-        (<- (@ sigma_x_halo j) (/ 1 (sqrt (@ lambda_x_halo j))))))
+           (dgamma alpha_sigma_x_halo beta_sigma_x_halo))))
     (:for i (1 nresp)
       (:if (= 2 (@ segment i))
         (:block
           (~ (@ ksi i) (dnorm 0 1))
           (:for j (1 nvars)
-            (:block
-              (~ (@ x i j)
-              (dnorm (+ (@ mu_x_halo j) (* (@ gamma j) (@ ksi i)))
-                     (@ sigma_x_halo j))))))))
+            (:let (sigma (/ 1 (sqrt (@ lambda_x_halo j))))
+	    (:let (mu (+ (@ mu_x_halo j) (* (@ gamma j) (@ ksi i))))
+              (~ (@ x i j) (dnorm mu sigma))))))))
 
     ; garbage
     (:for j (1 nvars)
       (:block
         (~ (@ mu_x_garb j) (dnorm 0 (@ sigma_mu_x_garb j)))
         (~ (@ lambda_x_garb j)
-           (dgamma alpha_lambda_x_garb beta_lambda_x_garb))
-        (<- (@ sigma_x_garb j) (/ 1 (sqrt (@ lambda_x_garb j))))))
+           (dgamma alpha_lambda_x_garb beta_lambda_x_garb))))
     (:for i (1 nresp)
       (:if (= 3 (@ segment i))
         (:for j (1 nvars)
-          (:block
-            (~ (@ x i j)
-            (dnorm (@ mu_x_garb j) (@ sigma_x_garb j)))))))
+          (:let (sigma (/ 1 (sqrt (@ lambda_x_garb j))))
+            (~ (@ x i j) (dnorm (@ mu_x_garb j) sigma))))))
 
     ; scale usage
     (:for h (1 3)
       (~ (@ nu h) (dnorm (@ mu_nu h) (@ sigma_nu h))))
-    (<- (@ Sigma_tls 1 1) (exp (@ nu 1)))
-    (<- (@ Sigma_tls 2 2) (exp (@ nu 2)))
-    (<- (@ Sigma_tls 1 2)
-        (* (exp (/ (+ (@ nu 1) (@ nu 2)) 2)) (tanh (@ nu 3))))
-    (<- (@ Sigma_tls 2 1) (@ Sigma_tls 1 2))
-    (<- mu_tls (vec 0 (neg (/ (@ Sigma_tls 2 2) 2))))
-    (:for i (1 nresp)
-      (:block
-        (~ (@ tls i :all) (dmvnorm mu_tls Sigma_tls))
-        (<- (@ tau i) (@ tls i 1))
-        (<- (@ scale i) (exp (@ tls i 2)))
-        (:for k (1 (- nlevels 1))
-	  (<- (@ c i k) (/ (- (@ cp k) (@ tau i)) (@ scale i))))
-        (:for j (1 nvars)
-          (~ (@ v i j) (dinterval (@ x i j) (@ c i :all))))))))
-
-
-
+    (:let (Sigma_1_2 (* (exp (/ (+ (@ nu 1) (@ nu 2)) 2))
+	                (tanh (@ nu 3))))
+    (:let (Sigma (vec (vec (exp (@ nu 1)) Sigma_1_2)
+	              (vec Sigma_1_2 (exp (@ nu 2)))))
+    (:let (mu (vec 0 (neg (/ (@ Sigma 2 2) 2))))
+      (:for i (1 nresp)
+        (:block
+          (~ (@ tls i :all) (dmvnorm mu Sigma))
+	  (:let (tau (@ tls i 1))
+          (:let (scale (exp (@ tls i 2)))
+          (:let (c (qvec k (1 (- nlevels 1)) (/ (- (@ cp k) tau) scale)))
+	    (:for j (1 nvars)
+              (~ (@ v i j) (dinterval (@ x i j) c)))))))))))))
 

@@ -1,4 +1,6 @@
-(use-package :utils)
+(defpackage :utils-tests
+  (:use :cl :lisp-unit :utils))
+(in-package :utils-tests)
 
 (define-test utils-tests
   (assert-true (starts-with 'a '(a)))
@@ -43,5 +45,11 @@ ind-f
   (assert-equal '(3 4 5) (int-range 3 5))
   (assert-equal '(5) (int-range 5 5))
   (assert-equal '() (int-range 4 3))
-	
+
+  (assert-equal "abeesead" (strcat "a" "bee" "sea" "d"))
+  (assert-equal "foo
+bar
+baz
+"
+    (strcat-lines "foo" "bar" "baz"))
 )

@@ -1,6 +1,6 @@
-(use-package :expr)
-(use-package :symbols)
-(use-package :utils)
+(defpackage :expr-tests
+  (:use :cl :lisp-unit :expr :symbols :utils))
+(in-package :expr-tests)
 
 (define-test sexpr->expr-tests
   (assert-equalp (make-expr-literal :value 1)
@@ -39,6 +39,21 @@
                                  :args (list (make-expr-literal :value 1)
                                              (make-expr-variable :symbol 'k)))))
                  (sexpr->expr '(@ v j :all (:range 1 k))))
+
+  (assert-equalp
+    (make-expr-let
+      :var 'x
+      :val (make-expr-apply
+	     :fct '+
+	     :args (list (make-expr-variable :symbol 'v)
+			 (make-expr-literal :value 1)))
+      :body (make-expr-apply
+	      :fct '*
+	      :args (list (make-expr-variable :symbol 'x)
+			   (make-expr-variable :symbol 'x))))
+    (sexpr->expr
+      '(:let (x (+ v 1))
+	 (* x x))))
 
   ;; recursive structure
 
@@ -106,6 +121,13 @@
   (assert-error 'error (sexpr->expr '(qsum j (1 n 3) j)))
   (assert-error 'error (sexpr->expr '(@)))
   (assert-error 'error (sexpr->expr '(@ x)))
+  (assert-error 'error (sexpr->expr '(:let)))
+  (assert-error 'error (sexpr->expr '(:let v)))
+  (assert-error 'error (sexpr->expr '(:let (v x))))
+  (assert-error 'error (sexpr->expr '(:let (v) (+ v 1))))
+  (assert-error 'error (sexpr->expr '(:let (v x 2) (+ v 1))))
+  (assert-error 'error (sexpr->expr '(:let ((+ x 2) y) (+ x y))))
+  (assert-error 'error (sexpr->expr '(:let (true 12) (* true true))))
 )
 
 (define-test expr->string-tests
@@ -160,6 +182,20 @@
 		    :fct '@
 		    :args (list (make-expr-variable :symbol '|nu|)
 				(make-expr-literal :value 1)))))))
+
+  (assert-equal
+    "(let y = v * v in x + y)"
+    (expr->string
+      (make-expr-let
+        :var '|y|
+	:val (make-expr-apply
+	       :fct '*
+	       :args (list (make-expr-variable :symbol '|v|)
+			   (make-expr-variable :symbol '|v|)))
+	:body (make-expr-apply
+	        :fct '+
+		:args (list (make-expr-variable :symbol '|x|)
+			    (make-expr-variable :symbol '|y|))))))
 
   (assert-equal
     "QSUM(j, v - 2 : 4 * w, j)"

@@ -1,4 +1,6 @@
-(use-package :compile)
+(defpackage :compile-tests
+  (:use :cl :lisp-unit :compile :model :expr :symbols :utils :testing-utilities))
+(in-package :compile-tests)
 
 (defun sexpr->decls (decls) (mapcar #'model:sexpr->decl decls))
 (defun sexpr->exprs (se) (mapcar #'sexpr->expr se))
@@ -22,15 +24,21 @@
 	       false)))))
 
   (assert-equal
-    '(* + .< .AND .IS-INTEGER < @ A AA ALPHA B BB BOOLEAN DNORM EXP FOO I II
-      INTEGER K M N NMAX NMIN REAL REALP TRUE UPPER-X V W X Z ZZ)
+    '(* + a c x y z ^)
+    (sort-unique
+      (compile::symbols-in-expr
+        (sexpr->expr '(+ a (:let (x (* y z)) (^ x c)))))))
+
+  (assert-equal
+    '(* + .< .AND .IS-INTEGER < @ A AA ALPHA B BB BOOLEAN DGAMMA DNORM
+      EXP FOO I II INTEGER K M N REAL REALP TRUE UPPER-X V W X Z ZZ)
     (sort-unique
       (compile::symbols-in-model
         (sexpr->model '(:model
 			 (:args (x real)
 				(n integer))
-			 (:reqs (< n nmax)
-				(< nmin n))
+			 (:reqs (< n 10)
+				(< 0 n))
 			 (:vars (v (real n))
 				(w (realp n))
 				(z integer)
@@ -39,13 +47,13 @@
 			   (:for i (m k)
 			     (:block
 			       (~ (@ v i) (dnorm a b))
-			       (<- (@ w i) (exp (@ v i)))))
-			   (:for ii (1 1) (<- alpha true))
+			       (~ (@ w i) (dnorm 0 (exp (@ v i))))))
+			   (:for ii (1 1) (:if true (~ alpha (dnorm 0 1))))
 			   (:if (and (< x upper-x) (is-integer (@ v 1)))
-			      (<- z (+ zz 8)))
+			      (~ z (dgamma 1 (+ zz 8))))
 			   (:if (< 0 foo)
-			     (<- z (+ 3 aa))
-			     (<- z (* 4 bb)))))))))
+			     (~ z (dnorm (+ 3 aa) 1))
+			     (~ z (dgamma (* 4 bb) 1)))))))))
 
 
   (assert-equal
@@ -196,13 +204,25 @@
 (defun cexpr->string (e) (compile::expr->string e))
 
 (define-test compile-expression-test
+  (assert-equal "x" (cexpr->string (sexpr->expr '|x|)))
+  (assert-equal "5" (cexpr->string (sexpr->expr '5)))
+  (assert-equal "-3.25e+0" (cexpr->string (sexpr->expr -3.25)))
+  (assert-equal "true" (cexpr->string (sexpr->expr 'true)))
+  (assert-equal "false" (cexpr->string (sexpr->expr 'false)))
+
+  (assert-equal "x[i - 1]"
+		(cexpr->string (sexpr->expr '(@ |x| |i|))))
+  (assert-equal "y[i + 2 - 1, j - 1 - 1]"
+		(cexpr->string (sexpr->expr '(@ |y| (+ |i| 2) (- |j| 1)))))
+  (assert-equal
+    "BMC.ArraySlice(x, i - 1, BMC.Range(lo - 1, hi), BMC.FullRange)"
+    (cexpr->string
+     (sexpr->expr '(@ |x| |i| (:range |lo| |hi|) :all))))
+
   (assert-equal "Math.Sqrt(x)"
 		(cexpr->string (sexpr->expr '(sqrt |x|))))
   (assert-equal "BMC.MatrixInverse(x)"
 		(cexpr->string (sexpr->expr '(inv |x|))))
-  (assert-equal "BMC.ArraySlice(x, i, BMC.Range(lo, hi), BMC.FullRange)"
-		(cexpr->string
-		  (sexpr->expr '(@ |x| |i| (:range |lo| |hi|) :all))))
   (assert-equal "Math.Exp(x / 2)"
 		(cexpr->string (sexpr->expr '(exp (/ |x| 2)))))
   (assert-equal "Math.Tanh(y)"
@@ -215,10 +235,10 @@
 		(cexpr->string (sexpr->expr '(- |x| |y|))))
   (assert-equal "-(X) * Y + -(Z)"
 		(cexpr->string (sexpr->expr '(+ (* (neg x) y) (neg z)))))
+;  (assert-equal "(let x = y ^ 2 in c * x)"
+;		(cexpr->string (sexpr->expr '(:let (|x| (^ |y| 2))
+;					       (* |c| |x|)))))
 )
-
-(defun strcat-lines (&rest args)
-  (format nil "~{~a~%~}" args))
 
 (define-test compile-ljd-tests
   (assert-equal
@@ -241,13 +261,13 @@ third line
 	     (sexpr->rel '(~ |x| (dcat |p|))))))
 
   (assert-equal
-    "ljd += BMC.LogDensityNorm(x[i], MU, SIGMA);
+    "ljd += BMC.LogDensityNorm(x[i - 1], MU, SIGMA);
 "
     (ppstr (compile::write-ljd-accum-rel "ljd"
 	     (sexpr->rel '(~ (@ |x| |i|) (dnorm mu sigma))))))
 
   (assert-equal
-    "ll += BMC.LogDensityGamma(x[i], A * C, B / D);
+    "ll += BMC.LogDensityGamma(x[i - 1], A * C, B / D);
 "
     (ppstr (compile::write-ljd-accum-rel "ll"
 	     (sexpr->rel '(~ (@ |x| |i|) (dgamma (* a c) (/ b d)))))))
@@ -271,32 +291,39 @@ third line
 	      (sexpr->rel '(~ |v| (dinterval |x| |c|))))))
 
   (assert-equal
-    "sigma = 1 / Math.Sqrt(lambda);
-"
+    (strcat-lines
+      "{"
+      "    var sigma = 1 / Math.Sqrt(lambda);"
+      "    lp += BMC.LogDensityNorm(X, 0, sigma);"
+      "}")
     (ppstr (compile::write-ljd-accum-rel "lp"
-	    (sexpr->rel '(<- |sigma| (/ 1 (sqrt |lambda|)))))))
+	    (sexpr->rel '(:let (|sigma| (/ 1 (sqrt |lambda|)))
+			   (~ x (dnorm 0 |sigma|)))))))
 
   (assert-equal
     (strcat-lines "lp += BMC.LogDensityCat(Y, P);"
-		  "X = Y;")
+		  "lp += BMC.LogDensityNorm(X, 0, SIGMA[Y - 1]);")
     (ppstr (compile::write-ljd-accum-rel "lp"
-	     (sexpr->rel '(:block (~ y (dcat p)) (<- x y))))))
+	     (sexpr->rel '(:block
+			    (~ y (dcat p))
+			    (~ x (dnorm 0 (@ sigma y))))))))
 
   (assert-equal
     (strcat-lines
-	    "if (X[I] == 1) {"
-	    "    acc += BMC.LogDensityNorm(Y[I], A, B);"
+	    "if (X[I - 1] == 1) {"
+	    "    acc += BMC.LogDensityNorm(Y[I - 1], A, B);"
             "}")
     (ppstr (compile::write-ljd-accum-rel "acc"
-	     (sexpr->rel '(:if (= (@ x i) 1) (~ (@ y i) (dnorm a b)))))))
+	     (sexpr->rel '(:if (= (@ x i) 1)
+			    (~ (@ y i) (dnorm a b)))))))
 
   (assert-equal
     (strcat-lines
-	    "if (V[I] < 4) {"
-	    "    acc += BMC.LogDensityNorm(Z[I], M, S);"
+	    "if (V[I - 1] < 4) {"
+	    "    acc += BMC.LogDensityNorm(Z[I - 1], M, S);"
             "}"
 	    "else {"
-	    "    acc += BMC.LogDensityCat(W[I], P);"
+	    "    acc += BMC.LogDensityCat(W[I - 1], P);"
 	    "}")
     (ppstr (compile::write-ljd-accum-rel "acc"
 	     (sexpr->rel '(:if (< (@ v i) 4)
@@ -305,12 +332,12 @@ third line
 
   (assert-equal
     (strcat-lines
-      "for (int i = M - 1; i <= (N + 2); ++i) {"
-      "    X[i] = Math.Sqrt(Y[i]);"
+      "for (int i = M - 1; i <= N + 2; ++i) {"
+      "    lp += BMC.LogDensityGamma(X[i - 1], Math.Sqrt(Y[i - 1]), 1);"
       "}")
     (ppstr (compile::write-ljd-accum-rel "lp"
 	     (sexpr->rel '(:for |i| ((- m 1) (+ n 2))
-                            (<- (@ x |i|) (sqrt (@ y |i|))))))))
+                            (~ (@ x |i|) (dgamma (sqrt (@ y |i|)) 1)))))))
 
   (assert-equal
     ""
@@ -413,17 +440,19 @@ public DMatrix b;
 {
     double ljd1 = 0.0;
     ljd1 += BMC.LogDensityDirichlet(P, ALPHA_P);
-    for (int i = 1; i <= (N); ++i) {
-        ljd1 += BMC.LogDensityCat(X[i], P);
+    for (int i = 1; i <= N; ++i) {
+        ljd1 += BMC.LogDensityCat(X[i - 1], P);
     }
     ljd1 += BMC.LogDensityGamma(LAMBDA, A, B);
-    SIGMA = 1 / Math.Sqrt(LAMBDA);
-    for (int i = 1; i <= (N); ++i) {
-        if (X[i] == 1) {
-            ljd1 += BMC.LogDensityNorm(Y[i], 0, SIGMA);
-        }
-        else {
-            ljd1 += BMC.LogDensityGamma(Y[i], B, A);
+    {
+        var SIGMA = 1 / Math.Sqrt(LAMBDA);
+        for (int i = 1; i <= N; ++i) {
+            if (X[i - 1] == 1) {
+                ljd1 += BMC.LogDensityNorm(Y[i - 1], 0, SIGMA);
+            }
+            else {
+                ljd1 += BMC.LogDensityGamma(Y[i - 1], B, A);
+            }
         }
     }
     return (Double.IsNaN(ljd1) ? Double.NegativeInfinity : ljd1);
@@ -431,7 +460,7 @@ public DMatrix b;
 "
     (ppstr
       (compile::write-csharp-log-joint-density
-        (sexpr->model
+        (model::raw-sexpr->model
 	 '(:model
 	   (:args (a realp)
 		  (b realp)
@@ -448,20 +477,222 @@ public DMatrix b;
 	     (:for |i| (1 n)
 	       (~ (@ x |i|) (dcat p)))
 	     (~ lambda (dgamma a b))
-	     (<- sigma (/ 1 (sqrt lambda)))
-	     (:for |i| (1 n)
-	       (:if (= (@ x |i|) 1)
-		 (~ (@ y |i|) (dnorm 0 sigma))
-		 (~ (@ y |i|) (dgamma b a))))))))))
+	     (:let (sigma (/ 1 (sqrt lambda)))
+	       (:for |i| (1 n)
+	         (:if (= (@ x |i|) 1)
+		   (~ (@ y |i|) (dnorm 0 sigma))
+		   (~ (@ y |i|) (dgamma b a)))))))))))
 
 ; updating deterministic vars
 )
 
-; TODO!!!: test that indices in array expressions have 1 subtracted when
-;   expr->string called for generating C# code.
-; TODO: write code that verifies that args, vars not used before defined.
+(define-test prior-draw-tests
+  (assert-equal
+    "BMC.DrawDirichlet(p, alpha_p);
+"
+    (ppstr (compile::write-prior-draw-rel
+	    (sexpr->rel '(~ |p| (ddirch |alpha_p|))))))
+
+  (assert-equal
+    "x[i - 1] = BMC.DrawCat(p);
+"
+    (ppstr (compile::write-prior-draw-rel
+	     (sexpr->rel '(~ (@ |x| |i|) (dcat |p|))))))
+
+  (assert-equal
+    "Y[i - 1, j - 1] = BMC.DrawNorm(MU, SIGMA);
+"
+    (ppstr (compile::write-prior-draw-rel
+	     (sexpr->rel '(~ (@ y |i| |j|) (dnorm mu sigma))))))
+
+  (assert-equal
+    "X = BMC.DrawGamma(A * C, B / D);
+"
+    (ppstr (compile::write-prior-draw-rel
+	     (sexpr->rel '(~ x (dgamma (* a c) (/ b d)))))))
+   (assert-equal
+    "BMC.DrawMVNorm(V, MU, SIGMA);
+"
+    (ppstr (compile::write-prior-draw-rel
+	     (sexpr->rel '(~ v (dmvnorm mu sigma))))))
+
+
+  (assert-equal
+    "BMC.DrawWishart(Lambda, nu + 3, V);
+"
+    (ppstr (compile::write-prior-draw-rel
+	     (sexpr->rel '(~ |Lambda| (dwishart (+ |nu| 3) V))))))
+
+
+  (assert-equal
+    "v[j - 1] = BMC.DrawInterval(x, c);
+"
+    (ppstr (compile::write-prior-draw-rel
+	      (sexpr->rel '(~ (@ |v| |j|) (dinterval |x| |c|))))))
+
+  (assert-equal
+    (strcat-lines
+      "{"
+      "    var sigma = alpha / Math.Sqrt(lambda);"
+      "    x = BMC.DrawNorm(0, sigma);"
+      "}")
+    (ppstr (compile::write-prior-draw-rel
+	     (sexpr->rel '(:let (|sigma| (/ |alpha| (sqrt |lambda|)))
+			    (~ |x| (dnorm 0 |sigma|)))))))
+
+  (assert-equal
+    (strcat-lines "Y = BMC.DrawCat(PVEC);"
+		  "X = BMC.DrawGamma(1, 1);")
+    (ppstr (compile::write-prior-draw-rel
+	     (sexpr->rel '(:block (~ y (dcat pvec)) (~ x (dgamma 1 1)))))))
+
+  (assert-equal
+    (strcat-lines
+	    "if (X[I - 1] == 1) {"
+	    "    Z = BMC.DrawNorm(A, B);"
+            "}")
+    (ppstr (compile::write-prior-draw-rel
+	     (sexpr->rel '(:if (= (@ x i) 1) (~ z (dnorm a b)))))))
+ 
+  (assert-equal
+    (strcat-lines
+	    "if (V[I - 1] < 4) {"
+	    "    Z[I - 1] = BMC.DrawNorm(M, S);"
+            "}"
+	    "else {"
+	    "    W[I - 1] = BMC.DrawCat(Q);"
+	    "}")
+    (ppstr (compile::write-prior-draw-rel
+	     (sexpr->rel '(:if (< (@ v i) 4)
+			    (~ (@ z i) (dnorm m s))
+			    (~ (@ w i) (dcat q)))))))
+
+  (assert-equal
+    (strcat-lines
+      "for (int i = M - 1; i <= N + 2; ++i) {"
+      "    X[i - 1] = BMC.DrawNorm(0, Math.Sqrt(Y[i - 1]));"
+      "}")
+    (ppstr (compile::write-prior-draw-rel
+	     (sexpr->rel '(:for |i| ((- m 1) (+ n 2))
+                            (~ (@ x |i|) (dnorm 0 (sqrt (@ y |i|)))))))))
+
+  (assert-equal
+    ""
+    (ppstr (compile::write-prior-draw-rel (make-relation-skip))))
+
+  (assert-equal
+    (strcat-lines
+      "void Draw() {"
+      "    <body>"
+      "}")
+    (ppstr (compile::write-prior-draw (lambda () (fmt "<body>")))))
+)
+
+(define-test dag-check-tests
+  (assert-equal
+   (strcat-lines
+     "private void UndefineAllVars() {"
+     "    for (int i1 = 1; i1 <= N; ++i1) {"
+     "        for (int i2 = 1; i2 <= 7; ++i2) {"
+     "            Y[i1 - 1, i2 - 1] = Double.NaN;"
+     "        }"
+     "    }"
+     "    M = BMC.InvalidInteger;"
+     "    R = Double.NaN;"
+     "    for (int i1 = 1; i1 <= N + 1; ++i1) {"
+     "        Z[i1 - 1] = BMC.InvalidInteger;"
+     "    }"
+     "}")
+   (ppstr (compile::write-undefine-all-vars
+     (sexpr->decls
+       '((y (realp n 7))
+	 (m integer)
+	 (r real)
+	 (z (integerp0 (+ n 1))))))))
+  ; TODO: DAG check tests
+)
+
+(defun sexpr->rels (se-list) (mapcar #'sexpr->rel se-list))
+
+(define-test var-type-tests
+  (assert-equal
+    '(a d m e h k)
+    (compile::stochastic-vars
+      (sexpr->rels
+        '((~ a (dcat p))
+	  (:if (< a b)
+	    (:block
+	      (~ d (dnorm mu sigma))))
+	  (:let (x (+ a b))
+	    (~ m (dcat q)))
+	  (:if (< b c)
+	     (:block
+	       (~ e (dgamma alph beta)))
+	     (:block
+	       (~ h (dgamma 0.5 1.5))))
+	  (:for i1 ((+ c d) (* f g))
+	    (:block
+	      (~ (@ k i1) (dnorm h g))))))))
+
+)
+
+(define-test ljd-expr-tests
+  (assert-equalp
+    (sexpr->expr '(ddirch-density p alpha))
+    (compile::rel->pdf (sexpr->rel '(~ p (ddirch alpha)))))
+  (assert-equalp
+    (sexpr->expr '(dcat-density x p))
+    (compile::rel->pdf (sexpr->rel '(~ x (dcat p)))))
+  (assert-equalp
+    (sexpr->expr '(dnorm-density (@ y i) mu sigma))
+    (compile::rel->pdf (sexpr->rel '(~ (@ y i) (dnorm mu sigma)))))
+  (assert-equalp
+    (sexpr->expr '(dgamma-density (@ v i j) a b))
+    (compile::rel->pdf (sexpr->rel '(~ (@ v i j) (dgamma a b)))))
+  (assert-equalp
+    (sexpr->expr '(dmvnorm-density (@ x i :all (:range 1 k)) m s))
+    (compile::rel->pdf
+      (sexpr->rel
+        '(~ (@ x i :all (:range 1 k)) (dmvnorm m s)))))
+  (assert-equalp
+    (sexpr->expr '(dwishart-density (@ y i :all :all) nu V))
+    (compile::rel->pdf
+      (sexpr->rel
+        '(~ (@ y i :all :all) (dwishart nu V)))))
+  (assert-equalp
+    (sexpr->expr '(dinterval-density (@ s i) (@ x i) c))
+    (compile::rel->pdf
+      (sexpr->rel
+        '(~ (@ s i) (dinterval (@ x i) c)))))
+  (assert-equalp
+    (sexpr->expr '(* (dnorm-density x m s) (dnorm-density y mm ss)))
+    (compile::rel->pdf
+      (sexpr->rel
+        '(:block
+	   (~ x (dnorm m s))
+	   (~ y (dnorm mm ss))))))
+  (assert-equalp
+    (sexpr->expr '(qprod i (m n) (dnorm-density (@ x i) m s)))
+    (compile::rel->pdf
+      (sexpr->rel '(:for i (m n) (~ (@ x i) (dnorm m s))))))
+  (assert-equalp
+    (sexpr->expr '(if-then-else (< j k)
+				(dnorm-density x m s) (dgamma-density y a b)))
+    (compile::rel->pdf
+      (sexpr->rel '(:if (< j k) (~ x (dnorm m s)) (~ y (dgamma a b))))))
+  (assert-equalp
+    (sexpr->expr '(if-then-else (< 0 x) (dcat-density x p) 1))
+    (compile::rel->pdf (sexpr->rel '(:if (< 0 x) (~ x (dcat p))))))
+  (assert-equalp
+    (sexpr->expr '(:let (sigma (^ a 2)) (dnorm-density x 0 sigma)))
+    (compile::rel->pdf (sexpr->rel '(:let (sigma (^ a 2))
+				      (~ x (dnorm 0 sigma))))))
+  (assert-equalp
+    (expr-lit 1)
+    (compile::rel->pdf (make-relation-skip)))
+)
+
 ; TODO: write and test code to verify DAG
-; TODO: test to verify correct print options used in write-csharp-class
 ; TODO: test for case when model language name and C# name for function
 ;   are different, or where there is no C# operator corresponding to
 ;   a binary operator in the model language

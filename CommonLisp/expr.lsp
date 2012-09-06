@@ -5,7 +5,8 @@
   (const symbol)
   (variable symbol)
   (quantifier op lo hi var body)
-  (apply fct args))
+  (apply fct args)
+  (let var val body))
 
 (defun expr-call (fct-symbol &rest args)
   (expr-app fct-symbol args))
@@ -35,6 +36,8 @@
 	      (sexpr->expr-quantifier op args))
 	     ((eq '@ op)
 	      (sexpr->expr-array-app op args))
+	     ((eq ':let op)
+	      (sexpr->expr-let args))
 	     ((is-fct-symbol op)
 	      (make-expr-apply
 	        :fct (convert-function-symbol op)
@@ -43,6 +46,15 @@
 	      (error "Illegal symbol (~W) at beginning of expression" op)))))
     (t
      (error "Unrecognized expression type: ~W" x))))
+
+(defun sexpr->expr-let (args)
+  (destructuring-bind ((var val) body) args
+    (unless (is-variable-symbol var)
+      (error "Invalid variable symbol in ~W." (cons :let args)))
+    (make-expr-let
+      :var var
+      :val (sexpr->expr val)
+      :body (sexpr->expr body))))
 
 (defun sexpr->expr-quantifier (op args)
   (destructuring-bind (var (lo-x hi-x) body-x) args
@@ -98,7 +110,13 @@
     ((quantifier op lo hi var body)
      (qexpr->string op lo hi var body))
     ((apply fct args)
-     (aexpr->string fct args lprec rprec))))
+     (aexpr->string fct args lprec rprec))
+    ((let var val body)
+     (lexpr->string var val body))))
+
+(defun lexpr->string (var val body)
+  (format nil "(let ~a = ~a in ~a)"
+	  (variable->string var) (expr->string val) (expr->string body)))
 
 (defun literal->string (x)
   (cond ((integerp x) (format nil "~d" x))

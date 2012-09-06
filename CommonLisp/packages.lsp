@@ -32,10 +32,10 @@
     ;; functions
     :@ :@-slice :@-rng :@-idx :vec :array-length :num-dims
     :+ :- :* :/ :^ :neg :exp :tanh :sqrt
-    :sum :dot :inv
+    :sum :dot :inv :if-then-else
 
     ;; finite quantifiers
-    :qand :qor :qsum :qprod
+    :qand :qor :qsum :qprod :qvec
     :.qand :.qor
 
     ;; distributions
@@ -48,22 +48,22 @@
     :<- :~
     ))
 
-(defpackage :adt
-  (:use :cl)
-  (:export :defadt :defadt1 :adt-case :match-adt1))
-
 (defpackage :utils
   (:use :cl)
-  (:export :starts-with :assoc-lookup :zip :strcat :read-file :int-range
-	   :append-mapcar :fdebug
+  (:export :starts-with :assoc-lookup :zip :strcat :strcat-lines
+	   :read-file :int-range
+	   :append-mapcar :fdebug :compound-symbol
 	   :indent :fmt :*indent-level* :*indent-amount* :*fmt-ostream*))
+
+(defpackage :adt
+  (:use :cl :utils)
+  (:export :defadt :defadt1 :adt-case :match-adt1))
 
 (defpackage :expr
   (:use :cl :symbols :adt :utils)
   (:export
    :sexpr->expr :expr->string :is-scalar-index :is-slice-all :is-slice-range
-   :default-print-options :make-print-options :default-is-binop
-   :*print-options* :*convert-boolean-functions*
+   :*convert-boolean-functions*
    :expr-call :expr-app :expr-lit :expr-var
    :is-expr
    :is-expr-literal :make-expr-literal :expr-literal-value
@@ -72,7 +72,8 @@
    :is-expr-quantifier :make-expr-quantifier :expr-quantifier-op
    :expr-quantifier-lo :expr-quantifier-hi :expr-quantifier-var
    :expr-quantifier-body
-   :is-expr-apply :make-expr-apply :expr-apply-fct :expr-apply-args))
+   :is-expr-apply :make-expr-apply :expr-apply-fct :expr-apply-args
+   :is-expr-let :make-expr-let :expr-let-var :expr-let-val :expr-let-body))
 
 (defpackage :model
   (:use :cl :symbols :adt :utils :expr)
@@ -80,7 +81,7 @@
    :read-model :sexpr->model
    :sexpr->vtype :sexpr->decl :sexpr->decls :sexpr->distr
    :sexpr->rellhs :sexpr->rel
-   :vtype->string :distr->string :rellhs->string :pp-decl :pp-rel :pp-model
+   :vtype->string :distr->string :rellhs->expr :pp-decl :pp-rel :pp-model
 
    :is-model :make-model :model-args :model-reqs :model-vars :model-body
 
@@ -93,8 +94,6 @@
    :is-distribution :make-distribution :distribution-name :distribution-args
 
    :is-relation
-   :is-relation-deterministic :make-relation-deterministic
-   :relation-deterministic-lhs :relation-deterministic-rhs
    :is-relation-stochastic :make-relation-stochastic
    :relation-stochastic-lhs :relation-stochastic-rhs
    :is-relation-block :make-relation-block :relation-block-members
@@ -103,6 +102,8 @@
    :relation-if-true-branch :relation-if-false-branch
    :is-relation-loop :make-relation-loop :relation-loop-var
    :relation-loop-lo :relation-loop-hi :relation-loop-body
+   :is-relation-let :make-relation-let
+   :relation-let-var :relation-let-val :relation-let-body
    :is-relation-skip :make-relation-skip
 
    :is-rellhs
