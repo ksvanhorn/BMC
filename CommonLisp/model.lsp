@@ -258,7 +258,7 @@
 	       (undeclared-vars seen (vars-in-type typ) undeclared))
 	 (push var seen)))
     (dolist (e (model-reqs mdl))
-      (setf undeclared (undeclared-vars seen (vars-in-expr e) undeclared)))
+      (setf undeclared (undeclared-vars seen (free-vars-in-expr e) undeclared)))
     (dolist (d (model-vars mdl))
       (match-adt1 (decl var typ) d
 	(setf undeclared
@@ -276,20 +276,7 @@
   (adt-case vtype typ
     ((scalar stype) '())
     ((array elem-type dims)
-     (append-mapcar #'vars-in-expr dims))))
-
-(defun vars-in-expr (e)
-  (adt-case expr e
-    ((literal value) '())
-    ((const symbol) '())
-    ((variable symbol) (list symbol))
-    ((quantifier op lo hi var body)
-     (append (vars-in-expr lo) (vars-in-expr hi)
-	     (remove var (vars-in-expr body))))
-    ((let var val body)
-     (append (vars-in-expr val) (remove var (vars-in-expr body))))
-    ((apply fct args)
-     (append-mapcar #'vars-in-expr args))))
+     (append-mapcar #'free-vars-in-expr dims))))
 
 (defun vars-used-in-dims (mdl)
   (let* ((vars (mapcar #'decl-var (model-vars mdl)))

@@ -20,6 +20,19 @@
 (defun expr-var (v)
   (make-expr-variable :symbol v))
 
+(defun free-vars-in-expr (e)
+  (adt-case expr e
+    ((literal value) '())
+    ((const symbol) '())
+    ((variable symbol) (list symbol))
+    ((quantifier op lo hi var body)
+     (append (free-vars-in-expr lo) (free-vars-in-expr hi)
+	     (remove var (free-vars-in-expr body))))
+    ((let var val body)
+     (append (free-vars-in-expr val) (remove var (free-vars-in-expr body))))
+    ((apply fct args)
+     (append-mapcar #'free-vars-in-expr args))))
+
 ;;; Converting s-expressions to exprs
 
 (defun sexpr->expr (x)

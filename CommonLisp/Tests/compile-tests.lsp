@@ -665,14 +665,14 @@ public DMatrix b;
       (sexpr->rel
         '(~ (@ s i) (dinterval (@ x i) c)))))
   (assert-equalp
-    (sexpr->expr '(* (dnorm-density x m s) (dnorm-density y mm ss)))
+    (sexpr->expr '(*! (dnorm-density x m s) (dnorm-density y mm ss)))
     (compile::rel->pdf
       (sexpr->rel
         '(:block
 	   (~ x (dnorm m s))
 	   (~ y (dnorm mm ss))))))
   (assert-equalp
-    (sexpr->expr '(qprod i (m n) (dnorm-density (@ x i) m s)))
+    (sexpr->expr '(qprod! i (m n) (dnorm-density (@ x i) m s)))
     (compile::rel->pdf
       (sexpr->rel '(:for i (m n) (~ (@ x i) (dnorm m s))))))
   (assert-equalp

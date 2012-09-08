@@ -31,11 +31,11 @@
     
     ;; functions
     :@ :@-slice :@-rng :@-idx :vec :array-length :num-dims
-    :+ :- :* :/ :^ :neg :exp :tanh :sqrt
+    :+ :- :* :*! :/ :^ :neg :exp :tanh :sqrt
     :sum :dot :inv :if-then-else
 
     ;; finite quantifiers
-    :qand :qor :qsum :qprod :qvec
+    :qand :qor :qsum :qprod :qprod! :qvec
     :.qand :.qor
 
     ;; distributions
@@ -53,6 +53,7 @@
   (:export :starts-with :assoc-lookup :zip :strcat :strcat-lines
 	   :read-file :int-range
 	   :append-mapcar :fdebug :compound-symbol
+	   :n-symbols-not-in :symbol-not-in
 	   :indent :fmt :*indent-level* :*indent-amount* :*fmt-ostream*))
 
 (defpackage :adt
@@ -62,6 +63,7 @@
 (defpackage :expr
   (:use :cl :symbols :adt :utils)
   (:export
+   :free-vars-in-expr
    :sexpr->expr :expr->string :is-scalar-index :is-slice-all :is-slice-range
    :*convert-boolean-functions*
    :expr-call :expr-app :expr-lit :expr-var
@@ -120,7 +122,12 @@
    :array-slice-index-range-lo :array-slice-index-range-hi
    :is-array-slice-index-all :make-array-slice-index-all))
 
+(defpackage :prove
+  (:use :cl :adt :expr :utils)
+  (:export))
+
 (defpackage :compile
   (:use :cl :model :expr :utils :adt :symbols)
   (:shadow :expr->string)
   (:export :compile-to-csharp))
+

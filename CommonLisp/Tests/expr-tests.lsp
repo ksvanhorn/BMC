@@ -347,3 +347,29 @@
 				  (make-expr-variable :symbol 'a)
 				  (make-expr-literal :value 0)))))))
 )
+
+(define-test free-vars-in-expr-tests
+  (assert-equalp
+    '()
+    (free-vars-in-expr (sexpr->expr 'true)))
+  (assert-equalp
+    '()
+    (free-vars-in-expr (sexpr->expr 5)))
+  (assert-equalp
+    '(v)
+    (free-vars-in-expr (sexpr->expr 'v)))
+  (assert-equalp
+    '(x y)
+    (free-vars-in-expr (sexpr->expr '(+ x y 3))))
+  (assert-equalp
+    '(a b)
+    (free-vars-in-expr (sexpr->expr '(+ a (qsum i (1 4) (* 3 b))))))
+  (assert-equalp
+    '(x y z)
+    (free-vars-in-expr (sexpr->expr '(:let (w (* 3 x)) (^ (+ y z) w)))))
+  (assert-equalp
+    '(m n x)
+    (free-vars-in-expr
+      (sexpr->expr
+        '(qand j (m n) (:let (y (@ x j)) (* y y))))))
+)

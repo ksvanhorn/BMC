@@ -500,25 +500,9 @@
 		   :body ch))))
     ch))    
 
-(defun n-symbols-not-in (n excluded &optional (prefix "i"))
-  (let* ((gen-next (next-symbol excluded prefix))
-	 (result nil))
-    (dotimes (i n)
-      (push (funcall gen-next) result))
-    (reverse result)))
-
-(defun next-symbol (excluded prefix)
-  (let ((suffix 0))
-    (lambda ()
-      (loop
-        (incf suffix)
-	(let ((sym (intern (strcat prefix (write-to-string suffix)))))
-	  (unless (member sym excluded)
-	    (return sym)))))))
-
 (defun write-csharp-log-joint-density (mdl)
   (let* ((excluded (symbols-in-model mdl))
-	 (accum-var (funcall (next-symbol excluded "ljd"))))
+	 (accum-var (symbol-not-in excluded "ljd")))
     (fmt "public double LogJointDensity()")
     (fmt "{")
     (indent
@@ -740,7 +724,7 @@
     ((skip))))
 
 (defun rels->pdf (rels)
-  (expr-app '* (mapcar #'rel->pdf rels)))
+  (expr-app '*! (mapcar #'rel->pdf rels)))
 
 (defun rel->pdf (rel)
   (adt-case relation rel
@@ -753,7 +737,7 @@
        'if-then-else condition (rel->pdf true-branch) (rel->pdf false-branch)))
     ((loop var lo hi body)
      (make-expr-quantifier
-       :op 'qprod :lo lo :hi hi :var var :body (rel->pdf body)))
+       :op 'qprod! :lo lo :hi hi :var var :body (rel->pdf body)))
     ((let var val body)
      (make-expr-let
        :var var :val val :body (rel->pdf body)))

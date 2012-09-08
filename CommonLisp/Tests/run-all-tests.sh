@@ -13,9 +13,9 @@
        (load ,pkg-path)
        (lisp-unit:run-all-tests ,pkg-name))))
 
-(utils:fdebug "~w" (macroexpand-1 '(runtests adt))) ; debug
 (runtests adt)
 (runtests utils)
 (runtests expr)
 (runtests model)
+(runtests prove)
 (runtests compile)

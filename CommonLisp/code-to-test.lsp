@@ -4,4 +4,5 @@
 (load "utils")
 (load "expr")
 (load "model")
+(load "prove")
 (load "compile")
