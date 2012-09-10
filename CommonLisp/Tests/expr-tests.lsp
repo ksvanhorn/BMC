@@ -3,54 +3,67 @@
 (in-package :expr-tests)
 
 (define-test sexpr->expr-tests
-  (assert-equalp (make-expr-literal :value 1)
-                 (sexpr->expr 1))
-  (assert-equalp (make-expr-const :symbol 'true)
+  (assert-equalp (make-expr-const :name 12)
+                 (sexpr->expr 12))
+  (assert-equalp (make-expr-const :name 'true)
                  (sexpr->expr 'true))
+  (assert-equalp (make-expr-const :name 'false)
+                 (sexpr->expr 'false))
+  (assert-equalp (make-expr-const :name '@-all)
+		 (sexpr->expr '@-all))
+
   (assert-equalp (make-expr-variable :symbol 'bee)
                  (sexpr->expr 'bee))
 
   (assert-equalp (make-expr-apply
                    :fct '+ 
-                   :args (list (make-expr-literal :value 3)
-                               (make-expr-literal :value 10)))
+                   :args (list (make-expr-const :name 3)
+                               (make-expr-const :name 10)))
                  (sexpr->expr '(+ 3 10)))
 
-  (assert-equalp (make-expr-quantifier
-                   :op 'qand
-                   :lo (make-expr-literal :value 1)
-                   :hi (make-expr-literal :value 4)
-                   :var 'i
-                   :body (make-expr-apply
-                           :fct '@
-                           :args (list (make-expr-variable :symbol 'x)
-                                       (make-expr-variable :symbol 'i))))
-                 (sexpr->expr '(qand i (1 4) (@ x i))))
-
-  (assert-equalp (make-expr-apply
-                   :fct '@-slice
-                   :args (list (make-expr-variable :symbol 'v)
-                               (make-expr-apply
-                                 :fct '@-idx
-                                 :args (list (make-expr-variable :symbol 'j)))
-                               (make-expr-const :symbol '@-all)
-                               (make-expr-apply
-                                 :fct '@-rng
-                                 :args (list (make-expr-literal :value 1)
-                                             (make-expr-variable :symbol 'k)))))
-                 (sexpr->expr '(@ v j :all (:range 1 k))))
+  (assert-equalp
+    (make-expr-apply
+     :fct 'qand
+     :args (list
+	     (make-expr-const :name 1)
+	     (make-expr-const :name 4)
+	     (make-expr-lambda
+	       :var 'i
+	       :body (make-expr-apply
+		       :fct '@
+		       :args (list (make-expr-variable :symbol 'x)
+				   (make-expr-variable :symbol 'i))))))
+    (sexpr->expr '(:quant qand i (1 4) (@ x i))))
 
   (assert-equalp
-    (make-expr-let
-      :var 'x
-      :val (make-expr-apply
-	     :fct '+
-	     :args (list (make-expr-variable :symbol 'v)
-			 (make-expr-literal :value 1)))
-      :body (make-expr-apply
-	      :fct '*
-	      :args (list (make-expr-variable :symbol 'x)
-			   (make-expr-variable :symbol 'x))))
+    (make-expr-apply
+      :fct '@-slice
+      :args (list
+	      (make-expr-variable :symbol 'v)
+	      (make-expr-apply
+	        :fct '@-idx
+		:args (list (make-expr-variable :symbol 'j)))
+	      (make-expr-const :name '@-all)
+	      (make-expr-apply
+	        :fct '@-rng
+		:args (list (make-expr-const :name 1)
+			    (make-expr-variable :symbol 'k)))))
+    (sexpr->expr '(@ v j :all (:range 1 k))))
+
+  (assert-equalp
+    (make-expr-apply
+      :fct '!
+      :args (list
+	      (make-expr-lambda
+	        :var 'x
+		:body (make-expr-apply
+		        :fct '*
+			:args (list (make-expr-variable :symbol 'x)
+				    (make-expr-variable :symbol 'x))))
+	      (make-expr-apply
+	        :fct '+
+		:args (list (make-expr-variable :symbol 'v)
+			    (make-expr-const :name 1)))))
     (sexpr->expr
       '(:let (x (+ v 1))
 	 (* x x))))
@@ -62,24 +75,25 @@
                    :args (list (make-expr-apply
                                  :fct '@
                                  :args (list (make-expr-variable :symbol 'nu)
-                                             (make-expr-literal :value 1)))))
+                                             (make-expr-const :name 1)))))
                  (sexpr->expr '(exp (@ nu 1))))
 
-  (assert-equalp (make-expr-quantifier
-                   :op 'qsum
-                   :lo
-                     (make-expr-apply
-                       :fct '-
-                       :args (list (make-expr-variable :symbol 'v)
-                                   (make-expr-literal :value 2)))
-                   :hi
-                     (make-expr-apply
-                       :fct '*
-                       :args (list (make-expr-literal :value 4)
-                                   (make-expr-variable :symbol 'w)))
-                   :var 'j
-                   :body (make-expr-variable :symbol 'j))
-                 (sexpr->expr '(qsum j ((- v 2) (* 4 w)) j)))
+  (assert-equalp
+    (make-expr-apply
+      :fct 'qsum
+      :args (list
+	      (make-expr-apply
+	        :fct '-
+		:args (list (make-expr-variable :symbol 'v)
+			    (make-expr-const :name 2)))
+	      (make-expr-apply
+	        :fct '*
+		:args (list (make-expr-const :name 4)
+			    (make-expr-variable :symbol 'w)))
+	      (make-expr-lambda
+	        :var 'j
+		:body (make-expr-variable :symbol 'j))))
+    (sexpr->expr '(:quant qsum j ((- v 2) (* 4 w)) j)))
 
   (assert-equalp
     (make-expr-apply
@@ -92,13 +106,13 @@
             :args (list (make-expr-apply
                           :fct '/
                           :args (list (make-expr-variable :symbol 's)
-                                      (make-expr-literal :value 3)))))
+                                      (make-expr-const :name 3)))))
           (make-expr-apply
             :fct '@-rng
             :args (list (make-expr-apply
                           :fct '-
                           :args (list (make-expr-variable :symbol 'n)
-                                      (make-expr-literal :value 1)))
+                                      (make-expr-const :name 1)))
                         (make-expr-apply
                           :fct '+
                           :args (list (make-expr-variable :symbol 'm)
@@ -109,16 +123,13 @@
   
   (assert-error 'error (sexpr->expr #\a))
   (assert-error 'error (sexpr->expr "foo"))
-  (assert-error 'error (sexpr->expr '(not-a-recognized-fct 2 3)))
-  (assert-error 'error (sexpr->expr '(dnorm mu sigma))) ; distr, not fct
-  (assert-error 'error (sexpr->expr '(not-a-quant i (1 n) (* i 3))))
-  (assert-error 'error (sexpr->expr '(qsum (@ v i) (1 n) 3)))
-  (assert-error 'error (sexpr->expr '(qsum)))
-  (assert-error 'error (sexpr->expr '(qsum j)))
-  (assert-error 'error (sexpr->expr '(qsum j 3)))
-  (assert-error 'error (sexpr->expr '(qsum j (1))))
-  (assert-error 'error (sexpr->expr '(qsum j (1 n))))
-  (assert-error 'error (sexpr->expr '(qsum j (1 n 3) j)))
+  (assert-error 'error (sexpr->expr '(:quant qsum (@ v i) (1 n) 3)))
+  (assert-error 'error (sexpr->expr '(:quant qsum)))
+  (assert-error 'error (sexpr->expr '(:quant qsum j)))
+  (assert-error 'error (sexpr->expr '(:quant qsum j 3)))
+  (assert-error 'error (sexpr->expr '(:quant qsum j (1))))
+  (assert-error 'error (sexpr->expr '(:quant qsum j (1 n))))
+  (assert-error 'error (sexpr->expr '(:quant qsum j (1 n 3) j)))
   (assert-error 'error (sexpr->expr '(@)))
   (assert-error 'error (sexpr->expr '(@ x)))
   (assert-error 'error (sexpr->expr '(:let)))
@@ -131,8 +142,8 @@
 )
 
 (define-test expr->string-tests
-  (assert-equal "1" (expr->string (make-expr-literal :value 1)))
-  (assert-equal "TRUE" (expr->string (make-expr-const :symbol 'true)))
+  (assert-equal "1" (expr->string (make-expr-const :name 1)))
+  (assert-equal "TRUE" (expr->string (make-expr-const :name 'true)))
   (assert-equal "bee" (expr->string (make-expr-variable :symbol '|bee|)))
 
   (assert-equal
@@ -140,21 +151,23 @@
     (expr->string
       (make-expr-apply
         :fct '+
-	:args (list (make-expr-literal :value 3)
-		    (make-expr-literal :value 10)))))
+	:args (list (make-expr-const :name 3)
+		    (make-expr-const :name 10)))))
 
   (assert-equal
     "QAND(i, 1 : 4, x[i])"
     (expr->string
-      (make-expr-quantifier
-        :op 'qand
-	:lo (make-expr-literal :value 1)
-	:hi (make-expr-literal :value 4)
-	:var '|i|
-	:body (make-expr-apply
-	        :fct '@
-		:args (list (make-expr-variable :symbol '|x|)
-			    (make-expr-variable :symbol '|i|))))))
+     (make-expr-apply
+       :fct 'qand
+       :args (list
+	       (make-expr-const :name 1)
+	       (make-expr-const :name 4)
+	       (make-expr-lambda
+		 :var '|i|
+		 :body (make-expr-apply
+			 :fct '@
+			 :args (list (make-expr-variable :symbol '|x|)
+				     (make-expr-variable :symbol '|i|))))))))
 
   (assert-equal
     "v[j, , 1 : k]"
@@ -165,10 +178,10 @@
 		    (make-expr-apply
 		      :fct '@-idx
 		      :args (list (make-expr-variable :symbol '|j|)))
-		    (make-expr-const :symbol '@-all)
+		    (make-expr-const :name '@-all)
 		    (make-expr-apply
 		      :fct '@-rng
-		      :args (list (make-expr-literal :value 1)
+		      :args (list (make-expr-const :name 1)
 				  (make-expr-variable :symbol '|k|)))))))
 
   ;; recursive structure
@@ -181,37 +194,43 @@
       :args (list (make-expr-apply
 		    :fct '@
 		    :args (list (make-expr-variable :symbol '|nu|)
-				(make-expr-literal :value 1)))))))
+				(make-expr-const :name 1)))))))
 
   (assert-equal
     "(let y = v * v in x + y)"
     (expr->string
-      (make-expr-let
-        :var '|y|
-	:val (make-expr-apply
-	       :fct '*
-	       :args (list (make-expr-variable :symbol '|v|)
-			   (make-expr-variable :symbol '|v|)))
-	:body (make-expr-apply
-	        :fct '+
-		:args (list (make-expr-variable :symbol '|x|)
-			    (make-expr-variable :symbol '|y|))))))
+      (make-expr-apply
+        :fct '!
+	:args (list
+	        (make-expr-lambda
+		  :var '|y|
+		  :body (make-expr-apply
+			  :fct '+
+			  :args (list (make-expr-variable :symbol '|x|)
+				      (make-expr-variable :symbol '|y|))))
+		(make-expr-apply
+		  :fct '*
+		  :args (list (make-expr-variable :symbol '|v|)
+			      (make-expr-variable :symbol '|v|)))))))
 
   (assert-equal
     "QSUM(j, v - 2 : 4 * w, j)"
     (expr->string
-      (make-expr-quantifier
-        :op 'qsum
-	:lo (make-expr-apply
+      (make-expr-apply
+        :fct 'qsum
+	:args
+	  (list
+	    (make-expr-apply
 	      :fct '-
 	      :args (list (make-expr-variable :symbol '|v|)
-			  (make-expr-literal :value 2)))
-	:hi (make-expr-apply
+			  (make-expr-const :name 2)))
+	    (make-expr-apply
 	      :fct '*
-	      :args (list (make-expr-literal :value 4)
+	      :args (list (make-expr-const :name 4)
 			  (make-expr-variable :symbol '|w|)))
-	:var '|j|
-	:body (make-expr-variable :symbol '|j|))))
+	    (make-expr-lambda
+	      :var '|j|
+	      :body (make-expr-variable :symbol '|j|))))))
 
   (assert-equal
     "x[s / 3, n - 1 : m + k]"
@@ -226,14 +245,14 @@
 			  (make-expr-apply
 			    :fct '/
 			    :args (list (make-expr-variable :symbol '|s|)
-					(make-expr-literal :value 3)))))
+					(make-expr-const :name 3)))))
 		(make-expr-apply
 		  :fct '@-rng
 		  :args (list
 			  (make-expr-apply
 			    :fct '-
 			    :args (list (make-expr-variable :symbol '|n|)
-					(make-expr-literal :value 1)))
+					(make-expr-const :name 1)))
 			  (make-expr-apply
 			    :fct '+
 			    :args (list
@@ -304,16 +323,11 @@
 		    :fct '@ :args (list (make-expr-variable :symbol 'x)))))
 
   (assert-error 'error
-    (expr->string (make-expr-apply
-		    :fct '@ :args (list (make-expr-literal :value 2)
-					(make-expr-variable :symbol 'y)))))
-
-  (assert-error 'error
     (expr->string
       (make-expr-apply
         :fct '@-slice
 	:args (list (make-expr-variable :symbol 'x)
-		    (make-expr-const :symbol '@-all)
+		    (make-expr-const :name '@-all)
 		    (make-expr-apply :fct '@-idx :args '()))))) ; 0 args!
 
   (assert-error 'error
@@ -321,10 +335,10 @@
       (make-expr-apply
         :fct '@-slice
 	:args (list (make-expr-variable :symbol 'x)
-		    (make-expr-const :symbol '@-all)
+		    (make-expr-const :name '@-all)
 		    (make-expr-apply
 		      :fct '@-idx
-		      :args (list (make-expr-literal :value 1)  ; 2 args!
+		      :args (list (make-expr-const :name 1)  ; 2 args!
 				  (make-expr-variable :symbol 'z)))))))
 
   (assert-error 'error
@@ -334,7 +348,7 @@
 	:args (list (make-expr-variable :symbol 'x)
 		    (make-expr-apply
 		      :fct '@-rng
-		      :args (list (make-expr-literal :value 2)))))))  ; 1 arg!
+		      :args (list (make-expr-const :name 2)))))))  ; 1 arg!
 
   (assert-error 'error
     (expr->string
@@ -343,9 +357,9 @@
 	:args (list (make-expr-variable :symbol 'x)
 		    (make-expr-apply
 		      :fct '@-rng
-		      :args (list (make-expr-literal :value 2)   ; 3 args!
+		      :args (list (make-expr-const :name 2)   ; 3 args!
 				  (make-expr-variable :symbol 'a)
-				  (make-expr-literal :value 0)))))))
+				  (make-expr-const :name 0)))))))
 )
 
 (define-test free-vars-in-expr-tests
@@ -363,13 +377,13 @@
     (free-vars-in-expr (sexpr->expr '(+ x y 3))))
   (assert-equalp
     '(a b)
-    (free-vars-in-expr (sexpr->expr '(+ a (qsum i (1 4) (* 3 b))))))
+    (free-vars-in-expr (sexpr->expr '(+ a (:quant qsum i (1 4) (* 3 b))))))
   (assert-equalp
-    '(x y z)
+    '(y z x)
     (free-vars-in-expr (sexpr->expr '(:let (w (* 3 x)) (^ (+ y z) w)))))
   (assert-equalp
     '(m n x)
     (free-vars-in-expr
       (sexpr->expr
-        '(qand j (m n) (:let (y (@ x j)) (* y y))))))
+        '(:quant qand j (m n) (:let (y (@ x j)) (* y y))))))
 )

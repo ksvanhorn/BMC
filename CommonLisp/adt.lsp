@@ -29,7 +29,12 @@
     (error "In (adt-case ~W ... ~W ...): ~
             clause form must begin with a list of symbols." base-type clause)))
 
+(defun is-otherwise-clause (clause)
+  (and (is-list-of-length 2 clause) (member (first clause) '(t otherwise))))
+
 (defun expand-clause (base-type clause)
+  (when (is-otherwise-clause clause)
+    (return-from expand-clause `(t ,(second clause))))
   (check-expand-clause base-type clause)
   (destructuring-bind ((p-head &rest p-args) &rest body) clause
     (let* ((subtype (compound-symbol base-type p-head))
@@ -64,12 +69,14 @@
 ;     (t (error "No match in adt-case FOO."))))
 
 (defmacro adt-case (base-type x &rest clauses)
-  (let ((clause-expansions
-	  (mapcar (lambda (c) (expand-clause base-type c)) clauses))
-	(errstr (format nil "No match in adt-case ~a." base-type)))
+  (let* ((clause-expansions
+	   (mapcar (lambda (c) (expand-clause base-type c)) clauses))
+	 (errstr (format nil "No match in adt-case ~a." base-type))
+	 (end (if (eq 't (caar (last clause-expansions)))
+		'()
+		(list `(t (error ,errstr))))))
     `(let ((,base-type ,x))
-       (cond ,@clause-expansions
-	     (t (error ,errstr))))))
+       (cond ,@clause-expansions ,@end))))
 
 ; Example:
 ; (defadt foo (bar a) (baz a b) (bop))

@@ -29,41 +29,26 @@
 
 (defun expr->string (e &optional (lprec -1) (rprec -1))
   (adt-case expr e
-    ((literal value)
-     (literal->string value))
-    ((const symbol)
-     (const->string symbol))
+    ((const name)
+     (const->string name))
     ((variable symbol)
      (variable->string symbol))
-    ((quantifier op lo hi var body)
-     (qexpr->string op lo hi var body))
-    ((let var val body)
-     (error "Unimplemented case in compile::expr->string"))
+    ((lambda var body)
+     (format nil "(~a => ~a)" var (expr->string body)))
     ((apply fct args)
      (aexpr->string fct args lprec rprec))))
 
-(defun literal->string (x)
+(defun const->string (x)
   (cond ((integerp x) (format nil "~d" x))
 	((realp x) (format nil "~,,,,,,'eE" x))
-	(t (error "Unimplemented case in compile::literal->string: ~a." x))))
-
-(defun const->string (x)
-  (case x
-	('true "true")
-	('false "false")
-	('@-all "BMC.FullRange")
-	(otherwise
-	  (error "Unimplemented case in compile::const->string: ~a." x))))
+	(t (case x
+	     ('true "true")
+	     ('false "false")
+	     ('@-all "BMC.FullRange")
+	     (t (error "Unimplemented case in compile::const->string: ~a."
+		       x))))))
 
 (defun variable->string (x) (symbol-name x))
-
-(defun qexpr->string (op lo hi var body)
-  (let ((op-s (fct-name op))
-	(lo-s (expr->string lo))
-	(hi-s (expr->string hi))
-	(var-s (variable->string var))
-	(body-s (expr->string body)))
-    (format nil "~a(~a, ~a, ~a => ~a)" op-s lo-s hi-s var-s body-s)))
 
 (defun aexpr->string (fct args lprec rprec)
   (case fct
@@ -79,7 +64,7 @@
 	 (mapcar #'expr->string (mapcar #'dec-expr (rest args)))))
 
 (defun dec-expr (expr)
-  (expr-call '- expr (expr-lit 1)))
+  (expr-call '- expr (expr-const 1)))
 
 (defun @-slice-expr->string (args)
   (unless (and (consp args) (< 1 (length args)))
@@ -95,7 +80,7 @@
 	((and (is-expr-apply x) (eq '@-idx (expr-apply-fct x)))
 	 (destructuring-bind (e) (expr-apply-args x)
 	   (dec-expr e)))
-	((and (is-expr-const x) (eq '@-all (expr-const-symbol x)))
+	((and (is-expr-const x) (eq '@-all (expr-const-name x)))
 	 x)
 	(t (dec-expr x))))
 
@@ -183,85 +168,80 @@
 
 ;;; End printing expressions
 
-(defun symbols-in-expr (x)
+(defun vars-in-expr (x)
   (adt-case expr x
-    ((literal value)
+    ((const name)
      '())
-    ((const symbol)
-     (list symbol))
     ((variable symbol)
      (list symbol))
-    ((quantifier op lo hi var body)
-     (list* op var (symbols-in-expr-list (list lo hi body))))
-    ((let var val body)
-     (cons var (symbols-in-expr-list (list val body))))
     ((apply fct args)
-     (symbols-in-sym-exprs fct args))))
+     (vars-in-expr-list args))
+    ((lambda var body)
+     (cons var (vars-in-expr body)))))
 
-(defun symbols-in-expr-list (xlist)
-  (append-mapcar #'symbols-in-expr xlist))
+(defun vars-in-expr-list (xlist)
+  (append-mapcar #'vars-in-expr xlist))
 
-(defun symbols-in-sym-exprs (sym exprs)
-  (cons sym (symbols-in-expr-list exprs)))
-
-(defun symbols-in-model (mdl)
+(defun vars-in-model (mdl)
   (match-adt1 (model args reqs vars body) mdl
-    (append (append-mapcar #'symbols-in-decl args)
-	    (append-mapcar #'symbols-in-expr reqs)
-	    (append-mapcar #'symbols-in-decl vars)
-	    (append-mapcar #'symbols-in-rel body))))
+    (append (append-mapcar #'vars-in-decl args)
+	    (append-mapcar #'vars-in-expr reqs)
+	    (append-mapcar #'vars-in-decl vars)
+	    (append-mapcar #'vars-in-rel body))))
 
-(defun symbols-in-decl (d)
+(defun vars-in-decl (d)
   (match-adt1 (decl var typ) d
-    (cons var (symbols-in-vtype typ))))
+    (cons var (vars-in-vtype typ))))
 
-(defun symbols-in-vtype (typ)
+(defun vars-in-vtype (typ)
   (adt-case vtype typ
     ((scalar stype)
-     (list stype))
+     '())
     ((array elem-type dims)
-     (symbols-in-sym-exprs elem-type dims))))
+     (vars-in-expr-list dims))))
 
-(defun symbols-in-rel (rel)
+(defun vars-in-rel (rel)
   (adt-case relation rel
     ((stochastic lhs rhs)
-     (append (symbols-in-rellhs lhs)
-	     (symbols-in-distr rhs)))
+     (append (vars-in-rellhs lhs)
+	     (vars-in-distr rhs)))
     ((block members)
-     (append-mapcar #'symbols-in-rel members))
+     (append-mapcar #'vars-in-rel members))
     ((if condition true-branch false-branch)
-     (append (symbols-in-expr condition)
-	     (symbols-in-rel true-branch)
-	     (symbols-in-rel false-branch)))
+     (append (vars-in-expr condition)
+	     (vars-in-rel true-branch)
+	     (vars-in-rel false-branch)))
     ((loop var lo hi body)
-     (append (symbols-in-sym-exprs var (list lo hi))
-	     (symbols-in-rel body)))
+     (append (list var)
+	     (vars-in-expr lo)
+	     (vars-in-expr hi)
+	     (vars-in-rel body)))
     ((let var val body)
-     (cons var (append (symbols-in-expr val) (symbols-in-rel body))))
+     (cons var (append (vars-in-expr val) (vars-in-rel body))))
     ((skip)
      '())))
 
-(defun symbols-in-rellhs (lhs)
+(defun vars-in-rellhs (lhs)
   (adt-case rellhs lhs
     ((simple var)
      (list var))
     ((array-elt var indices)
-     (symbols-in-sym-exprs var indices))
+     (cons var (vars-in-expr-list indices)))
     ((array-slice var indices)
-     (cons var (append-mapcar #'symbols-in-arr-slice-idx indices)))))
+     (cons var (append-mapcar #'vars-in-arr-slice-idx indices)))))
 
-(defun symbols-in-arr-slice-idx (x)
+(defun vars-in-arr-slice-idx (x)
   (adt-case array-slice-index x
     ((scalar value)
-     (symbols-in-expr value))
+     (vars-in-expr value))
     ((range lo hi)
-     (symbols-in-expr-list (list lo hi)))
+     (vars-in-expr-list (list lo hi)))
     ((all)
      '())))
 
-(defun symbols-in-distr (d)
+(defun vars-in-distr (d)
   (match-adt1 (distribution name args) d
-    (symbols-in-sym-exprs name args)))
+    (vars-in-expr-list args)))
 
 (defun write-csharp-class-body (mdl)
   (write-csharp-declarations mdl)
@@ -413,25 +393,18 @@
 
 (defun is-trivially-true (e)
   (adt-case expr e
-    ((literal value)
-     nil)
-    ((const symbol)
-     (eq 'true symbol))
-    ((variable symbol)
-     nil)
-    ((quantifier op lo hi var body)
-     nil)
-    ((let var val body)
-     nil)
+    ((const name)
+     (eq 'true name))
     ((apply fct args)
-     (is-trivially-true-app fct args))))
+     (is-trivially-true-app fct args))
+    (otherwise nil)))
 
 (defun is-trivially-true-app (fct args)
   (and (eq 'is-integerp0 fct) (= 1 (length args))
-    (let ((e (first args)))
-      (and (is-expr-literal e)
-	   (let ((val (expr-literal-value e)))
-	     (and (integerp val) (<= 0 val)))))))
+       (adt-case expr (first args)
+	 ((const name)
+	  (and (integerp name) (<= 0 name)))
+	 (otherwise nil))))
 
 (defun args-checks-raw (mdl)
   (append (append-mapcar #'decl-checks (model-args mdl))
@@ -473,12 +446,12 @@
   (let ((vexpr (expr-var var-sym)))
     (mapcar (lambda (n d)
 	      (expr-call '=
-		(expr-call 'array-length (expr-lit n) vexpr)
+		(expr-call 'array-length (expr-const n) vexpr)
 		d))
 	    (int-range 1 (length dims)) dims)))
 
 (defun array-element-checks (var-sym etype-sym dims)
-  (let* ((excluded (symbols-in-sym-exprs var-sym dims))
+  (let* ((excluded (cons var-sym (vars-in-expr-list dims)))
 	 (idxvar-symbols (n-symbols-not-in (length dims) excluded))
 	 (idxvars (mapcar #'expr-var idxvar-symbols))
 	 (var (expr-var var-sym))
@@ -492,16 +465,11 @@
   (let ((di-list (reverse (zip dims idxvars))))
     (dolist (x di-list)
       (destructuring-bind (dim idxvar) x
-	(setf ch (make-expr-quantifier
-		   :op 'qand
-		   :lo (expr-lit 1)
-		   :hi dim
-		   :var idxvar
-		   :body ch))))
-    ch))    
+	(setf ch (expr-call 'qand (expr-const 1) dim (expr-lam idxvar ch)))))
+    ch))
 
 (defun write-csharp-log-joint-density (mdl)
-  (let* ((excluded (symbols-in-model mdl))
+  (let* ((excluded (vars-in-model mdl))
 	 (accum-var (symbol-not-in excluded "ljd")))
     (fmt "public double LogJointDensity()")
     (fmt "{")
@@ -681,7 +649,7 @@
 	   (error "Unimplemented case in undefined-val: ~a" base-type))))
 
 (defun write-undefine-array-var (var elem-type dims)
-  (let* ((used-vars (symbols-in-expr-list dims))
+  (let* ((used-vars (vars-in-expr-list dims))
 	 (idx-vars (n-symbols-not-in (length dims) used-vars))
 	 (val (undefined-val (base-type elem-type)))
 	 (lhs (make-rellhs-array-elt
@@ -736,14 +704,11 @@
      (expr-call
        'if-then-else condition (rel->pdf true-branch) (rel->pdf false-branch)))
     ((loop var lo hi body)
-     (make-expr-quantifier
-       :op 'qprod! :lo lo :hi hi :var var :body (rel->pdf body)))
+     (expr-call 'qprod! lo hi (expr-lam var (rel->pdf body))))
     ((let var val body)
-     (make-expr-let
-       :var var :val val :body (rel->pdf body)))
+     (expr-call '! (expr-lam var (rel->pdf body)) val))
     ((skip)
-     (expr-lit 1))
-))
+     (expr-const 1))))
 
 (defun rel-stoch->pdf (lhs rhs)
   (let ((lhs-expr (rellhs->expr lhs)))

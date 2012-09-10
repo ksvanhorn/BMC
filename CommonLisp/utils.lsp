@@ -9,6 +9,10 @@
 	(error (format nil "Assoc lookup failed to find ~w" key))
         (cdr x))))
 
+(defun is-list-of-length (n x)
+  (or (and (= 0 n) (eq nil x))
+      (and (consp x) (is-list-of-length (- n 1) (cdr x)))))
+
 (defun zip (&rest lists) (apply #'mapcar #'list lists))
 
 (defun append-mapcar (fct lst)

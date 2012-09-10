@@ -14,26 +14,25 @@
     '(a b c) (sort-unique '(b c b b a c c a)))
 
   (assert-equal
-    '(* + - / < false i4 k m n qand sqrt v x ^)
+    '(i4 k m n x)
     (sort-unique
-      (compile::symbols-in-sym-exprs
-        'v (sexpr->exprs
-	     '((* (/ x 4) (+ k 3) (- m n))
-	       (qand i4 (1 n) (< i4 k))
-	       (sqrt (^ x 6))
-	       false)))))
+      (compile::vars-in-expr-list
+        (sexpr->exprs
+	 '((* (/ x 4) (+ k 3) (- m n))
+	   (:quant qand i4 (1 n) (< i4 k))
+	   (sqrt (^ x 6))
+	   false)))))
 
   (assert-equal
-    '(* + a c x y z ^)
+    '(a c x y z)
     (sort-unique
-      (compile::symbols-in-expr
+      (compile::vars-in-expr
         (sexpr->expr '(+ a (:let (x (* y z)) (^ x c)))))))
 
   (assert-equal
-    '(* + .< .AND .IS-INTEGER < @ A AA ALPHA B BB BOOLEAN DGAMMA DNORM
-      EXP FOO I II INTEGER K M N REAL REALP TRUE UPPER-X V W X Z ZZ)
+    '(A AA ALPHA B BB FOO I II K M N UPPER-X V W X Z ZZ)
     (sort-unique
-      (compile::symbols-in-model
+      (compile::vars-in-model
         (sexpr->model '(:model
 			 (:args (x real)
 				(n integer))
@@ -68,15 +67,15 @@
     (compile::n-symbols-not-in 2 '(+ x |i3| y |i1| w)))
 
   (assert-equalp
-    (sexpr->expr '(qand i (1 (+ n 2))
-			(qand j (1 (- m 3)) (is-real (@ x i j)))))
+    (sexpr->expr '(:quant qand i (1 (+ n 2))
+			(:quant qand j (1 (- m 3)) (is-real (@ x i j)))))
     (compile::array-element-check
       (sexpr->expr '(is-real (@ x i j)))
       (sexpr->exprs '((+ n 2) (- m 3)))
       '(i j)))
 
   (assert-equalp
-    (sexpr->expr '(qand i (1 (+ n 2)) (< 0 (@ x i))))
+    (sexpr->expr '(:quant qand i (1 (+ n 2)) (< 0 (@ x i))))
     (compile::array-element-check
       (sexpr->expr '(< 0 (@ x i)))
       (sexpr->exprs '((+ n 2)))
@@ -103,21 +102,23 @@
     (compile::scalar-type-checks (expr-var 'x) 'real))
 
   (assert-equalp
-    (list (sexpr->expr '(qand |i1| (1 n) (< 0 (@ x |i1|)))))
+    (list (sexpr->expr '(:quant qand |i1| (1 n) (< 0 (@ x |i1|)))))
     (compile::array-element-checks 'x 'integerp (sexpr->exprs '(n))))
 
   (assert-equalp
-    (list (sexpr->expr '(qand |i1| (1 n)
-			      (qand |i2| (1 k) (is-realp0 (@ v |i1| |i2|))))))
+    (list (sexpr->expr '(:quant qand |i1| (1 n)
+			      (:quant qand |i2| (1 k)
+				      (is-realp0 (@ v |i1| |i2|))))))
     (compile::array-element-checks 'v 'realp0 (sexpr->exprs '(n k))))
 
   (assert-equalp
-    (list (sexpr->expr '(qand |i2| (1 (+ n |i1|)) (is-real (@ y |i2|)))))
+    (list (sexpr->expr '(:quant qand |i2| (1 (+ n |i1|)) (is-real (@ y |i2|)))))
     (compile::array-element-checks 'y 'real (sexpr->exprs '((+ n |i1|)))))
 
   (assert-equalp
-    (list (sexpr->expr '(qand |i1| (1 n)
-			      (qand |i3| (1 k) (is-realx (@ |i2| |i1| |i3|))))))
+    (list (sexpr->expr '(:quant qand |i1| (1 n)
+			      (:quant qand |i3| (1 k)
+				      (is-realx (@ |i2| |i1| |i3|))))))
     (compile::array-element-checks '|i2| 'realx (sexpr->exprs '(n k))))
 
   (assert-equalp
@@ -143,7 +144,7 @@
 
   (assert-equalp
     (sexpr->exprs '((= (array-length 1 A) (+ k 1))
-		    (qand |i1| (1 (+ k 1)) (<= 0 (@ A |i1|)))))
+		    (:quant qand |i1| (1 (+ k 1)) (<= 0 (@ A |i1|)))))
     (compile::decl-checks (sexpr->decl '(A (integerp0 (+ k 1))))))
 
   (assert-equalp
@@ -153,24 +154,25 @@
   (assert-equalp
     (sexpr->exprs '((= (array-length 1 y) m)
 		    (= (array-length 2 y) (* k 3))
-		    (qand |i1| (1 m)
-			  (qand |i2| (1 (* k 3)) (is-real (@ y |i1| |i2|))))))
+		    (:quant qand |i1| (1 m)
+			  (:quant qand |i2| (1 (* k 3))
+				  (is-real (@ y |i1| |i2|))))))
     (compile::decl-checks (sexpr->decl '(y (real m (* k 3))))))
 
   (assert-equalp
     (sexpr->exprs '((< 0 n)
 		    (<= 0 k)
 		    (= (array-length 1 v) m)
-		    (qand |i1| (1 m) (is-realp0 (@ v |i1|)))
+		    (:quant qand |i1| (1 m) (is-realp0 (@ v |i1|)))
 		    (= (array-length 1 w) n)
 		    (= (array-length 1 x) n)
 		    (= (array-length 2 x) m)
-		    (qand |i1| (1 n)
-			  (qand |i2| (1 m) (is-realp (@ x |i1| |i2|))))
+		    (:quant qand |i1| (1 n)
+			  (:quant qand |i2| (1 m) (is-realp (@ x |i1| |i2|))))
 		    (= (array-length 1 y) m)
 		    (= (array-length 2 y) n)
 		    (< m n)
-		    (qand i (1 m) (< (@ v i) 100))
+		    (:quant qand i (1 m) (< (@ v i) 100))
 		    (is-integerp0 n)))
     (compile::args-checks
       (sexpr->model '(:model
@@ -182,7 +184,7 @@
 			     (x (realp n m))
 			     (y (integer m n)))
 		      (:reqs (< m n)
-			     (qand i (1 m) (< (@ v i) 100)))
+			     (:quant qand i (1 m) (< (@ v i) 100)))
 		      (:vars (foo integer)
 			     (bar (realp n)))
 		      (:body)))))
@@ -672,7 +674,7 @@ public DMatrix b;
 	   (~ x (dnorm m s))
 	   (~ y (dnorm mm ss))))))
   (assert-equalp
-    (sexpr->expr '(qprod! i (m n) (dnorm-density (@ x i) m s)))
+    (sexpr->expr '(:quant qprod! i (m n) (dnorm-density (@ x i) m s)))
     (compile::rel->pdf
       (sexpr->rel '(:for i (m n) (~ (@ x i) (dnorm m s))))))
   (assert-equalp
@@ -688,7 +690,7 @@ public DMatrix b;
     (compile::rel->pdf (sexpr->rel '(:let (sigma (^ a 2))
 				      (~ x (dnorm 0 sigma))))))
   (assert-equalp
-    (expr-lit 1)
+    (expr-const 1)
     (compile::rel->pdf (make-relation-skip)))
 )
 

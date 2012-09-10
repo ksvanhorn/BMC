@@ -32,7 +32,7 @@
     ;; functions
     :@ :@-slice :@-rng :@-idx :vec :array-length :num-dims
     :+ :- :* :*! :/ :^ :neg :exp :tanh :sqrt
-    :sum :dot :inv :if-then-else
+    :sum :dot :inv :if-then-else :!
 
     ;; finite quantifiers
     :qand :qor :qsum :qprod :qprod! :qvec
@@ -45,13 +45,13 @@
     :dnorm-density :dmvnorm-density :dgamma-density :dwishart-density
 
     ;; model symbols
-    :<- :~
+    :~
     ))
 
 (defpackage :utils
   (:use :cl)
   (:export :starts-with :assoc-lookup :zip :strcat :strcat-lines
-	   :read-file :int-range
+	   :read-file :int-range :is-list-of-length
 	   :append-mapcar :fdebug :compound-symbol
 	   :n-symbols-not-in :symbol-not-in
 	   :indent :fmt :*indent-level* :*indent-amount* :*fmt-ostream*))
@@ -66,16 +66,12 @@
    :free-vars-in-expr
    :sexpr->expr :expr->string :is-scalar-index :is-slice-all :is-slice-range
    :*convert-boolean-functions*
-   :expr-call :expr-app :expr-lit :expr-var
+   :expr-call :expr-app :expr-var :expr-const :expr-lam
    :is-expr
-   :is-expr-literal :make-expr-literal :expr-literal-value
-   :is-expr-const :make-expr-const :expr-const-symbol
+   :is-expr-const :make-expr-const :expr-const-name
    :is-expr-variable :make-expr-variable :expr-variable-symbol
-   :is-expr-quantifier :make-expr-quantifier :expr-quantifier-op
-   :expr-quantifier-lo :expr-quantifier-hi :expr-quantifier-var
-   :expr-quantifier-body
    :is-expr-apply :make-expr-apply :expr-apply-fct :expr-apply-args
-   :is-expr-let :make-expr-let :expr-let-var :expr-let-val :expr-let-body))
+   :is-expr-lambda :make-expr-lambda :expr-lambda-var :expr-lambda-body))
 
 (defpackage :model
   (:use :cl :symbols :adt :utils :expr)
@@ -123,7 +119,7 @@
    :is-array-slice-index-all :make-array-slice-index-all))
 
 (defpackage :prove
-  (:use :cl :adt :expr :utils)
+  (:use :cl :adt :expr :utils :symbols)
   (:export))
 
 (defpackage :compile

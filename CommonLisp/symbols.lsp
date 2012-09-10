@@ -23,7 +23,7 @@
     .= .!= .< .<= .> .>= .is-symm-pd
     @ @-slice vec array-length num-dims
     + - * *! / ^ neg exp tanh sqrt
-    sum dot inv if-then-else
+    sum dot inv if-then-else !
     ddirch-density dcat-density dinterval-density
     dnorm-density dmvnorm-density dgamma-density dwishart-density))
 

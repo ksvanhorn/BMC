@@ -12,7 +12,7 @@
 
   (assert-equalp (make-vtype-array
 		   :elem-type 'boolean
-		   :dims (list (make-expr-literal :value 2)
+		   :dims (list (make-expr-const :name 2)
 			       (make-expr-variable :symbol 'n)))
 		 (sexpr->vtype '(boolean 2 n)))
   (assert-equalp (make-vtype-array
@@ -20,7 +20,7 @@
 		   :dims (list (make-expr-apply
 				 :fct '+
 				 :args (list (make-expr-variable :symbol 'k)
-					     (make-expr-literal :value 3)))))
+					     (make-expr-const :name 3)))))
 		 (sexpr->vtype '(realp (+ k 3))))
   (assert-error 'error (sexpr->vtype '(integerp)))
 
@@ -60,7 +60,7 @@
       :indices (list (make-array-slice-index-scalar
 		       :value (make-expr-variable :symbol 'i))
 		     (make-array-slice-index-range
-		       :lo (make-expr-literal :value 1)
+		       :lo (make-expr-const :name 1)
 		       :hi (make-expr-variable :symbol 'n))
 		     (make-array-slice-index-all)))
     (sexpr->rellhs '(@ y i (:range 1 n) :all)))
@@ -159,7 +159,7 @@
       :args (list (sexpr->decl '(n integerp0))
 		  (sexpr->decl '(x (real n))))
       :reqs (list (sexpr->expr '(< n 200))
-		  (sexpr->expr '(qand i (1 n) (<= 0 (@ x i)))))
+		  (sexpr->expr '(:quant qand i (1 n) (<= 0 (@ x i)))))
       :vars (list (sexpr->decl '(y (real n n)))
 		  (sexpr->decl '(z (integer (+ n 2)))))
       :body (list (sexpr->rel '(:for i (1 n) (~ (@ y i i) (dnorm m s))))
@@ -170,7 +170,7 @@
 		     (:args (n integerp0)
 		            (x (real n)))
 		     (:reqs (< n 200)
-                            (qand i (1 n) (<= 0 (@ x i))))
+                            (:quant qand i (1 n) (<= 0 (@ x i))))
 		     (:vars (y (real n n))
                             (z (integer (+ n 2))))
 		     (:body (:for i (1 n) (~ (@ y i i) (dnorm m s)))
@@ -301,7 +301,7 @@ model {
 	     (:args (n integerp0)
 	            (x (real n)))
 	     (:reqs (< n 200)
-	            (qand i (1 n) (<= 0 (@ x i))))
+	            (:quant qand i (1 n) (<= 0 (@ x i))))
 	     (:vars (y (real n n))
 	            (z (real (+ n 2))))
 	     (:body (:for i (1 n)
@@ -322,7 +322,7 @@ model {
 		 (b (real n))
 		 (n integerp0))
 	  (:reqs (<= 3 e)
-		 (= 1 (qsum i ((+ m 1) (- k 1)) (@ chi i))))
+		 (= 1 (:quant qsum i ((+ m 1) (- k 1)) (@ chi i))))
 	  (:vars (c realp)
 		 (d (integer n (@ z 1)))
 		 (e integer)

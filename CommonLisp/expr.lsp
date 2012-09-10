@@ -1,12 +1,10 @@
 (in-package :expr)
 
 (defadt expr
-  (literal value)
-  (const symbol)
+  (const name)
   (variable symbol)
-  (quantifier op lo hi var body)
   (apply fct args)
-  (let var val body))
+  (lambda var body))
 
 (defun expr-call (fct-symbol &rest args)
   (expr-app fct-symbol args))
@@ -14,22 +12,21 @@
 (defun expr-app (fct-symbol args)
   (make-expr-apply :fct fct-symbol :args args))
 
-(defun expr-lit (x)
-  (make-expr-literal :value x))
-
 (defun expr-var (v)
   (make-expr-variable :symbol v))
 
+(defun expr-const (x)
+  (make-expr-const :name x))
+
+(defun expr-lam (var body)
+  (make-expr-lambda :var var :body body))
+
 (defun free-vars-in-expr (e)
   (adt-case expr e
-    ((literal value) '())
-    ((const symbol) '())
+    ((const name) '())
     ((variable symbol) (list symbol))
-    ((quantifier op lo hi var body)
-     (append (free-vars-in-expr lo) (free-vars-in-expr hi)
-	     (remove var (free-vars-in-expr body))))
-    ((let var val body)
-     (append (free-vars-in-expr val) (remove var (free-vars-in-expr body))))
+    ((lambda var body)
+     (remove var (free-vars-in-expr body)))
     ((apply fct args)
      (append-mapcar #'free-vars-in-expr args))))
 
@@ -38,19 +35,19 @@
 (defun sexpr->expr (x)
   (cond
     ((is-literal-value x)
-     (make-expr-literal :value x))
+     (make-expr-const :name x))
     ((is-const-symbol x)
-     (make-expr-const :symbol x))
+     (make-expr-const :name x))
     ((symbolp x)
      (make-expr-variable :symbol x))
     ((consp x)
      (destructuring-bind (op . args) x
-       (cond ((is-fquant-symbol op)
-	      (sexpr->expr-quantifier op args))
+       (cond ((eq :quant op)
+	      (sexpr->expr-quantifier args))
+	     ((eq :let op)
+	      (sexpr->expr-let args))
 	     ((eq '@ op)
 	      (sexpr->expr-array-app op args))
-	     ((eq ':let op)
-	      (sexpr->expr-let args))
 	     ((is-fct-symbol op)
 	      (make-expr-apply
 	        :fct (convert-function-symbol op)
@@ -64,20 +61,22 @@
   (destructuring-bind ((var val) body) args
     (unless (is-variable-symbol var)
       (error "Invalid variable symbol in ~W." (cons :let args)))
-    (make-expr-let
-      :var var
-      :val (sexpr->expr val)
-      :body (sexpr->expr body))))
+    (make-expr-apply
+      :fct '!
+      :args (list (make-expr-lambda :var var :body (sexpr->expr body))
+		  (sexpr->expr val)))))
 
-(defun sexpr->expr-quantifier (op args)
-  (destructuring-bind (var (lo-x hi-x) body-x) args
+(defun sexpr->expr-quantifier (args)
+  (destructuring-bind (op var (lo-x hi-x) body-x) args
     (let ((lo (sexpr->expr lo-x))
 	  (hi (sexpr->expr hi-x))
 	  (body (sexpr->expr body-x)))
       (unless (is-variable-symbol var)
 	(error "Index var ~W of quantifier expression ~W ~
                 is not a valid variable symbol" var (cons op args)))
-      (make-expr-quantifier :op op :lo lo :hi hi :var var :body body))))
+      (make-expr-apply
+        :fct op
+	:args (list lo hi (make-expr-lambda :var var :body body))))))
 
 (defun sexpr->expr-array-app (_ args)
   (unless (and (consp args) (< 1 (length args)))
@@ -95,7 +94,7 @@
   (not (or (is-slice-all x) (is-slice-range x))))
 
 (defun sexpr->slice-arg (x)
-  (cond ((is-slice-all x) (make-expr-const :symbol '@-all))
+  (cond ((is-slice-all x) (make-expr-const :name '@-all))
 	((is-slice-range x)
 	 (destructuring-bind (lo-x hi-x) (cdr x)
 	   (let ((lo (sexpr->expr lo-x))
@@ -114,40 +113,47 @@
 
 (defun expr->string (e &optional (lprec -1) (rprec -1))
   (adt-case expr e
-    ((literal value)
-     (literal->string value))
-    ((const symbol)
-     (const->string symbol))
+    ((const name)
+     (const->string name))
     ((variable symbol)
      (variable->string symbol))
-    ((quantifier op lo hi var body)
-     (qexpr->string op lo hi var body))
+    ((lambda var body)
+     (error "Cannot print lambda expression: ~w." e))
     ((apply fct args)
-     (aexpr->string fct args lprec rprec))
-    ((let var val body)
-     (lexpr->string var val body))))
+     (cond ((is-fquant-symbol fct)
+	    (qexpr->string fct args))
+	   ((and (eq '! fct) (= 2 (length args)))
+	    (destructuring-bind (arg1 arg2) args
+	      (if (is-expr-lambda arg1)
+		(match-adt1 (expr-lambda var body) arg1
+		  (lexpr->string var arg2 body))
+		(aexpr->string fct args lprec rprec))))
+	   (t
+	    (aexpr->string fct args lprec rprec))))))
 
 (defun lexpr->string (var val body)
   (format nil "(let ~a = ~a in ~a)"
 	  (variable->string var) (expr->string val) (expr->string body)))
 
-(defun literal->string (x)
+(defun const->string (x)
   (cond ((integerp x) (format nil "~d" x))
 	((realp x) (format nil "~,,,,,,EE" x))
+	((symbolp x) (symbol-name x))
 	(t (error "Unimplemented case in expr::literal->string: ~a." x))))
-
-(defun const->string (x) 
-(symbol-name x))
 
 (defun variable->string (x) (symbol-name x))
 
-(defun qexpr->string (op lo hi var body)
-  (let ((op-s (fct-name op))
-	(lo-s (expr->string lo))
-	(hi-s (expr->string hi))
-	(var-s (variable->string var))
-	(body-s (expr->string body)))
-    (format nil "~a(~a, ~a : ~a, ~a)" op-s var-s lo-s hi-s body-s)))
+(defun qexpr->string (fct args) ;(op lo hi var body)
+  (unless (and (= 3 (length args)) (is-expr-lambda (third args)))
+    (error "Invalid argument list for ~a: ~w" fct args))
+  (destructuring-bind (lo hi lexpr) args
+    (match-adt1 (expr-lambda var body) lexpr
+      (let ((op-s (fct-name fct))
+	    (lo-s (expr->string lo))
+	    (hi-s (expr->string hi))
+	    (var-s (variable->string var))
+	    (body-s (expr->string body)))
+	(format nil "~a(~a, ~a : ~a, ~a)" op-s var-s lo-s hi-s body-s)))))
 
 (defun aexpr->string (fct args lprec rprec)
   (case fct
@@ -163,18 +169,18 @@
 	 (mapcar arg->string (rest args))))
 
 (defun array-expr->string (e)
-  (when (is-expr-literal e)
-    (error "Cannot apply array indexing to a literal: ~a." e))
   (if (or (is-expr-const e) (is-expr-variable e))
     (expr->string e)
     (format nil "(~a)" (expr->string e))))
 
 (defun iexpr->string (e)
-  (when (or (is-expr-literal e) (is-expr-variable e) (is-expr-quantifier e))
-    (return-from iexpr->string (expr->string e)))
   (adt-case expr e
-    ((const symbol)
-     (if (eq '@-all symbol) "" (expr->string e)))
+    ((const name)
+     (if (eq '@-all name) "" (expr->string e)))
+    ((variable symbol)
+     (expr->string e))
+    ((lambda var body)
+     (error "A lambda expression cannot be an array slice argument: ~w." e))
     ((apply fct args)
      (case fct
 	   ('@-idx
@@ -230,7 +236,8 @@
     (.<  50 . 50) (.<= 50 . 50) (.= 50 . 50) (.!= 50 . 50) (.> 50 . 50) (.>= 50 . 50)
     (and 40 . 41) (or 30 . 31) (=> 20 . 21)  (<=> 10 . 11)
     (.and 40 . 41) (.or 30 . 31) (.=> 20 . 21)  (.<=> 10 . 11)
-    (+ 100 . 101) (- 100 . 101) (* 110 . 111) (/ 110 . 111) (^ 121 . 120)))
+    (+ 100 . 101) (- 100 . 101) (* 110 . 111) (/ 110 . 111) (^ 121 . 120)
+    (! 200 . 201)))
 
 (defun fct-name (op) (symbol-name op))
 

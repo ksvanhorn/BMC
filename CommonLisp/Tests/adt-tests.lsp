@@ -39,6 +39,32 @@
       (h foo))))
 
   (assert-expands
+   '(let ((fum some-expr))
+      (cond
+        ((is-fum-bar fum)
+	 (let ((a (fum-bar-a fum))) 2))
+	((is-fum-baz fum)
+	 (let ((b (fum-baz-b fum))) 3))
+	(t 4)))
+   (adt-case fum some-expr
+     ((bar a) 2)
+     ((baz b) 3)
+     (otherwise 4)))
+
+  (assert-expands
+   '(let ((fum some-expr))
+      (cond
+        ((is-fum-bar fum)
+	 (let ((a (fum-bar-a fum))) 2))
+	((is-fum-baz fum)
+	 (let ((b (fum-baz-b fum))) 3))
+	(t 4)))
+   (adt-case fum some-expr
+     ((bar a) 2)
+     ((baz b) 3)
+     (t 4)))
+
+  (assert-expands
    '(defstruct (foo (:predicate is-foo))
      (bar nil :read-only t)
      (baz nil :read-only t))
