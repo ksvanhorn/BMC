@@ -4,11 +4,72 @@
 
 (defun compile-to-csharp (csharp-name-space class-name mdl)
   (let ((stoch-vars (stochastic-vars (model-body mdl))))
-    (format t "Stochastic: ~a~%" stoch-vars))
-  (let ((e (rels->pdf (model-body mdl))))
-    (format t "PDF:~%~a~%" (expr:expr->string e)))
+    (format t "Stochastic: ~a~%~%" stoch-vars))
+  (let* ((e (rels->pdf (model-body mdl)))
+	 (e1 (prove::expand-densities e))
+	 (e1a (prove::simplify-expr e1))
+	 (e2 (prove::eliminate-let-expressions e1a))
+	 (e2a (prove::simplify-expr e2))
+	 (e3 (prove::expand-products e2a))
+	 (e3a (prove::simplify-expr e3))
+	 (e4 (funcall (prove::expand-array-lengths (args-vars-dims mdl))
+		      e3a))
+	 (e4a (prove::simplify-expr e4))
+	 (exp e4a))
+    (let ((*fmt-ostream* *standard-output*))
+      ;(format t "PDF:~%")
+      ;(print-product e)
+      ;(format t "~%PDFxd:~%")
+      ;(print-product e1)
+      (format t "~%PDFxp:~%")
+      (print-product exp)))
   (write-csharp-class csharp-name-space class-name
 		      (lambda () (write-csharp-class-body mdl))))
+
+(defun print-product (e)
+  (assert (is-expr-apply e))
+  (assert (eq '* (expr-apply-fct e)))
+  (let ((*indent-amount* 2))
+    (print-factors (expr-apply-args e))))
+
+(defun print-factors (factors)
+  (dolist (x factors) (print-factor x)))
+
+(defun print-factor (x)
+  (adt-case expr x
+    ((apply fct args)
+     (case fct
+       ('* (fmt "*") (indent (print-factors args)))
+       ('! (print-let args))
+       ('qprod (print-qprod args))
+       ('if-then-else (print-if-then-else args))
+       (otherwise (fmt "~a" (expr:expr->string x)))))
+    (otherwise
+     (fmt "~a" (expr:expr->string x)))))
+
+(defun print-let (args)
+  (assert (= 2 (length args)))
+  (destructuring-bind (f val) args
+    (match-adt1 (expr-lambda var body) f
+      (let ((var-s (expr:expr->string (expr-var var)))
+	    (val-s (expr:expr->string val)))
+	(fmt "LET ~a = ~a IN" var-s val-s)
+	(indent (print-factor body))))))
+
+(defun print-qprod (args)
+  (destructuring-bind (lo hi f) args
+    (match-adt1 (expr-lambda var body) f
+      (let ((lo-s (expr:expr->string lo))
+	    (hi-s (expr:expr->string hi)))
+	(fmt "QPROD ~a, ~a : ~a," var lo-s hi-s)
+	(indent (print-factor body))))))
+
+(defun print-if-then-else (args)
+  (destructuring-bind (test exp-t exp-f) args
+    (fmt "IF-THEN-ELSE ~a" (expr:expr->string test))
+    (indent
+      (print-factor exp-t)
+      (print-factor exp-f))))
 
 (defun write-csharp-class (csharp-name-space class-name write-body)
   (fmt "using System;")
@@ -692,7 +753,7 @@
     ((skip))))
 
 (defun rels->pdf (rels)
-  (expr-app '*! (mapcar #'rel->pdf rels)))
+  (expr-app '* (mapcar #'rel->pdf rels)))
 
 (defun rel->pdf (rel)
   (adt-case relation rel
@@ -704,7 +765,7 @@
      (expr-call
        'if-then-else condition (rel->pdf true-branch) (rel->pdf false-branch)))
     ((loop var lo hi body)
-     (expr-call 'qprod! lo hi (expr-lam var (rel->pdf body))))
+     (expr-call 'qprod lo hi (expr-lam var (rel->pdf body))))
     ((let var val body)
      (expr-call '! (expr-lam var (rel->pdf body)) val))
     ((skip)

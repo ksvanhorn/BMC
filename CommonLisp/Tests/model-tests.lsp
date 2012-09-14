@@ -348,4 +348,34 @@ model {
 		  (y (real 3 m)))))))
 )
 
+(defun sexpr->exprs (se) (mapcar #'sexpr->expr se))
+
+(define-test decl-dims-tests
+  (assert-equalp
+    '(v . ())
+    (decl-dims (sexpr->decl '(v integer))))
+  (assert-equalp
+    (cons 'x (list (expr-var 'n)))
+    (decl-dims (sexpr->decl '(x (real n)))))
+  (assert-equalp
+    (cons 'y (sexpr->exprs '(1 (* m n))))
+    (decl-dims (sexpr->decl '(y (realp 1 (* m n))))))
+
+  (assert-equalp
+    (list (cons 'x (sexpr->exprs '(5)))
+	  (cons 'n '())
+	  (cons 'y (sexpr->exprs '(n 2)))
+	  (cons 'z '())
+	  (cons 'w (sexpr->exprs '(3 n))))
+    (args-vars-dims
+      (model::raw-sexpr->model
+        '(:model
+	   (:args (x (integer  5))
+		  (n integerp))
+	   (:reqs)
+	   (:vars (y (realp n 2))
+		  (z boolean)
+		  (w (integer 3 n)))))))
+)
+
 ;; TODO: Add tests that verify error-checking (check-model)

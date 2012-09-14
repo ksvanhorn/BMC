@@ -6,7 +6,7 @@
 (load "utils")
 (load "expr")
 (load "model")
-;(load "prove")
+(load "prove")
 (load "compile")
 
 (defpackage :bmc

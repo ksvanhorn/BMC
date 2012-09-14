@@ -24,7 +24,7 @@
   (:reqs
     (<= 3 nvars)
     (<= 3 nlevels)
-    (qand k (1 (- nlevels 2)) (< (@ cp k) (@ cp (+ 1 k))))
+    (:quant qand k (1 (- nlevels 2)) (< (@ cp k) (@ cp (+ 1 k))))
     (< (- nvars 2) dof_Sigma_x_form)
     (is-symm-pd inverse_scale_Sigma_x_form))
   (:vars
@@ -109,7 +109,7 @@
           (~ (@ tls i :all) (dmvnorm mu Sigma))
 	  (:let (tau (@ tls i 1))
           (:let (scale (exp (@ tls i 2)))
-          (:let (c (qvec k (1 (- nlevels 1)) (/ (- (@ cp k) tau) scale)))
+          (:let (c (:quant qvec k (1 (- nlevels 1)) (/ (- (@ cp k) tau) scale)))
 	    (:for j (1 nvars)
               (~ (@ v i j) (dinterval (@ x i j) c)))))))))))))
 

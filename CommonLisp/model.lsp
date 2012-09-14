@@ -211,6 +211,21 @@
 	       (= 2 (length (second x))))
     (error "Invalid loop (for) relation: ~W." (cons 'for x))))
 
+(defun args-vars-dims (mdl)
+  (append (decls-dims (model-args mdl))
+	  (decls-dims (model-vars mdl))))
+
+(defun decls-dims (decls)
+  (mapcar #'decl-dims decls))
+
+(defun decl-dims (d)
+  (match-adt1 (decl var typ) d
+    (adt-case vtype typ
+      ((scalar stype)
+       (cons var '()))
+      ((array elem-type dims)
+       (cons var dims)))))
+
 ;;; Model checks.
 ;;; TODO: fuller check of model structure?
 

@@ -30,6 +30,17 @@
     ((apply fct args)
      (append-mapcar #'free-vars-in-expr args))))
 
+(defun occurs-free (var-symbol e)
+  (adt-case expr e
+    ((const name)
+     nil)
+    ((variable symbol)
+     (eq var-symbol symbol))
+    ((lambda var body)
+     (and (not (eq var-symbol var)) (occurs-free var-symbol body)))
+    ((apply fct args)
+     (some (lambda (x) (occurs-free var-symbol x)) args))))
+
 ;;; Converting s-expressions to exprs
 
 (defun sexpr->expr (x)
@@ -137,7 +148,8 @@
 
 (defun const->string (x)
   (cond ((integerp x) (format nil "~d" x))
-	((realp x) (format nil "~,,,,,,EE" x))
+	((rationalp x) (format nil "~a" x))
+	((realp x) (format nil "~,,,,,,'EE" x))
 	((symbolp x) (symbol-name x))
 	(t (error "Unimplemented case in expr::literal->string: ~a." x))))
 
@@ -236,7 +248,7 @@
     (.<  50 . 50) (.<= 50 . 50) (.= 50 . 50) (.!= 50 . 50) (.> 50 . 50) (.>= 50 . 50)
     (and 40 . 41) (or 30 . 31) (=> 20 . 21)  (<=> 10 . 11)
     (.and 40 . 41) (.or 30 . 31) (.=> 20 . 21)  (.<=> 10 . 11)
-    (+ 100 . 101) (- 100 . 101) (* 110 . 111) (/ 110 . 111) (^ 121 . 120)
+    (+ 100 . 101) (- 100 . 101) (* 110 . 111) (*! 110 . 111) (/ 110 . 111) (^ 121 . 120)
     (! 200 . 201)))
 
 (defun fct-name (op) (symbol-name op))

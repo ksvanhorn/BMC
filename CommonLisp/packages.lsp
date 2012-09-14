@@ -10,7 +10,7 @@
     :.and :.or :.not :.=> :.<=>
 
     ;; constants
-    :@-all :true :false
+    :@-all :true :false :%pi :%e
 
     ;; scalar types
     :boolean
@@ -31,8 +31,9 @@
     
     ;; functions
     :@ :@-slice :@-rng :@-idx :vec :array-length :num-dims
-    :+ :- :* :*! :/ :^ :neg :exp :tanh :sqrt
-    :sum :dot :inv :if-then-else :!
+    :abs-det :mv-gamma-fct :trace :mat* :quad
+    :+ :- :* :*! :/ :^ :neg :exp :tanh :sqrt :sqr :max
+    :sum :dot :inv :if-then-else :! :gamma-fct :length :vec-
 
     ;; finite quantifiers
     :qand :qor :qsum :qprod :qprod! :qvec
@@ -46,6 +47,9 @@
 
     ;; model symbols
     :~
+
+    ;; coordination
+    :i :i1 :k
     ))
 
 (defpackage :utils
@@ -63,7 +67,7 @@
 (defpackage :expr
   (:use :cl :symbols :adt :utils)
   (:export
-   :free-vars-in-expr
+   :free-vars-in-expr :occurs-free
    :sexpr->expr :expr->string :is-scalar-index :is-slice-all :is-slice-range
    :*convert-boolean-functions*
    :expr-call :expr-app :expr-var :expr-const :expr-lam
@@ -83,7 +87,7 @@
 
    :is-model :make-model :model-args :model-reqs :model-vars :model-body
 
-   :is-decl :make-decl :decl-var :decl-typ
+   :is-decl :make-decl :decl-var :decl-typ :args-vars-dims :decl-dims
 
    :is-vtype
    :is-vtype-scalar :make-vtype-scalar :vtype-scalar-stype

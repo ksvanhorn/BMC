@@ -145,6 +145,8 @@
   (assert-equal "1" (expr->string (make-expr-const :name 1)))
   (assert-equal "TRUE" (expr->string (make-expr-const :name 'true)))
   (assert-equal "bee" (expr->string (make-expr-variable :symbol '|bee|)))
+  (assert-equal "5.0E-1" (expr->string (make-expr-const :name 0.5)))
+  (assert-equal "3/7" (expr->string (make-expr-const :name 3/7)))
 
   (assert-equal
     "3 + 10"
@@ -387,3 +389,21 @@
       (sexpr->expr
         '(:quant qand j (m n) (:let (y (@ x j)) (* y y))))))
 )
+
+(define-test occurs-free-tests
+  (let ((yes '(v
+	       (+ a v)
+	       (+ v a)
+	       (sqr v)
+	       (:quant qand i (1 n) (* v 7))
+	       (+ (- a (/ v 2)) (* x y))))
+	(no '(w
+	      12
+	      %pi
+	      (+ a b)
+	      (:quant qand i (1 n) (* w 7))
+	      (:quant qand v (1 n) (* v 7)))))
+    (dolist (e (mapcar #'sexpr->expr yes))
+      (assert-true (occurs-free 'v e)))
+    (dolist (e (mapcar #'sexpr->expr no))
+      (assert-false (occurs-free 'v e)))))
