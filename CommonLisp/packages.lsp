@@ -122,6 +122,10 @@
    :array-slice-index-range-lo :array-slice-index-range-hi
    :is-array-slice-index-all :make-array-slice-index-all))
 
+(defpackage simplify
+  (:use :cl :adt :expr :utils :symbols)
+  (:export :simplify-expr :is-asae :*can-prove*))
+
 (defpackage :prove
   (:use :cl :adt :expr :utils :symbols)
   (:export))

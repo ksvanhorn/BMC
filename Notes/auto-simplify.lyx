@@ -1,0 +1,578 @@
+#LyX 1.6.9 created this file. For more info see http://www.lyx.org/
+\lyxformat 345
+\begin_document
+\begin_header
+\textclass article
+\use_default_options true
+\language english
+\inputencoding auto
+\font_roman default
+\font_sans default
+\font_typewriter default
+\font_default_family default
+\font_sc false
+\font_osf false
+\font_sf_scale 100
+\font_tt_scale 100
+
+\graphics default
+\paperfontsize default
+\use_hyperref false
+\papersize default
+\use_geometry false
+\use_amsmath 1
+\use_esint 1
+\cite_engine basic
+\use_bibtopic false
+\paperorientation portrait
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation indent
+\defskip medskip
+\quotes_language english
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\author "" 
+\end_header
+
+\begin_body
+
+\begin_layout Title
+Automatic Simplification Notes
+\end_layout
+
+\begin_layout Section
+Semantics
+\end_layout
+
+\begin_layout Standard
+Additional semantics for arithmetic operations when we allow values not
+ in 
+\begin_inset Formula $\mathbb{R}$
+\end_inset
+
+.
+ Define 
+\begin_inset Formula $\mathbb{R}'=\mathbb{R}\cup\{-\infty,\infty\}$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+Comparisons:
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $-\infty<u$
+\end_inset
+
+ for all 
+\begin_inset Formula $u\in\mathbb{R}\cup\{\infty\}$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $u<\infty$
+\end_inset
+
+ for all 
+\begin_inset Formula $u\in\mathbb{R}\cup\{-\infty\}$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $u>v$
+\end_inset
+
+ iff 
+\begin_inset Formula $v<u$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $u\leq v$
+\end_inset
+
+ iff 
+\begin_inset Formula $u<v$
+\end_inset
+
+ or 
+\begin_inset Formula $u=v$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $u\geq v$
+\end_inset
+
+ iff 
+\begin_inset Formula $v\leq u$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $\neg(u<v)$
+\end_inset
+
+ if 
+\begin_inset Formula $ $
+\end_inset
+
+
+\begin_inset Formula $u\notin\mathbb{R}'$
+\end_inset
+
+ or 
+\begin_inset Formula $v\notin\mathbb{R}'$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+Addition:
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $u+\infty=\infty+u=\infty$
+\end_inset
+
+ if 
+\begin_inset Formula $u>-\infty$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $u+-\infty=-\infty+u=-\infty$
+\end_inset
+
+ if 
+\begin_inset Formula $u<\infty$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $-\infty+\infty=\infty+-\infty=\bot$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $u+v=v+u=\bot$
+\end_inset
+
+ if 
+\begin_inset Formula $u\notin\mathbb{R}'$
+\end_inset
+
+ or 
+\begin_inset Formula $v\notin\mathbb{R}'$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+Multiplication:
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $u\cdot\infty=\infty\cdot u=\infty$
+\end_inset
+
+ if 
+\begin_inset Formula $u>0$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $u\cdot\infty=\infty\cdot u=-\infty$
+\end_inset
+
+ if 
+\begin_inset Formula $u<0$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $0\cdot\infty=\infty\cdot0=\bot$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $u\cdot(-\infty)=(-\infty)\cdot u=-\infty$
+\end_inset
+
+ if 
+\begin_inset Formula $u>0$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $ $
+\end_inset
+
+
+\begin_inset Formula $u\cdot(-\infty)=(-\infty)\cdot u=\infty$
+\end_inset
+
+ if 
+\begin_inset Formula $u<0$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $0\cdot(-\infty)=(-\infty)\cdot0=\bot$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $u\cdot v=v\cdot u=\bot$
+\end_inset
+
+ if 
+\begin_inset Formula $u\notin\mathbb{R}'$
+\end_inset
+
+ or 
+\begin_inset Formula $v\notin\mathbb{R}'$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+Exponentiation:
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $\infty^{u}=\infty$
+\end_inset
+
+ if 
+\begin_inset Formula $u>0$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $\infty^{0}=\bot$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $\infty^{u}=0$
+\end_inset
+
+ if 
+\begin_inset Formula $u<0$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $\infty^{u}=\bot$
+\end_inset
+
+ if 
+\begin_inset Formula $u\notin\mathbb{R}'$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $(-\infty)^{u}=\infty$
+\end_inset
+
+ if 
+\begin_inset Formula $u$
+\end_inset
+
+ is an even positive integer.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $(-\infty)^{u}=-\infty$
+\end_inset
+
+ if 
+\begin_inset Formula $u$
+\end_inset
+
+ is an odd positive integer.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $(-\infty)^{0}=\bot$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $(-\infty)^{u}=0$
+\end_inset
+
+ if 
+\begin_inset Formula $u$
+\end_inset
+
+ is a negative integer.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $(-\infty)^{u}=\bot$
+\end_inset
+
+ if 
+\begin_inset Formula $u\notin\mathbb{Z}$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $v^{\infty}=\infty$
+\end_inset
+
+ if 
+\begin_inset Formula $v>0$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $v^{-\infty}=0$
+\end_inset
+
+ if 
+\begin_inset Formula $v>0$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $0^{\infty}=0^{-\infty}=\bot$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $v^{u}=\bot$
+\end_inset
+
+ if 
+\begin_inset Formula $v<0$
+\end_inset
+
+ and 
+\begin_inset Formula $u\notin\mathbb{Z}$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $v^{u}=\bot$
+\end_inset
+
+ when 
+\begin_inset Formula $v\notin\mathbb{R}'$
+\end_inset
+
+ or 
+\begin_inset Formula $u\notin\mathbb{R}$
+\end_inset
+
+'.
+\end_layout
+
+\begin_layout Standard
+Let's consider =to what extent the field axioms remain valid.
+ First, define
+\begin_inset Formula \begin{eqnarray*}
+\mathcal{I}(x) & = & \begin{cases}
+x & \mbox{if }x\in\mathbb{R}'\\
+\bot & \mbox{otherwise}\end{cases}\\
+\mathcal{Z}(x) & = & \begin{cases}
+0 & \mbox{if }x\in\mathbb{R}\\
+\bot & \mbox{otherwise}\end{cases}\end{eqnarray*}
+
+\end_inset
+
+Then for all 
+\begin_inset Formula $u,v,w$
+\end_inset
+
+:
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $u+v=v+u$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $u\cdot v=v\cdot u$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $u+(v+w)=(u+v)+w$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $u\cdot(v\cdot w)=(u\cdot v)\cdot w$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $u+0=\mathcal{I}(u)$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $u\cdot1=\mathcal{I}(u)$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $u\cdot0=\mathcal{Z}(u)$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $u\cdot(v+w)=u\cdot v+u\cdot w$
+\end_inset
+
+ unless
+\end_layout
+
+\begin_deeper
+\begin_layout Itemize
+\begin_inset Formula $u\in\{\infty,-\infty\}$
+\end_inset
+
+, 
+\begin_inset Formula $v,w\in\mathbb{R}'$
+\end_inset
+
+, 
+\begin_inset Formula $\mbox{sgn}(v)\neq\mbox{sgn}(w)$
+\end_inset
+
+, and 
+\begin_inset Formula $v\neq-w$
+\end_inset
+
+.
+\end_layout
+
+\end_deeper
+\begin_layout Itemize
+\begin_inset Formula $(v+w)\cdot u=v\cdot u+w\cdot u$
+\end_inset
+
+ unless
+\end_layout
+
+\begin_deeper
+\begin_layout Itemize
+\begin_inset Formula $u\in\{\infty,-\infty\}$
+\end_inset
+
+, 
+\begin_inset Formula $v,w\in\mathbb{R}'$
+\end_inset
+
+, 
+\begin_inset Formula $\mbox{sgn}(v)\neq\mbox{sgn}(w)$
+\end_inset
+
+, and 
+\begin_inset Formula $v\neq w$
+\end_inset
+
+.
+\end_layout
+
+\end_deeper
+\begin_layout Itemize
+\begin_inset Formula $u$
+\end_inset
+
+ has an additive inverse only if 
+\begin_inset Formula $u\in\mathbb{R}$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Formula $u$
+\end_inset
+
+ has a multiplicative inverse only if 
+\begin_inset Formula $u\in\mathbb{R}\setminus\{0\}$
+\end_inset
+
+.
+\end_layout
+
+\end_body
+\end_document
