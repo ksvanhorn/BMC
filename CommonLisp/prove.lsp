@@ -17,6 +17,15 @@
 	  (push x failed))))
     (values failed count)))
 
+(defgeneric is-provable (prover boolean-expr)
+  (:documentation "Returns t if prover |- boolean-expr."))
+
+(defgeneric also-assume (prover0 boolean-exprs)
+  (:documentation (strcat "Creates from prover0 a new prover object "
+			  "that assumes boolean-exprs to be true.")))
+
+(defparameter *prover* nil)
+
 (defun multi-subst-expr (subs e)
   (dolist (sub subs)
     (destructuring-bind (v . replacement) sub

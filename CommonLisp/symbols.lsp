@@ -20,7 +20,7 @@
     .is-boolean .is-integer .is-integerp0 .is-integerp
     .is-realxn .is-realx .is-real .is-realp0 .is-realp
     = != < <= > >= is-symm-pd
-    .= .!= .< .<= .> .>= .is-symm-pd quad
+    .= .!= .< .<= .> .>= .is-symm-pd quad fac
     @ @-slice vec array-length num-dims abs-det mv-gamma-fct trace mat*
     + - * *! / ^ neg exp tanh sqrt sqr max
     sum dot inv if-then-else ! gamma-fct length vec-

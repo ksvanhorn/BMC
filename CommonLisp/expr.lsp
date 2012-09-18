@@ -57,6 +57,8 @@
 	      (sexpr->expr-quantifier args))
 	     ((eq :let op)
 	      (sexpr->expr-let args))
+	     ((eq :lambda op)
+	      (sexpr->expr-lambda args))
 	     ((eq '@ op)
 	      (sexpr->expr-array-app op args))
 	     ((is-fct-symbol op)
@@ -76,6 +78,10 @@
       :fct '!
       :args (list (make-expr-lambda :var var :body (sexpr->expr body))
 		  (sexpr->expr val)))))
+
+(defun sexpr->expr-lambda (args)
+  (destructuring-bind (var body) args
+    (make-expr-lambda :var var :body (sexpr->expr body))))
 
 (defun sexpr->expr-quantifier (args)
   (destructuring-bind (op var (lo-x hi-x) body-x) args

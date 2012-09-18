@@ -49,6 +49,14 @@
 		:args (list (make-expr-const :name 1)
 			    (make-expr-variable :symbol 'k)))))
     (sexpr->expr '(@ v j :all (:range 1 k))))
+  
+  (assert-equalp
+    (make-expr-lambda :var 'x
+		      :body (make-expr-apply
+			      :fct '+
+			      :args (list (make-expr-variable :symbol 'x)
+					  (make-expr-const :name 3))))
+    (sexpr->expr '(:lambda x (+ x 3))))
 
   (assert-equalp
     (make-expr-apply

@@ -31,7 +31,7 @@
     
     ;; functions
     :@ :@-slice :@-rng :@-idx :vec :array-length :num-dims
-    :abs-det :mv-gamma-fct :trace :mat* :quad
+    :abs-det :mv-gamma-fct :trace :mat* :quad :fac
     :+ :- :* :*! :/ :^ :neg :exp :tanh :sqrt :sqr :max
     :sum :dot :inv :if-then-else :! :gamma-fct :length :vec-
 
@@ -122,13 +122,13 @@
    :array-slice-index-range-lo :array-slice-index-range-hi
    :is-array-slice-index-all :make-array-slice-index-all))
 
-(defpackage simplify
-  (:use :cl :adt :expr :utils :symbols)
-  (:export :simplify-expr :is-asae :*can-prove*))
-
 (defpackage :prove
   (:use :cl :adt :expr :utils :symbols)
-  (:export))
+  (:export :is-provable :also-assume :*prover*))
+
+(defpackage simplify
+  (:use :cl :adt :expr :utils :symbols :prove)
+  (:export :simplify-expr))
 
 (defpackage :compile
   (:use :cl :model :expr :utils :adt :symbols)
