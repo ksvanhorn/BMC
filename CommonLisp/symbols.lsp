@@ -15,6 +15,7 @@
 (defconstant +fct-symbols+
   '(and or not => <=>
     .and .or .not .=> .<=>
+    is-numberu is-integeru
     is-boolean is-integer is-integerp0 is-integerp is-even is-odd
     is-realxn is-realx is-real is-realp0 is-realp
     .is-boolean .is-integer .is-integerp0 .is-integerp
