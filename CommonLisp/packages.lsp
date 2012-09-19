@@ -10,7 +10,7 @@
     :.and :.or :.not :.=> :.<=>
 
     ;; constants
-    :@-all :true :false :%pi :%e
+    :@-all :true :false :%pi :%e :%undef :%infty+ :%infty-
 
     ;; scalar types
     :boolean
@@ -19,7 +19,7 @@
 
     ;; predicates for scalar types
     :is-boolean
-    :is-integer :is-integerp0 :is-integerp
+    :is-integer :is-integerp0 :is-integerp :is-even :is-odd
     :is-realxn :is-realx :is-real :is-realp0 :is-realp
     :.is-boolean
     :.is-integer :.is-integerp0 :.is-integerp

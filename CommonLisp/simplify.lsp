@@ -19,6 +19,178 @@
       (t nil)))
    (otherwise nil)))
 
+(defun simplify-expr (x)
+  (adt-case expr x
+    ((const name)
+     x)
+    ((variable symbol)
+     x)
+    ((apply fct args)
+     (simplify-apply-expr x fct args))
+))
+
+(defconstant +zero+ (expr-const 0))
+(defconstant +one+ (expr-const 1))
+(defconstant +infty-pos+ (expr-const '%infty+))
+(defconstant +infty-neg+ (expr-const '%infty-))
+(defconstant +undef+ (expr-const '%undef))
+(defconstant +true+ (expr-const 'true))
+(defconstant +false+ (expr-const 'false))
+
+(defun can-prove (e)
+  (and *prover* (is-provable *prover* e)))
+
+(defun simplify-apply-expr (x fct args)
+  (if (and (is-strict-fct fct) (some #'is-undefined args))
+      +undef+
+    (case fct
+      ('^ (simplify-power-expr x args))
+      ('if-then-else (simplify-if-then-else-expr x args))
+      ('fac (simplify-fac-expr x args))
+      (otherwise x)
+)))
+
+(defun is-strict-fct (fct)
+  (not (eq 'if-then-else fct)))
+
+(defun simplify-power-expr (x args)
+  (destructuring-bind (base expt) args
+    (let ((base-num (and (is-expr-const base) (expr-const-name base)))
+	  (expt-num (and (is-expr-const expt) (expr-const-name expt))))
+      (cond
+        ((eql 0 base-num)
+	 (simplify-zero-power-expr x expt))
+	((eql 1 base-num)
+	 (simplify-one-power-expr x expt))
+	((eql '%infty+ base-num)
+	 (simplify-posinf-power-expr x expt))
+	((eql '%infty- base-num)
+	 (simplify-neginf-power-expr x expt))
+	((integerp expt-num)
+	 (simplify-integer-expt-expr x base base-num expt-num))
+	(t x)
+      ))))
+
+(defun simplify-zero-power-expr (x expt)
+  (cond
+    ((equalp +zero+ expt)
+     +undef+)              ; 0 ^ 0 --> undefined
+    ((can-prove (is-positive-expr expt))
+     +zero+)               ; 0 ^ positive --> 0
+    ((can-prove (is-negative-expr expt))
+     (let ((is-even-expr (expr-call 'is-even expt)))
+       (cond               ; is-even implies is-integer
+         ((can-prove is-even-expr)
+	  +infty-pos+)     ; 0 ^ negative-even-integer --> infinity
+	 ((can-prove (expr-call 'not is-even-expr))
+	  +undef+))))      ; 0 ^ negative-not-even --> undefined
+    (t x)))
+
+(defun simplify-one-power-expr (x expt)
+  (cond
+    ((equalp +infty-pos+ expt)
+     +undef+)  ; 1 ^ infinity --> undefined
+    ((equalp +infty-neg+ expt)
+     +undef+)  ; 1 ^ -infinity --> undefined
+    ((can-prove (is-real-expr expt))
+     +one+)    ; 1 ^ real-number --> 1
+    (t x)))
+
+(defun simplify-posinf-power-expr (x expt)
+  (cond
+    ((equalp +zero+ expt)
+     +undef+)      ; infinity ^ 0 --> undefined
+    ((can-prove (is-positive-expr expt))
+     +infty-pos+)  ; infinity ^ positive --> infinity
+    ((can-prove (is-negative-expr expt))
+     +zero+)       ; infinity ^ negative --> 0
+    (t x)))
+
+(defun simplify-neginf-power-expr (x expt)
+  (cond
+    ((equalp +zero+ expt)
+     +undef+)    ; -infinity ^ 0 --> undefined
+    ((can-prove (expr-call 'not (is-integer-expr expt)))
+     +undef+)    ; -infinity ^ non-integer --> undefined
+    ((can-prove (is-negative-expr expt))
+     (if (can-prove (is-integer-expr expt))
+	 +zero+     ; -infinity ^ negative-integer --> 0
+       x))
+    ((can-prove (is-positive-expr expt))
+     (cond
+       ((can-prove (expr-call 'is-even expt))
+	+infty-pos+)  ;; -infinity ^ positive-even-integer --> infinity
+       ((can-prove (expr-call 'is-odd expt))
+	+infty-neg+)  ;; -infinity ^ positive-odd-integer --> -infinity
+       (t x)))
+    (t x)))
+
+(defun simplify-integer-expt-expr (x base base-num expt-num)
+  (cond
+    ((numberp base-num)
+     (expr-const (expt base-num expt-num)))  ; constant folding
+    ((and (zerop expt-num) (can-prove (is-nonzero-expr base))
+	  (can-prove (is-real-expr base)))
+     +one+)
+    ((eql 1 expt-num)
+     base)
+#|
+    ((and (is-expr-apply base) (eq '^ (expr-apply-fct base)))
+     (match-adt1 expr-apply (fct args)
+       (destructuring-bind (r s) args
+         (let ((p (simplify-product (expr-call '* s expt-num))))
+	|#   
+    (t x)))
+
+(defun simplify-if-then-else-expr (x args)
+  (destructuring-bind (test tbranch fbranch) args
+    (cond
+      ((equalp +true+ test)
+       tbranch)
+      ((equalp +false+ test)
+       fbranch)
+      ((equalp +undef+ test)
+       +undef+)
+      (t x))))
+
+(defun simplify-fac-expr (x args)
+  (destructuring-bind (a) args
+    (adt-case expr a
+     ((const name)
+      (if (integerp name)
+	  (if (<= 0 name)
+	      (expr-const (factorial name))
+	    (expr-const '%undef))
+	x))
+     (otherwise x))))      
+  
+(defun factorial (n)
+  (let ((result 1))
+    (loop for k from 2 to n do
+      (setf result (* result k)))
+    result))
+
+(defun is-positive-expr (e)
+  (expr-call '< +zero+ e))
+
+(defun is-negative-expr (e)
+  (expr-call '< e +zero+))
+
+(defun is-real-expr (e)
+  (expr-call 'is-real e))
+
+(defun is-realx-expr (e)
+  (expr-call 'is-realx e))
+
+(defun is-integer-expr (e)
+  (expr-call 'is-integer e))
+
+(defun is-nonzero-expr (e)
+  (expr-call '!= +zero+ e))
+
+(defun is-undefined (x)
+  (and (is-expr-const x) (eq '%undef (expr-const-name x))))
+
 (defun is-literal (x)
   (and (is-expr-const x) (numberp (expr-const-name x))))
 

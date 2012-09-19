@@ -4,6 +4,6 @@
 (load "utils")
 (load "expr")
 (load "model")
-(load "simplify")
 (load "prove")
+(load "simplify")
 (load "compile")

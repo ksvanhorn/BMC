@@ -4,7 +4,7 @@
   (member s '(qand .qand qor .qor qsum qprod qprod! qvec)))
 
 (defun is-const-symbol (s)
-  (member s '(@-all true false %pi %e)))
+  (member s '(@-all true false %pi %e %undef %infty+ %infty-)))
 
 (defun is-variable-symbol (s)
   (and (symbolp s) (not (is-const-symbol s))))
@@ -15,7 +15,7 @@
 (defconstant +fct-symbols+
   '(and or not => <=>
     .and .or .not .=> .<=>
-    is-boolean is-integer is-integerp0 is-integerp
+    is-boolean is-integer is-integerp0 is-integerp is-even is-odd
     is-realxn is-realx is-real is-realp0 is-realp
     .is-boolean .is-integer .is-integerp0 .is-integerp
     .is-realxn .is-realx .is-real .is-realp0 .is-realp
