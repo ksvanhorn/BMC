@@ -37,9 +37,6 @@
 (defconstant +true+ (expr-const 'true))
 (defconstant +false+ (expr-const 'false))
 
-(defun can-prove (e)
-  (and *prover* (is-provable *prover* e)))
-
 (defun simplify-apply-expr (x fct args)
   (if (and (is-strict-fct fct) (some #'is-undefined args))
       +undef+
@@ -64,8 +61,27 @@
 	 (simplify-one-power-expr x expt))
 	((integerp expt-num)
 	 (simplify-integer-expt-expr x base base-num expt-num))
-	(t x)
-      ))))
+	(t
+	 (adt-case expr base
+	   ((apply fct args)
+	    (case fct
+	       ('^ (simplify-power-power-expr x args expt))
+	       ('* (simplify-power-of-product x args expt))
+	       (otherwise x)))
+	   (otherwise x)))))))
+
+;;; REQUIRE: expt is not an integer literal
+;;; REQUIRE: full-expr has form (x ^ y) ^ expt, with base-args = (list x y)
+;;;
+(defun simplify-power-power-expr (full-expr base-args expt)
+  (destructuring-bind (x y) base-args
+    (if (can-prove (expr-call 'or
+		     (is-positive-expr x)
+		     (expr-call 'and
+		       (is-nonzero-expr x) (is-integeru-expr expt))))
+	(let ((p (simplify-product (list y expt))))
+	  (simplify-power-expr (expr-call '^ x p) (list x p)))
+      full-expr)))
 
 (defun simplify-zero-power-expr (x expt)
   (let ((ipe (is-positive-expr expt)))
@@ -89,33 +105,49 @@
   (cond
     ((numberp base-num)
      (expr-const (expt base-num expt-num)))  ; constant folding
-    ((and (zerop expt-num) (can-prove (is-nonzero-expr base))
-	  (can-prove (is-real-expr base)))
-     +one+)
-    ((and (eql 1 expt-num) (can-prove (is-numberu-expr base)))
-     base)
+    ((zerop expt-num)
+     (let ((e1 (expr-call 'is-real base))
+	   (e2 (expr-call '!= +zero+ base)))
+       (if (and (can-prove e1) (can-prove e2))
+	   +one+
+	 (expr-call 'if-then-else (expr-call 'and e1 e2) +one+ +undef+))))
+    ((eql 1 expt-num)
+     (let ((test (is-numberu-expr base)))
+       (if (can-prove test)
+	   base
+	 (expr-call 'if-then-else test base +undef+))))
     (t
      (adt-case expr base
        ((apply fct args)
-	(if (eq '^ fct)
-	    (destructuring-bind (r s) args
-	      (let* ((p (simplify-product (list (expr-const expt-num) s)))
-		     (p-num (and (is-expr-const p) (expr-const-name p)))
-		     (e (expr-call '^ r p)))
-		(if (integerp p-num)
-		    (simplify-power-expr e)
-		  e)))
-	  x))
+	(case fct
+	  ('^ (simplify-power-power-expr x args (expr-const expt-num)))
+	  ('* (simplify-power-of-product x args (expr-const expt-num)))
+	  (otherwise (return-from simplify-integer-expt-expr x))))	
        (otherwise x)))))
 
+(defun simplify-power-of-product (x prod-args expt)
+)
+
 (defun simplify-product (args)
-  (expr-app '* args))
+  (flet ((expand-prod (x)
+	   (if (and (is-expr-apply x) (eq '* (expr-apply-fct x)))
+	       (expr-apply-args x)
+	     (list x))))
+    (setf args (append-mapcar #'expand-prod args)))
+  (if (every (lambda (x) (and (is-expr-const x) (numberp (expr-const-name x))))
+	     args)
+    (expr-const (apply #'* (mapcar #'expr-const-name args)))
+    (expr-app '* (exprs-sort args))))
+
+(defun exprs-sort (elist)
+  (let ((es elist))
+    (sort es #'expr<)))
 
 (defun simplify-if-then-else-expr (x args)
   (destructuring-bind (test tbranch fbranch) args
     (cond
-      ((can-prove test) tbranch)
-      ((can-prove (expr-call 'not test)) fbranch)
+      ((equalp +true+ test) tbranch)
+      ((equalp +false+ test) fbranch)
       ((equalp +undef+ test) +undef+)
       (t x))))
 
@@ -151,6 +183,9 @@
 (defun is-integer-expr (e)
   (expr-call 'is-integer e))
 
+(defun is-integeru-expr (e)
+  (expr-call 'is-integeru e))
+
 (defun is-nonzero-expr (e)
   (expr-call '!= +zero+ e))
 
@@ -168,6 +203,9 @@
 
 (defun is-ordinary-fct (x)
   (and (is-expr-apply x) (not (member (expr-apply-fct x) '(+ * ^ fac)))))
+
+(defun expr< (x y)
+  (< (expr-cmp x y) 0))
 
 (defun expr-cmp (x y)
   (cond

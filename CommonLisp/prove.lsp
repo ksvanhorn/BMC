@@ -25,6 +25,18 @@
 
 (defparameter *prover* nil)
 
+(defun can-prove (boolean-expr)
+  (is-provable *prover* boolean-expr))
+
+(defmacro assuming (boolean-exprs &rest body)
+  `(let ((*prover* (also-assume *prover* ,boolean-exprs)))
+     ,@body))
+
+(defmacro assuming-se (boolean-sexprs &rest body)
+  (let ((var (gensym)))
+    `(let ((,var (mapcar #'sexpr->expr ,boolean-sexprs)))
+       (assuming ,var ,@body))))
+
 (defun multi-subst-expr (subs e)
   (dolist (sub subs)
     (destructuring-bind (v . replacement) sub

@@ -160,80 +160,95 @@
   (make-instance 'mock-prover :provables (mapcar #'sexpr->expr plist)))
 
 (define-test simplify-tests
-  (assert-simplified-expr= 5 5)
-  (assert-simplified-expr= x x)
-  (assert-simplified-expr= %pi %pi)
-  (assert-simplified-expr= 2/3 2/3)
-  (assert-simplified-expr= 5.6 5.6)
-  (assert-simplified-expr= %undef %undef)
-
-  (assert-simplified-expr= 1 (fac 0))
-  (assert-simplified-expr= 1 (fac 1))
-  (assert-simplified-expr= 24 (fac 4))
-  (assert-simplified-expr= %undef (fac %undef))
-  (assert-simplified-expr= (fac x) (fac x))
-  (assert-simplified-expr= (fac 3/4) (fac 3/4))
-  (assert-simplified-expr= %undef (fac -1))
-  (assert-simplified-expr= (fac -2/3) (fac -2/3))
-
-  (let ((*prover* (make-prover '(v-true (not v-false)))))
-    (assert-simplified-expr= x (if-then-else v-true x y))
-    (assert-simplified-expr= x (if-then-else v-true x %undef))
-    (assert-simplified-expr= y (if-then-else v-false x y))
-    (assert-simplified-expr= y (if-then-else v-false %undef y)))
-  (assert-simplified-expr= %undef (if-then-else %undef x y))
-  ;; case where test is not boolean?
-
-  (assert-simplified-expr= (mv-gamma-fct x) (mv-gamma-fct x))
-  (assert-simplified-expr= %undef (mv-gamma-fct %undef))
-
-  (assert-simplified-expr= %undef (^ %undef 2))
-  (assert-simplified-expr= %undef (^ 3 %undef))
-
-  (let ((*prover* (make-prover '((< 0 x) (not (< 0 y))))))
-    (assert-simplified-expr= 0 (^ 0 x))  ; x is positive
-    (assert-simplified-expr= %undef (^ 0 y)))
-  (assert-simplified-expr= %undef (^ 0 %undef))
-  (assert-simplified-expr= (if-then-else (< 0 z) 0 %undef) (^ 0 z))
-
-  (let ((*prover* (make-prover '((is-real x) (not (is-real y))))))
-    (assert-simplified-expr= 1 (^ 1 x))
-    (assert-simplified-expr= %undef (^ 1 y)))
-  (assert-simplified-expr= %undef (^ 1 %undef))
-  (assert-simplified-expr= (if-then-else (is-real z) 1 %undef) (^ 1 z))
-
-  (assert-simplified-expr= 8 (^ 2 3))
-  (assert-simplified-expr= 1/9 (^ 3 -2))
-  (assert-simplified-expr= 16/81 (^ 2/3 4))
-  (assert-simplified-expr= -8 (^ -2 3))
-  (assert-simplified-expr= 1/9 (^ -3 -2))
-  (let ((*prover* (make-prover '((is-numberu y)))))
-    (assert-simplified-expr= y (^ y 1)))
-  (assert-simplified-expr= (^ y 1) (^ y 1))
-  (let ((*prover* (make-prover '((!= 0 x) (is-real x)))))
-    (assert-simplified-expr= 1 (^ x 0)))
-
-  (let ((*prover* (make-prover '((is-numberu x) (is-numberu y)
-				 (is-numberu 1/3) (is-numberu 1/2)
-                                 (is-numberu (^ x 1/2))
-				 (is-integeru z) (is-integeru 2) (is-integeru 3)
-				 (is-integeru 4) (is-integeru 8)))))
-    (assert-simplified-expr= (^ x (* 2 y)) (^ (^ x y) 2))
-    (assert-simplified-expr= (^ x (* y z)) (^ (^ x y) z))
-    (assert-simplified-expr= (^ x 4/3) (^ (^ x 1/3) 4))
-    (assert-simplified-expr= (^ x 2) (^ (^ (^ x 1/2) 1/2) 8))
-    (assert-simplified-expr= 2 (^ (^ 2 1/3) 3))
-    (assert-simplified-expr= 9 (^ (^ 3 1/2) 4))
-    ;; MORE HERE -- handle case when not known that all operands have needed types
-  )
-  ;; (x ^ r) ^ s when x > 0? or when s known to be an integer?
-#|
   (let ((*prover* (make-prover '())))
-    (assert-simplified-expr= (^ 
-    (assert-simplified-expr= 1/2 (^ (^ 2 1/3) -3))
-    (assert-simplified-expr= 1/9 (^ (^ 3 1/2) -4)))
+    (assert-simplified-expr= 5 5)
+    (assert-simplified-expr= x x)
+    (assert-simplified-expr= %pi %pi)
+    (assert-simplified-expr= 2/3 2/3)
+    (assert-simplified-expr= 5.6 5.6)
+    (assert-simplified-expr= %undef %undef)
+
+    (assert-simplified-expr= 1 (fac 0))
+    (assert-simplified-expr= 1 (fac 1))
+    (assert-simplified-expr= 24 (fac 4))
+    (assert-simplified-expr= %undef (fac %undef))
+    (assert-simplified-expr= (fac x) (fac x))
+    (assert-simplified-expr= (fac 3/4) (fac 3/4))
+    (assert-simplified-expr= %undef (fac -1))
+    (assert-simplified-expr= (fac -2/3) (fac -2/3))
+
+    (assert-simplified-expr= x (if-then-else true x y))
+    (assert-simplified-expr= x (if-then-else true x %undef))
+    (assert-simplified-expr= y (if-then-else false x y))
+    (assert-simplified-expr= y (if-then-else false %undef y))
+    (assert-simplified-expr= %undef (if-then-else %undef x y))
+
+    (assert-simplified-expr= (mv-gamma-fct x) (mv-gamma-fct x))
+    (assert-simplified-expr= %undef (mv-gamma-fct %undef))
+
+    (assert-simplified-expr= %undef (^ %undef 2))
+    (assert-simplified-expr= %undef (^ 3 %undef))
+
+    (assuming-se '((< 0 x))
+      (assert-simplified-expr= 0 (^ 0 x)))
+    (assuming-se '((not (< 0 x)))
+      (assert-simplified-expr= %undef (^ 0 x)))
+    (assert-simplified-expr= %undef (^ 0 %undef))
+    (assert-simplified-expr= (if-then-else (< 0 z) 0 %undef) (^ 0 z))
+
+    (assuming-se '((is-real x))
+      (assert-simplified-expr= 1 (^ 1 x)))
+    (assert-simplified-expr= %undef (^ 1 %undef))
+    (assert-simplified-expr= (if-then-else (is-real z) 1 %undef) (^ 1 z))
+
+    (assert-simplified-expr= 8 (^ 2 3))
+    (assert-simplified-expr= 1/9 (^ 3 -2))
+    (assert-simplified-expr= 16/81 (^ 2/3 4))
+    (assert-simplified-expr= -8 (^ -2 3))
+    (assert-simplified-expr= 1/9 (^ -3 -2))
+    (assert-simplified-expr= 1/2 (^ 1/2 1))
+    (assuming-se '((is-numberu y))
+      (assert-simplified-expr= y (^ y 1)))
+    (assert-simplified-expr= (if-then-else (is-numberu y) y %undef) (^ y 1))
+    (assuming-se '((!= 0 x) (is-real x))
+      (assert-simplified-expr= 1 (^ x 0)))
+    (assert-simplified-expr=
+      (if-then-else (and (is-real x) (!= 0 x)) 1 %undef)
+      (^ x 0))
+
+    (assuming-se '((or (< 0 x) (and (!= 0 x) (is-integeru z))))
+      (assert-simplified-expr= (^ x (* y z)) (^ (^ x y) z)))
+    (assuming-se '((is-integeru 3))
+      (assert-simplified-expr= (^ (^ x y) 3) (^ (^ x y) 3)))
+    (assuming-se '((or (< 0 x) (and (!= 0 x) (is-integeru 2/3))))
+      (assert-simplified-expr= (^ x 1/3) (^ (^ x 1/2) 2/3)))
+    (assuming-se '((or (< 0 x) (and (!= 0 x) (is-integeru -1/5))))
+      (assert-simplified-expr= (^ x (* -1/5 y)) (^ (^ x y) -1/5)))
+    (assuming-se '((or (< 0 x) (and (!= 0 x) (is-integeru 4))))
+      (assert-simplified-expr= (^ x 4/3) (^ (^ x 1/3) 4)))
+    (assuming-se '((or (< 0 2) (and (!= 0 2) (is-integeru 3))))
+      (assert-simplified-expr= 2 (^ (^ 2 1/3) 3)))
+    (assuming-se '((or (< 0 3) (and (!= 0 3) (is-integeru 4))))
+      (assert-simplified-expr= 9 (^ (^ 3 1/2) 4)))
+    (assuming-se '((or (< 0 (^ x 1/2)) (and (!= 0 (^ x 1/2)) (is-integeru 8)))
+		   (or (< 0 x) (and (!= 0 x) (is-integeru 4))))
+      (assert-simplified-expr= (^ x 2) (^ (^ (^ x 1/2) 1/2) 8)))
+    (assuming-se '((or (< 0 (^ w x)) (and (!= 0 (^ w x)) (is-integeru z)))
+		   (or (< 0 w) (and (!= 0 w) (is-integeru (* y z)))))
+      (assert-simplified-expr= (^ w (* x y z)) (^ (^ (^ w x) y) z)))
+    (assert-simplified-expr= (^ (^ (^ w x) y) z) (^ (^ (^ w x) y) z))
+
+#|
+    (assuming-se '((is-integeru n))
+      (assert-simplified-expr= (* (^ a n) (^ b n) (^ c n))
+			       (^ (* a b c) n)))
+    (assuming-se '((is-integeru 2)
+                   (or (< 0 (* x y)) (and (!= 0 (* x y)) (is-integeru 2))))
+       (assert-simplified-expr= (* x y (^ z 4))
+				(^ (* (^ (* x y) 1/2) (^ z 2)) 2)))
 |#
-  ;; More work needed for (x ^ r) ^ s
-  
-; TODO: lambda expressions
+  )
 )
+
+; TODO: lambda expressions
+

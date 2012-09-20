@@ -124,7 +124,8 @@
 
 (defpackage :prove
   (:use :cl :adt :expr :utils :symbols)
-  (:export :is-provable :also-assume :*prover*))
+  (:export :is-provable :also-assume :*prover* :can-prove :assuming
+	   :assuming-se))
 
 (defpackage simplify
   (:use :cl :adt :expr :utils :symbols :prove)
