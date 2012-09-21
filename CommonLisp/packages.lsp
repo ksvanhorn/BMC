@@ -18,7 +18,7 @@
     :realxn :realx :real :realp0 :realp
 
     ;; predicates for scalar types
-    :is-boolean :is-numberu :is-integeru
+    :is-boolean :is-number :is-numberu :is-integeru
     :is-integer :is-integerp0 :is-integerp :is-even :is-odd
     :is-realxn :is-realx :is-real :is-realp0 :is-realp
     :.is-boolean

@@ -44,11 +44,15 @@
       ('^ (simplify-power-expr x args))
       ('if-then-else (simplify-if-then-else-expr x args))
       ('fac (simplify-fac-expr x args))
+      ('* (simplify-product args))
       (otherwise x)
 )))
 
 (defun is-strict-fct (fct)
   (not (eq 'if-then-else fct)))
+
+(defun simplify-power-expr-1 (base expt)
+  (simplify-power-expr (expr-call '^ base expt) (list base expt)))
 
 (defun simplify-power-expr (x args)
   (destructuring-bind (base expt) args
@@ -59,8 +63,19 @@
 	 (simplify-zero-power-expr x expt))
 	((eql 1 base-num)
 	 (simplify-one-power-expr x expt))
-	((integerp expt-num)
-	 (simplify-integer-expt-expr x base base-num expt-num))
+	((and (integerp expt-num) (numberp base-num))
+	 (expr-const (expt base-num expt-num)))  ; constant folding
+	((eql 0 expt-num)
+	 (let ((e1 (expr-call 'is-real base))
+	       (e2 (expr-call '!= +zero+ base)))
+	   (if (and (can-prove e1) (can-prove e2))
+	       +one+
+	     (expr-call 'if-then-else (expr-call 'and e1 e2) +one+ +undef+))))
+	((eql 1 expt-num)
+	 (let ((test (is-numberu-expr base)))
+	   (if (can-prove test)
+	       base
+	     (expr-call 'if-then-else test base +undef+))))
 	(t
 	 (adt-case expr base
 	   ((apply fct args)
@@ -70,7 +85,6 @@
 	       (otherwise x)))
 	   (otherwise x)))))))
 
-;;; REQUIRE: expt is not an integer literal
 ;;; REQUIRE: full-expr has form (x ^ y) ^ expt, with base-args = (list x y)
 ;;;
 (defun simplify-power-power-expr (full-expr base-args expt)
@@ -101,34 +115,31 @@
        +undef+)
       (t (expr-call 'if-then-else ire +one+ +undef+)))))
 
-(defun simplify-integer-expt-expr (x base base-num expt-num)
-  (cond
-    ((numberp base-num)
-     (expr-const (expt base-num expt-num)))  ; constant folding
-    ((zerop expt-num)
-     (let ((e1 (expr-call 'is-real base))
-	   (e2 (expr-call '!= +zero+ base)))
-       (if (and (can-prove e1) (can-prove e2))
-	   +one+
-	 (expr-call 'if-then-else (expr-call 'and e1 e2) +one+ +undef+))))
-    ((eql 1 expt-num)
-     (let ((test (is-numberu-expr base)))
-       (if (can-prove test)
-	   base
-	 (expr-call 'if-then-else test base +undef+))))
-    (t
-     (adt-case expr base
-       ((apply fct args)
-	(case fct
-	  ('^ (simplify-power-power-expr x args (expr-const expt-num)))
-	  ('* (simplify-power-of-product x args (expr-const expt-num)))
-	  (otherwise (return-from simplify-integer-expt-expr x))))	
-       (otherwise x)))))
-
 (defun simplify-power-of-product (x prod-args expt)
-)
+  (if (can-prove (is-integeru-expr expt))
+      (let ((args (mapcar (lambda (a) (simplify-power-expr-1 a expt))
+			  prod-args)))
+	(simplify-product args))
+    x))
 
 (defun simplify-product (args)
+  (cond
+    ((member +zero+ args :test #'equalp)
+     (let* ((args1 (remove +zero+ args :test #'equalp))
+	    (needed (mapcar #'is-number-expr args1))
+	    (unproven (remove-if #'can-prove needed)))
+       (cond
+	 ((null unproven)
+	  +zero+)
+	 ((= 1 (length unproven))
+	  (expr-call 'if-then-else (first unproven) +zero+ +undef+))
+	 (t
+	  (expr-call 'if-then-else (expr-app 'and unproven) +zero+ +undef+)))))
+    ((= 1 (length args))
+     (first args))
+    (t (simplify-product-old args))))
+
+(defun simplify-product-old (args)	  
   (flet ((expand-prod (x)
 	   (if (and (is-expr-apply x) (eq '* (expr-apply-fct x)))
 	       (expr-apply-args x)
@@ -176,6 +187,9 @@
 
 (defun is-real-expr (e)
   (expr-call 'is-real e))
+
+(defun is-number-expr (e)
+  (expr-call 'is-number e))
 
 (defun is-numberu-expr (e)
   (expr-call 'is-numberu e))

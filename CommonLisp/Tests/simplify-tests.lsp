@@ -238,15 +238,35 @@
       (assert-simplified-expr= (^ w (* x y z)) (^ (^ (^ w x) y) z)))
     (assert-simplified-expr= (^ (^ (^ w x) y) z) (^ (^ (^ w x) y) z))
 
-#|
     (assuming-se '((is-integeru n))
       (assert-simplified-expr= (* (^ a n) (^ b n) (^ c n))
 			       (^ (* a b c) n)))
     (assuming-se '((is-integeru 2)
+		   (or (< 0 z) (and (!= 0 z) (is-integeru 2)))
+		   (is-numberu (* x y))
                    (or (< 0 (* x y)) (and (!= 0 (* x y)) (is-integeru 2))))
        (assert-simplified-expr= (* x y (^ z 4))
 				(^ (* (^ (* x y) 1/2) (^ z 2)) 2)))
-|#
+
+    (assert-simplified-expr= %undef (* %undef a))
+    (assert-simplified-expr= %undef (* a %undef))
+    (assert-simplified-expr= %undef (* a %undef b))
+
+    (assuming-se '((is-number a) (is-number b))
+      (assert-simplified-expr= 0 (* 0 a))
+      (assert-simplified-expr= 0 (* a 0))
+      (assert-simplified-expr= 0 (* a 0 b)))
+    (assert-simplified-expr= 
+      (if-then-else (is-number a) 0 %undef)
+      (* 0 a))
+    (assert-simplified-expr=
+      (if-then-else (is-number b) 0 %undef)
+      (* b 0))
+    (assert-simplified-expr=
+      (if-then-else (and (is-number a) (is-number b)) 0 %undef)
+      (* a 0 b))
+
+    (assert-simplified-expr= x (* x))
   )
 )
 
