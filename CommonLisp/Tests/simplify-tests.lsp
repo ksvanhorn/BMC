@@ -267,6 +267,19 @@
       (* a 0 b))
 
     (assert-simplified-expr= x (* x))
+    (assert-simplified-expr= 1 (* 1/5 5))
+    (assert-simplified-expr= 4/3 (* 2/3 2))
+
+    (assuming-se '((is-number x))
+      (assert-simplified-expr= x (* 1 x))
+      (assert-simplified-expr= x (* x 1)))
+    (assert-simplified-expr= (if-then-else (is-number x) x %undef)
+			     (* 1 x))
+    (assert-simplified-expr= (if-then-else (is-number x) x %undef)
+			     (* 1 x))
+
+    ; (* (^ a -1) b a)
+    ; (* c 2 b c a)
   )
 )
 

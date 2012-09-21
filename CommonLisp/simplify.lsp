@@ -137,6 +137,39 @@
 	  (expr-call 'if-then-else (expr-app 'and unproven) +zero+ +undef+)))))
     ((= 1 (length args))
      (first args))
+    (t
+     (let ((new-args (simplify-product-rec args)))
+       (cond
+	 ((null new-args)
+	  +one+)
+	 ((= 1 (length new-args))
+	  (first new-args))
+	 (t
+	  (expr-app '* new-args)))))))
+
+;;; REQUIRE: length(args) > 2
+;;;
+(defun simplify-product-rec (args)
+  (cond
+    ((= 2 (length args))
+     (destructuring-bind (u1 u2) args
+       (cond
+	 ((and (is-literal u1) (is-literal u2))
+	  (let ((num (* (expr-const-name u1) (expr-const-name u2))))
+	    (if (= 1 num)
+	      '()
+	      (list (expr-const num)))))
+	 ((equalp +one+ u1)
+	  (let ((test (is-number-expr u2)))
+	    (if (can-prove test)
+	      (list u2)
+	      (list (expr-call 'if-then-else test u2 +undef+)))))
+	 ((equalp +one+ u2)
+	  (let ((test (is-number-expr u1)))
+	    (if (can-prove test)
+		(list u1)
+		(list (expr-call 'if-then-else test u1 +undef+)))))	  
+	 (t (simplify-product-old args)))))
     (t (simplify-product-old args))))
 
 (defun simplify-product-old (args)	  
@@ -147,8 +180,8 @@
     (setf args (append-mapcar #'expand-prod args)))
   (if (every (lambda (x) (and (is-expr-const x) (numberp (expr-const-name x))))
 	     args)
-    (expr-const (apply #'* (mapcar #'expr-const-name args)))
-    (expr-app '* (exprs-sort args))))
+    (list (expr-const (apply #'* (mapcar #'expr-const-name args))))
+    (exprs-sort args)))
 
 (defun exprs-sort (elist)
   (let ((es elist))
