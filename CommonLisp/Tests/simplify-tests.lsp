@@ -278,6 +278,10 @@
     (assert-simplified-expr= (if-then-else (is-number x) x %undef)
 			     (* 1 x))
 
+    ;(* (^ x 3) (^ x 4))
+    ;(* y (^ y a))
+    ;(* (^ z 3) (^ z -3))
+
     ; (* (^ a -1) b a)
     ; (* c 2 b c a)
   )
