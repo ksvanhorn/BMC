@@ -30,10 +30,10 @@
     :.= :.!= :.< :.<= :.> :.>= :.is-symm-pd
     
     ;; functions
-    :@ :@-slice :@-rng :@-idx :vec :array-length :num-dims
+    :@ :@-slice :@-rng :@-idx :vec :mat :array-length :num-dims
     :abs-det :mv-gamma-fct :trace :mat* :quad :fac
-    :+ :- :* :*! :/ :^ :neg :exp :tanh :sqrt :sqr :max
-    :sum :dot :inv :if-then-else :! :gamma-fct :length :vec-
+    :+ :- :* :*! :/ :^ :neg :exp :tanh :sqrt :sqr :max :vmax
+    :vsum :dot :inv :if-then-else :! :gamma-fct :length :vec-
 
     ;; finite quantifiers
     :qand :qor :qsum :qprod :qprod! :qvec

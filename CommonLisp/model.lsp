@@ -1,6 +1,6 @@
 (in-package :model)
 
-(defadt1 model args reqs vars body)
+(defadt1 model args reqs vars invs body)
 
 (defadt1 decl var typ)
 
@@ -42,18 +42,20 @@
     (make-model :args (mapcar #'sexpr->decl (cdr (second x)))
 		:reqs (mapcar #'sexpr->expr (cdr (third x)))
 		:vars (mapcar #'sexpr->decl (cdr (fourth x)))
+		:invs (mapcar #'sexpr->expr (cdr (fifth x)))
 		:body (let ((*convert-boolean-functions* t))
-			(mapcar #'sexpr->rel (cdr (fifth x)))))))
+			(mapcar #'sexpr->rel (cdr (sixth x)))))))
 
 (defun check-model-top-level (x)
   (unless (and (starts-with :model x)
-	       (= 5 (length x))
+	       (= 6 (length x))
 	       (starts-with :args (second x))
 	       (starts-with :reqs (third x))
 	       (starts-with :vars (fourth x))
-	       (starts-with :body (fifth x)))
+	       (starts-with :invs (fifth x))
+	       (starts-with :body (sixth x)))
     (error "Model must have form ~
-            '(:model (:args ...) (:reqs ...) (:vars ...) (:body ...))'.")))
+            '(:model (:args ...) (:reqs ...) (:vars ...) (:invs ...) (:body ...))'.")))
 
 (defun sexpr->decl (x)
   (when (and (consp x) (= 2 (length x)))
@@ -589,13 +591,15 @@
   (fmt  "~a" (expr->string x)))
 
 (defun pp-model (mdl)
-  (match-adt1 (model args reqs vars body) mdl
+  (match-adt1 (model args reqs vars invs body) mdl
     (pp-hdr-block "args"
       (dolist (x args) (pp-decl x)))
     (pp-hdr-block "reqs"
       (dolist (x reqs) (pp-expr x)))
     (pp-hdr-block "vars"
       (dolist (x vars) (pp-decl x)))
+    (pp-hdr-block "invs"
+      (dolist (x invs) (pp-expr x)))
     (pp-hdr-block "model"
       (dolist (x body) (pp-rel x)))))
    

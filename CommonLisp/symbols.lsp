@@ -22,9 +22,9 @@
     .is-realxn .is-realx .is-real .is-realp0 .is-realp
     = != < <= > >= is-symm-pd
     .= .!= .< .<= .> .>= .is-symm-pd quad fac
-    @ @-slice vec array-length num-dims abs-det mv-gamma-fct trace mat*
-    + - * *! / ^ neg exp tanh sqrt sqr max
-    sum dot inv if-then-else ! gamma-fct length vec-
+    @ @-slice vec mat array-length num-dims abs-det mv-gamma-fct trace mat*
+    + - * *! / ^ neg exp tanh sqrt sqr max vmax
+    vsum dot inv if-then-else ! gamma-fct length vec-
     ddirch-density dcat-density dinterval-density
     dnorm-density dmvnorm-density dgamma-density dwishart-density))
 
