@@ -1,0 +1,31 @@
+NOTATION
+--------
+
+Extend quantifiers to allow filter.
+Extend sum to allow filter.
+dot: inner product of two tensors
+^2: synonym for sqr
+@^2: ^2 applied elementwise to an array
+^-1: synonym for unary /
+@^-1: ^-1 applied elementwise to an array
+^-2: (^-2 x) == (^ x -2)
+@^-2: ^-2 applied elementwise to an array
+^1/2: synonym for sqrt
+@^1/2: ^1/2 applied elementwise
+^-1/2
+@^-1/2
+@*
+@+
+sum instead of vsum
+o* outer product
+o^2 self outer product
+q@sum: quantified elementwise sum of arrays
+
+sa*
+
+
+COMMON SUBEXPRESSIONS
+---------------------
+
+(= 1 (@ segment r))
+(dot (@ x r (:range 2 nvars)) beta)
