@@ -52,7 +52,7 @@
       (<= (@ v r k) (@ nlevels k))))
     (:quant qand r (1 nresp) (<= (@ segment r) 3))
     (is-symm-pd Lambda_x_form)
-    (= 1 (vsum p_segment)))
+    (= 1 (sum p_segment)))
   (:body
     ; segments
     (~ p_segment (ddirch alpha_p_segment))
@@ -75,7 +75,7 @@
         (:block
           (~ (@ x r (:range 2 nvars))
              (dmvnorm mu_x_form (inv Lambda_x_form)))
-	  (:let (sigma (/ 1 (sqrt lambda_y_form)))
+	  (:let (sigma (^-1/2 lambda_y_form))
           (:let (mu (+ mu_y_form (dot (@ x r (:range 2 nvars)) beta)))
             (~ (@ x r 1) (dnorm mu sigma)))))))
 
@@ -89,7 +89,7 @@
     (:for r (1 nresp)
       (:if (= 2 (@ segment r))
         (:for k (1 nvars)
-          (:let (sigma (/ 1 (sqrt (@ lambda_x_halo k))))
+          (:let (sigma (^-1/2 (@ lambda_x_halo k)))
 	  (:let (mu (+ (@ mu_x_halo k) (* (@ gamma k) (@ ksi r))))
             (~ (@ x r k) (dnorm mu sigma)))))))
 
@@ -102,7 +102,7 @@
     (:for r (1 nresp)
       (:if (= 3 (@ segment r))
         (:for k (1 nvars)
-          (:let (sigma (/ 1 (sqrt (@ lambda_x_garb k))))
+          (:let (sigma (^-1/2 (@ lambda_x_garb k)))
             (~ (@ x r k) (dnorm (@ mu_x_garb k) sigma))))))
 
     ; scale usage
