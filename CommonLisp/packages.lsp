@@ -126,6 +126,10 @@
    :array-slice-index-range-lo :array-slice-index-range-hi
    :is-array-slice-index-all :make-array-slice-index-all))
 
+(defpackage :mcimpl
+  (:use :cl :model :expr :utils :symbols :adt)
+  (:export :sexpr->mcimpl))
+
 (defpackage :prove
   (:use :cl :adt :expr :utils :symbols)
   (:export :is-provable :also-assume :*prover* :can-prove :assuming

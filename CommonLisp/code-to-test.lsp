@@ -4,6 +4,7 @@
 (load "utils")
 (load "expr")
 (load "model")
+(load "mcimpl")
 (load "prove")
 (load "simplify")
 (load "compile")

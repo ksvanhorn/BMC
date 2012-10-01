@@ -602,7 +602,6 @@
       (dolist (x invs) (pp-expr x)))
     (pp-hdr-block "model"
       (dolist (x body) (pp-rel x)))))
-   
 
 #|
 
