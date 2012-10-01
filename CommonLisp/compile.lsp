@@ -3,6 +3,7 @@
 ;;; Main function
 
 (defun compile-to-csharp (csharp-name-space class-name mdl)
+#|
   (let ((stoch-vars (stochastic-vars (model-body mdl))))
     (format t "Stochastic: ~a~%~%" stoch-vars))
   (let* ((e (rels->pdf (model-body mdl)))
@@ -23,6 +24,7 @@
       ;(print-product e1)
       (format t "~%PDFxp:~%")
       (print-product exp)))
+|#
   (write-csharp-class csharp-name-space class-name
 		      (lambda () (write-csharp-class-body mdl))))
 
@@ -57,11 +59,13 @@
 	(indent (print-factor body))))))
 
 (defun print-qprod (args)
-  (destructuring-bind (lo hi f) args
+  (destructuring-bind (lo hi filter f) args
+    (unless (equalp (expr-const '%true-pred) filter)
+      (error "Unimplemented: non-trivial filter in print-qprod."))
     (match-adt1 (expr-lambda var body) f
       (let ((lo-s (expr:expr->string lo))
 	    (hi-s (expr:expr->string hi)))
-	(fmt "QPROD ~a, ~a : ~a," var lo-s hi-s)
+	(fmt "QPROD ~a, ~a : ~a" var lo-s hi-s)
 	(indent (print-factor body))))))
 
 (defun print-if-then-else (args)
@@ -106,6 +110,9 @@
 	     ('true "true")
 	     ('false "false")
 	     ('@-all "BMC.FullRange")
+	     ('%pi "Math.PI")
+	     ('%e "Math.E")
+	     ('%true-pred "(x => true)")
 	     (t (error "Unimplemented case in compile::const->string: ~a."
 		       x))))))
 
@@ -205,7 +212,7 @@
     (<=> . "BMC.Iff")
     (^ . "Math.Pow")
     (exp . "Math.Exp")
-    (sqrt . "Math.Sqrt")
+    (^1/2 . "Math.Sqrt")
     (tanh . "Math.Tanh")
     (neg . "-")
     (inv . "BMC.MatrixInverse")
@@ -526,7 +533,8 @@
   (let ((di-list (reverse (zip dims idxvars))))
     (dolist (x di-list)
       (destructuring-bind (dim idxvar) x
-	(setf ch (expr-call 'qand (expr-const 1) dim (expr-lam idxvar ch)))))
+	(setf ch (expr-call 'qand (expr-const 1) dim
+			    (expr-const '%true-pred) (expr-lam idxvar ch)))))
     ch))
 
 (defun write-csharp-log-joint-density (mdl)
@@ -765,7 +773,8 @@
      (expr-call
        'if-then-else condition (rel->pdf true-branch) (rel->pdf false-branch)))
     ((loop var lo hi body)
-     (expr-call 'qprod lo hi (expr-lam var (rel->pdf body))))
+     (expr-call 'qprod lo hi (expr-const '%true-pred)
+		(expr-lam var (rel->pdf body))))
     ((let var val body)
      (expr-call '! (expr-lam var (rel->pdf body)) val))
     ((skip)

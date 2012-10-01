@@ -10,7 +10,7 @@
     :.and :.or :.not :.=> :.<=>
 
     ;; constants
-    :@-all :true :false :%pi :%e :%undef :%infty+ :%infty-
+    :@-all :true :false :%pi :%e :%undef :%infty+ :%infty- :%true-pred
 
     ;; scalar types
     :boolean
@@ -30,13 +30,17 @@
     :.= :.!= :.< :.<= :.> :.>= :.is-symm-pd
     
     ;; functions
-    :@ :@-slice :@-rng :@-idx :vec :mat :array-length :num-dims
-    :abs-det :mv-gamma-fct :trace :mat* :quad :fac
-    :+ :- :* :*! :/ :^ :neg :exp :tanh :sqrt :sqr :max :vmax
-    :vsum :dot :inv :if-then-else :! :gamma-fct :length :vec-
+    :@ :@-slice :@-rng :@-idx :vec :rmat :array-length :num-dims
+    :abs-det :mv-gamma-fct :trace :quad :fac
+    :+ :- :* :*! :/ :^ :neg :exp :tanh :max :vmax
+    :sum :dot :inv :if-then-else :! :gamma-fct :length
+    :^1/2 :^2 :^-1 :^-1/2 :^-2
+    :@^1/2 :@^2 :@^-1 :@^-1/2 :@^-2
+    :@+ :@- :@* :@/ :$*
+    :diag_mat :o* :o^2 :cons :cons-col :cons-row
 
     ;; finite quantifiers
-    :qand :qor :qsum :qprod :qprod! :qvec
+    :qand :qor :qsum :qprod :qprod! :qvec :q@sum :qrmat
     :.qand :.qor
 
     ;; distributions

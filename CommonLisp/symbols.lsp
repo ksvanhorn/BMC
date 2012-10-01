@@ -1,10 +1,10 @@
 (in-package :symbols)
 
 (defun is-fquant-symbol (s)
-  (member s '(qand .qand qor .qor qsum qprod qprod! qvec)))
+  (member s '(qand .qand qor .qor qsum qprod qprod! qvec q@sum qrmat)))
 
 (defun is-const-symbol (s)
-  (member s '(@-all true false %pi %e %undef %infty+ %infty-)))
+  (member s '(@-all true false %pi %e %undef %infty+ %infty- %true-pred)))
 
 (defun is-variable-symbol (s)
   (and (symbolp s) (not (is-const-symbol s))))
@@ -22,9 +22,13 @@
     .is-realxn .is-realx .is-real .is-realp0 .is-realp
     = != < <= > >= is-symm-pd
     .= .!= .< .<= .> .>= .is-symm-pd quad fac
-    @ @-slice vec mat array-length num-dims abs-det mv-gamma-fct trace mat*
-    + - * *! / ^ neg exp tanh sqrt sqr max vmax
-    vsum dot inv if-then-else ! gamma-fct length vec-
+    @ @-slice vec rmat array-length num-dims abs-det mv-gamma-fct trace
+    + - * *! / ^ neg exp tanh max vmax
+    sum dot inv if-then-else ! gamma-fct length
+    ^1/2 ^2 ^-1 ^-1/2 ^-2
+    @^1/2 @^2 @^-1 @^-1/2 @^-2
+    @+ @- @* @/ $*
+    diag_mat o* o^2 cons cons-col cons-row
     ddirch-density dcat-density dinterval-density
     dnorm-density dmvnorm-density dgamma-density dwishart-density))
 

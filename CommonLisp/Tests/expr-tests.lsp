@@ -27,6 +27,7 @@
      :args (list
 	     (make-expr-const :name 1)
 	     (make-expr-const :name 4)
+	     (make-expr-const :name '%true-pred)
 	     (make-expr-lambda
 	       :var 'i
 	       :body (make-expr-apply
@@ -34,6 +35,12 @@
 		       :args (list (make-expr-variable :symbol 'x)
 				   (make-expr-variable :symbol 'i))))))
     (sexpr->expr '(:quant qand i (1 4) (@ x i))))
+
+  (assert-equalp
+    (expr-call 'qand (expr-const 1) (expr-var 'n)
+	       (expr-lam 'k (expr-call 'is-even (expr-var 'k)))
+	       (expr-lam 'k (expr-call '@ (expr-var 'x) (expr-var 'k))))
+    (sexpr->expr '(:quant qand k (1 n) (is-even k) (@ x k))))
 
   (assert-equalp
     (make-expr-apply
@@ -98,6 +105,7 @@
 	        :fct '*
 		:args (list (make-expr-const :name 4)
 			    (make-expr-variable :symbol 'w)))
+	      (make-expr-const :name '%true-pred)
 	      (make-expr-lambda
 	        :var 'j
 		:body (make-expr-variable :symbol 'j))))
@@ -172,6 +180,7 @@
        :args (list
 	       (make-expr-const :name 1)
 	       (make-expr-const :name 4)
+	       (expr-const '%true-pred)
 	       (make-expr-lambda
 		 :var '|i|
 		 :body (make-expr-apply
@@ -238,6 +247,7 @@
 	      :fct '*
 	      :args (list (make-expr-const :name 4)
 			  (make-expr-variable :symbol '|w|)))
+	    (expr-const '%true-pred) 
 	    (make-expr-lambda
 	      :var '|j|
 	      :body (make-expr-variable :symbol '|j|))))))
@@ -402,7 +412,7 @@
   (let ((yes '(v
 	       (+ a v)
 	       (+ v a)
-	       (sqr v)
+	       (^2 v)
 	       (:quant qand i (1 n) (* v 7))
 	       (+ (- a (/ v 2)) (* x y))))
 	(no '(w

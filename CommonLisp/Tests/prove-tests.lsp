@@ -52,7 +52,7 @@
       (prove::pat-match e (expr-const 3)))
     (assert-equalp
       '(nil . nil)
-      (prove::pat-match e (sexpr->expr '(sqrt 3)))))
+      (prove::pat-match e (sexpr->expr '(^1/2 3)))))
 
   (let ((e (expr-var 'v)))
     (assert-equalp
@@ -69,7 +69,7 @@
       (prove::pat-match e (expr-const 4)))
     (assert-equalp
       '(nil . nil)
-      (prove::pat-match e (expr-call 'sqrt (expr-const 3)))))
+      (prove::pat-match e (expr-call '^1/2 (expr-const 3)))))
 
   (let ((e (sexpr->expr '(.and v))))
     (assert-equalp
@@ -94,7 +94,7 @@
       `(t (?y . ,(expr-var 'v)))
       (prove::pat-match e (sexpr->expr '(.and ?y)))))
 
-  (let ((e (expr-lam 'v (sexpr->expr '(+ (^ v 3) (sqrt m))))))
+  (let ((e (expr-lam 'v (sexpr->expr '(+ (^ v 3) (^1/2 m))))))
     (dolist (pat (mapcar #'sexpr->expr
 			 '(32 v x (+ a b) (+ ?v ?x))))
       (assert-equalp '(nil . nil) (prove::pat-match e pat))))
@@ -120,13 +120,13 @@
   (let ((xform1 (prove::se-pattern-xform
 		  '((* ?a (* ?b ?c)) . (* (* ?a ?b) ?c))))
 	(xform2 (prove::se-pattern-xform
-		  '((sqrt ?x) . (^ ?x 1/2))))
+		  '((^1/2 ?x) . (^ ?x 1/2))))
 	(xform3 (prove::se-pattern-xform
 		  '((neg (neg ?x)) . ?x))))
     (assert-equalp
       (sexpr->expr '(^ (+ a b) 1/2))
       (funcall (prove::compose-xforms xform1 xform2 xform3)
-	       (sexpr->expr '(sqrt (+ a b)))))
+	       (sexpr->expr '(^1/2 (+ a b)))))
 
     (assert-equalp
       (sexpr->expr '(* (* x y) z))
@@ -141,7 +141,7 @@
     (assert-equalp
       (sexpr->expr '(:let (x (^ y 1/2)) (* x (^ z 1/2))))
       (funcall (prove::recurse xform2)
-	       (sexpr->expr '(:let (x (sqrt y)) (* x (sqrt z))))))
+	       (sexpr->expr '(:let (x (^1/2 y)) (* x (^1/2 z))))))
 
     (assert-equalp
       (sexpr->expr '(* (* (* a b) c) d))
@@ -174,12 +174,12 @@
   (assert-equalp
     (sexpr->expr '(^ a 1/2))
     (prove::eliminate-extraneous-ops
-      (sexpr->expr '(sqrt a))))
+      (sexpr->expr '(^1/2 a))))
 
   (assert-equalp
     (sexpr->expr '(^ b 2))
     (prove::eliminate-extraneous-ops
-      (sexpr->expr '(sqr b))))
+      (sexpr->expr '(^2 b))))
 
   (assert-equalp
     (sexpr->expr '(+ (^ (* b c) 1/2)
@@ -188,16 +188,15 @@
 			2)))
     (prove::eliminate-extraneous-ops
       (sexpr->expr
-        '(+ (sqrt (* b c))
-	    (sqr (exp (- (/ c (neg (exp d)))
-			 b)))))))
+        '(+ (^1/2 (* b c))
+	    (^2 (exp (- (/ c (neg (exp d))) b)))))))
 )
 
 (define-test expand-distr-tests
   (assert-equalp
     (sexpr->expr
-      '(* (/ 1 (* (sqrt (* 2 %pi)) (* 2 sigma)))
-	  (exp (* -1/2 (sqr (- v (+ mu y)))))))
+      '(* (/ 1 (* (^1/2 (* 2 %pi)) (* 2 sigma)))
+	  (exp (* -1/2 (^2 (- v (+ mu y)))))))
     (prove::expand-densities
       (sexpr->expr '(dnorm-density v (+ mu y) (* 2 sigma)))))
 
@@ -255,7 +254,7 @@
 	       (^ (abs-det V) (* -1/2 nu))
 	       (/ 1 (mv-gamma-fct k (* 1/2 nu)))
 	       (^ (abs-det Lambda) (* 1/2 (- nu k 1)))
-	       (exp (* -1/2 (trace (mat* (inv V) Lambda))))))))
+	       (exp (* -1/2 (trace (dot (inv V) Lambda))))))))
     (prove::expand-densities
       (sexpr->expr '(dwishart-density Lambda nu V))))
 
@@ -267,7 +266,7 @@
 	       (^ (abs-det V) (* -1/2 k))
 	       (/ 1 (mv-gamma-fct k1 (* 1/2 k)))
 	       (^ (abs-det Lambda) (* 1/2 (- k k1 1)))
-	       (exp (* -1/2 (trace (mat* (inv V) Lambda))))))))
+	       (exp (* -1/2 (trace (dot (inv V) Lambda))))))))
     (prove::expand-densities
       (sexpr->expr '(dwishart-density Lambda k V))))
 
@@ -276,15 +275,15 @@
      '(:let (k (array-length 1 Sigma))
 	(* (^ (* 2 %pi) (* -1/2 k))
 	   (^ (abs-det Sigma) -1/2)
-	   (exp (* -1/2 (quad (inv Sigma) (vec- v mu)))))))
+	   (exp (* -1/2 (quad (inv Sigma) (@- v mu)))))))
    (prove::expand-densities
      (sexpr->expr '(dmvnorm-density v mu Sigma))))
 
   (assert-equalp
     (sexpr->expr
       '(* (:quant qprod j (1 n)
-		  (* (/ 1 (* (sqrt (* 2 %pi)) (^ lambda -1/2)))
-		     (exp (* -1/2 (sqr (- (@ x j) m))))))
+		  (* (/ 1 (* (^1/2 (* 2 %pi)) (^ lambda -1/2)))
+		     (exp (* -1/2 (^2 (- (@ x j) m))))))
 	  (* (< 0 lambda) (/ (^ beta alpha) (gamma-fct alpha))
 	     (^ lambda (- alpha 1)) (exp (* -1 beta lambda)))))
     (prove::expand-densities
@@ -331,10 +330,10 @@
       (sexpr->expr '(^ (:quant qprod k (1 m) (* (@ x i) (@ y i))) n))))
 
   (assert-equalp
-    (sexpr->expr '(* (:quant qprod i1 (lo hi) (^ (sqrt (@ x i1)) (@ n i)))
+    (sexpr->expr '(* (:quant qprod i1 (lo hi) (^ (^1/2 (@ x i1)) (@ n i)))
 		     (:quant qprod i1 (lo hi) (^ (@ y i1) (@ n i)))))
     (prove::expand-products
-      (sexpr->expr '(^ (:quant qprod i (lo hi) (* (sqrt (@ x i)) (@ y i)))
+      (sexpr->expr '(^ (:quant qprod i (lo hi) (* (^1/2 (@ x i)) (@ y i)))
 		       (@ n i)))))
 
   (assert-equalp
@@ -392,7 +391,7 @@
   (assert-equalp
     (sexpr->expr '(max 0 (- b (- a 1))))
     (prove::simplify-lengths
-      (sexpr->expr '(array-length 1 (:quant qvec i (a b) (sqr i))))))
+      (sexpr->expr '(array-length 1 (:quant qvec i (a b) (^2 i))))))
   (assert-equalp
     (sexpr->expr 2)
     (prove::simplify-lengths
@@ -406,7 +405,7 @@
         '(* a (:quant qprod i (1 k)
 		      (if-then-else y
 			b
-			(length (:quant qvec i (j k) (sqrt i)))))))))
+			(length (:quant qvec i (j k) (^1/2 i)))))))))
 )
 
 (define-test fold-constants-tests
@@ -648,19 +647,19 @@
     (prove::expr->prover-expr (sexpr->expr '(+ x 3))))
 
   (assert-equal
-     '(+ 3 (* (sqrt z) (sqrt z)))
+     '(+ 3 (* (^1/2 z) (^1/2 z)))
      (prove::expr->prover-expr
        (sexpr->expr
-	 '(:let (x (sqrt z)) (+ 3 (* x x))))))
+	 '(:let (x (^1/2 z)) (+ 3 (* x x))))))
 )
 |#
 
 #|
   (assert-equal
-     '((+ 3 (* x x)) . ((= x (sqrt z))))
+     '((+ 3 (* x x)) . ((= x (^1/2 z))))
      (prove::expr->prover-expr
        (sexpr->expr
-	 '(:let (x (sqrt z)) (+ 3 (* x (:let (x y) x)))))))
+	 '(:let (x (^1/2 z)) (+ 3 (* x (:let (x y) x)))))))
 |#
 
 ; substitution for variable

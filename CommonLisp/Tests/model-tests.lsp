@@ -162,6 +162,7 @@
 		  (sexpr->expr '(:quant qand i (1 n) (<= 0 (@ x i)))))
       :vars (list (sexpr->decl '(y (real n n)))
 		  (sexpr->decl '(z (integer (+ n 2)))))
+      :invs (list (sexpr->expr '(is-symm-pd y)))
       :body (list (sexpr->rel '(:for i (1 n) (~ (@ y i i) (dnorm m s))))
 		  (sexpr->rel '(:if (.= n 100)
 				 (~ z (dmvnorm mu Sigma))
@@ -173,6 +174,7 @@
                             (:quant qand i (1 n) (<= 0 (@ x i))))
 		     (:vars (y (real n n))
                             (z (integer (+ n 2))))
+		     (:invs (is-symm-pd y))
 		     (:body (:for i (1 n) (~ (@ y i i) (dnorm m s)))
 		            (:if (= n 100)
 			      (~ z (dmvnorm mu Sigma))
@@ -282,6 +284,9 @@ vars {
   Y : REAL[N, N]
   Z : REAL[N + 2]
 }
+invs {
+  IS-SYMM-PD(Y)
+}
 model {
   for (I in 1 : N) {
     Y[I, I] ~ DNORM(M, S)
@@ -304,6 +309,7 @@ model {
 	            (:quant qand i (1 n) (<= 0 (@ x i))))
 	     (:vars (y (real n n))
 	            (z (real (+ n 2))))
+	     (:invs (is-symm-pd y))
 	     (:body (:for i (1 n)
 		      (~ (@ y i i) (dnorm m s)))
 	            (:if (= n 100)

@@ -20,7 +20,7 @@
         (sexpr->exprs
 	 '((* (/ x 4) (+ k 3) (- m n))
 	   (:quant qand i4 (1 n) (< i4 k))
-	   (sqrt (^ x 6))
+	   (^1/2 (^ x 6))
 	   false)))))
 
   (assert-equal
@@ -42,6 +42,7 @@
 				(w (realp n))
 				(z integer)
 			        (alpha boolean))
+			 (:invs (<= 0 z))
 			 (:body
 			   (:for i (m k)
 			     (:block
@@ -187,6 +188,7 @@
 			     (:quant qand i (1 m) (< (@ v i) 100)))
 		      (:vars (foo integer)
 			     (bar (realp n)))
+		      (:invs (< 12 foo))
 		      (:body)))))
 
   (assert-equalp
@@ -199,6 +201,7 @@
 			     (bar (realp n))
 			     (baz (real 5))
 			     (bip (integer n)))
+		      (:invs)
 		      (:body)))))
 
 )
@@ -222,7 +225,7 @@
      (sexpr->expr '(@ |x| |i| (:range |lo| |hi|) :all))))
 
   (assert-equal "Math.Sqrt(x)"
-		(cexpr->string (sexpr->expr '(sqrt |x|))))
+		(cexpr->string (sexpr->expr '(^1/2 |x|))))
   (assert-equal "BMC.MatrixInverse(x)"
 		(cexpr->string (sexpr->expr '(inv |x|))))
   (assert-equal "Math.Exp(x / 2)"
@@ -299,7 +302,7 @@ third line
       "    lp += BMC.LogDensityNorm(X, 0, sigma);"
       "}")
     (ppstr (compile::write-ljd-accum-rel "lp"
-	    (sexpr->rel '(:let (|sigma| (/ 1 (sqrt |lambda|)))
+	    (sexpr->rel '(:let (|sigma| (/ 1 (^1/2 |lambda|)))
 			   (~ x (dnorm 0 |sigma|)))))))
 
   (assert-equal
@@ -339,7 +342,7 @@ third line
       "}")
     (ppstr (compile::write-ljd-accum-rel "lp"
 	     (sexpr->rel '(:for |i| ((- m 1) (+ n 2))
-                            (~ (@ x |i|) (dgamma (sqrt (@ y |i|)) 1)))))))
+                            (~ (@ x |i|) (dgamma (^1/2 (@ y |i|)) 1)))))))
 
   (assert-equal
     ""
@@ -474,12 +477,13 @@ public DMatrix b;
 		  (x (integerp n))
 		  (sigma realp)
 		  (y (real n)))
+	   (:invs)
 	   (:body
 	     (~ p (ddirch alpha_p))
 	     (:for |i| (1 n)
 	       (~ (@ x |i|) (dcat p)))
 	     (~ lambda (dgamma a b))
-	     (:let (sigma (/ 1 (sqrt lambda)))
+	     (:let (sigma (/ 1 (^1/2 lambda)))
 	       (:for |i| (1 n)
 	         (:if (= (@ x |i|) 1)
 		   (~ (@ y |i|) (dnorm 0 sigma))
@@ -539,7 +543,7 @@ public DMatrix b;
       "    x = BMC.DrawNorm(0, sigma);"
       "}")
     (ppstr (compile::write-prior-draw-rel
-	     (sexpr->rel '(:let (|sigma| (/ |alpha| (sqrt |lambda|)))
+	     (sexpr->rel '(:let (|sigma| (/ |alpha| (^1/2 |lambda|)))
 			    (~ |x| (dnorm 0 |sigma|)))))))
 
   (assert-equal
@@ -576,7 +580,7 @@ public DMatrix b;
       "}")
     (ppstr (compile::write-prior-draw-rel
 	     (sexpr->rel '(:for |i| ((- m 1) (+ n 2))
-                            (~ (@ x |i|) (dnorm 0 (sqrt (@ y |i|)))))))))
+                            (~ (@ x |i|) (dnorm 0 (^1/2 (@ y |i|)))))))))
 
   (assert-equal
     ""

@@ -157,8 +157,8 @@
     ((/ ?x ?y) . (* ?x (^ ?y -1)))
     ((- ?x ?y) . (+ ?x (* -1 ?y)))
     ((exp ?x) . (^ %e ?x))
-    ((sqrt ?x) . (^ ?x 1/2))
-    ((sqr ?x) . (^ ?x 2))))
+    ((^1/2 ?x) . (^ ?x 1/2))
+    ((^2 ?x) . (^ ?x 2))))
 
 (defconstant +eliminate-extraneous-ops+
   (let* ((xforms (mapcar #'se-pattern-xform
@@ -180,8 +180,8 @@
 
 (defconstant +expand-density-patterns+
   '(((dnorm-density ?x ?mu ?sigma) .
-     (* (/ 1 (* (sqrt (* 2 %pi)) ?sigma))
-        (exp (* -1/2 (sqr (- ?x ?mu))))))
+     (* (/ 1 (* (^1/2 (* 2 %pi)) ?sigma))
+        (exp (* -1/2 (^2 (- ?x ?mu))))))
 
     ((dgamma-density ?x ?alpha ?beta) .
      (* (< 0 ?x) (/ (^ ?beta ?alpha) (gamma-fct ?alpha))
@@ -211,13 +211,13 @@
 	     (^ (abs-det ?V) (* -1/2 ?n))
 	     (/ 1 (mv-gamma-fct k (* 1/2 ?n)))
 	     (^ (abs-det ?X) (* 1/2 (- ?n k 1)))
-	     (exp (* -1/2 (trace (mat* (inv ?V) ?X))))))))
+	     (exp (* -1/2 (trace (dot (inv ?V) ?X))))))))
 
     ((dmvnorm-density ?x ?m ?S) .
      (:let (k (array-length 1 ?S))
        (* (^ (* 2 %pi) (* -1/2 k))
 	  (^ (abs-det ?S) -1/2)
-	  (exp (* -1/2 (quad (inv ?S) (vec- ?x ?m)))))))
+	  (exp (* -1/2 (quad (inv ?S) (@- ?x ?m)))))))
    ))
 
 (defconstant +expand-densities-fct+
@@ -284,10 +284,11 @@
 ;;; qprod(i, lo, hi, e1 * ... * en) ==> 
 ;;; qprod(i, lo, hi, e1) * ... * qprod(i, lo, hi, en)
 (defun expand-qprod-to-factors (args)
-  (destructuring-bind (lo hi f) args
+  (destructuring-bind (lo hi filter f) args
     (adt-case expr f
       ((lambda var body)
-       (mapcar (lambda (x) (expr-call 'qprod lo hi (expr-lam var x)))
+       (mapcar (lambda (x) (expr-call 'qprod lo hi filter
+				      (expr-lam var x)))
 	       (expand-to-factors body))))))
 
 ;;; expand e1 ^ e2
@@ -307,10 +308,10 @@
 	  ; (e1a ^ e1b) ^ e2
 	  (destructuring-bind (e1a e1b) args
 	    (expand-power-power-to-factors e1a e1b e2)))
-	 ((and (eq 'qprod fct) (= 3 (length args)))
-	  ; qprod(i, lo, hi, body) ^ e2
-	  (destructuring-bind (lo hi f) args
-	    (expand-power-qprod-to-factors lo hi f e2)))
+	 ((and (eq 'qprod fct) (= 4 (length args)))
+	  ; qprod(i, lo, hi, filter, body) ^ e2
+	  (destructuring-bind (lo hi filter f) args
+	    (expand-power-qprod-to-factors lo hi filter f e2)))
 	 ((eq '* fct)
 	  ; (e1_1 * ... * e1_n) ^ e2
 	  (expand-power-prod-to-factors args e2))
@@ -327,8 +328,8 @@
     (lambda (x) (expand-to-factors (expr-call '^ x expt)))
     (append-mapcar #'expand-to-factors prod-args)))
 
-;;; qprod(i, lo, hi, f(i)) ^ e2 ==> qprod(i, lo, hi, f(i) ^ e2)
-(defun expand-power-qprod-to-factors (lo hi f e2)
+;;; qprod(i, lo, hi, filter, f(i)) ^ e2 ==> qprod(i, lo, hi, filter, f(i) ^ e2)
+(defun expand-power-qprod-to-factors (lo hi filter f e2)
   (adt-case expr f
     ((lambda var body)
      (let ((excluded (free-vars-in-expr e2)))
@@ -337,7 +338,7 @@
 	   (setf body (subst-expr var (expr-var new-var) body))
 	   (setf var new-var)))
        (expand-to-factors
-	 (expr-call 'qprod lo hi
+	 (expr-call 'qprod lo hi filter
 		    (expr-lam var (expr-call '^ body e2))))))))
 
 (defun expand-quadratic (e)
@@ -531,7 +532,7 @@
 		    '((length ?x) .
 		      (array-length 1 ?x)))
 		  (se-pattern-xform
-		    '((array-length 1 (qvec ?m ?n ?f)) .
+		    '((array-length 1 (qvec ?m ?n ?p ?f)) .
 		      (max 0 (- ?n (- ?m 1)))))
 		  (se-pattern-xform
 		    '((array-length 1 (vec ?x ?y)) . 2))))))
@@ -541,11 +542,12 @@
 (defun simplify-qprod-unvarying-body (e)
   (adt-case expr e
     ((apply fct args)
-     (if (and (eq 'qprod fct) (= 3 (length args)))
-       (destructuring-bind (lo hi f) args
+     (if (and (eq 'qprod fct) (= 4 (length args)))
+       (destructuring-bind (lo hi filter f) args
          (adt-case expr f
 	   ((lambda var body)
-	    (if (occurs-free var body)
+	    (if (or (occurs-free var body)
+		    (not (equalp filter (expr-const '%true-pred))))
 	      e
 	      (expr-call '^ body
 			 (expr-call '- hi (expr-call '- lo (expr-const 1))))))
@@ -559,8 +561,8 @@
 	   ((- ?x ?y) . (+ ?x (* -1 ?y)))
 	   ((- ?x ?y ?z) . (+ ?x (* -1 ?y) (* -1 ?z)))
 	   ((exp ?x) . (^ %e ?x))
-	   ((sqrt ?x) . (^ ?x 1/2))
-	   ((sqr ?x) . (^ ?x 2))
+	   ((^1/2 ?x) . (^ ?x 1/2))
+	   ((^2 ?x) . (^ ?x 2))
 	   ((^ (^ ?x ?a) ?b) . (^ ?x (* ?a ?b))) 
 	   ((length ?x) .
 	    (array-length 1 ?x))

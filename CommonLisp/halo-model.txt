@@ -110,7 +110,8 @@
       (~ (@ nu h) (dnorm (@ mu_nu h) (@ sigma_nu h))))
     (:let (sig_1_2 (* (exp (* 1/2 (+ (@ nu 1) (@ nu 2))))
 	                (tanh (@ nu 3))))
-    (:let (Sigma (mat 2 2 (vec (exp (@ nu 1)) sig_1_2 sig_1_2 (exp (@ nu 2)))))
+    (:let (Sigma (rmat (vec (exp (@ nu 1)) sig_1_2)
+                       (vec sig_1_2 (exp (@ nu 2)))))
     (:let (mu (vec 0 (* -1/2 (@ Sigma 2 2))))
       (:for r (1 nresp)
         (:block

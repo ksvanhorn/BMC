@@ -84,16 +84,21 @@
     (make-expr-lambda :var var :body (sexpr->expr body))))
 
 (defun sexpr->expr-quantifier (args)
-  (destructuring-bind (op var (lo-x hi-x) body-x) args
+  (unless (or (= 4 (length args)) (= 5 (length args)))
+    (error "Wrong number of args for quantifier: ~w" args))
+  (destructuring-bind (op var (lo-x hi-x) filter-or-body . maybe-body) args
+    (unless (is-variable-symbol var)
+      (error "Index var ~W of quantifier expression ~W ~
+              is not a valid variable symbol" var (cons op args)))
     (let ((lo (sexpr->expr lo-x))
 	  (hi (sexpr->expr hi-x))
-	  (body (sexpr->expr body-x)))
-      (unless (is-variable-symbol var)
-	(error "Index var ~W of quantifier expression ~W ~
-                is not a valid variable symbol" var (cons op args)))
-      (make-expr-apply
-        :fct op
-	:args (list lo hi (make-expr-lambda :var var :body body))))))
+	  (filter-x (if maybe-body filter-or-body nil))
+	  (body-x (if maybe-body (car maybe-body) filter-or-body)))
+      (let ((filter (if filter-x
+			(expr-lam var (sexpr->expr filter-x))
+		      (expr-const '%true-pred)))
+	    (body (expr-lam var (sexpr->expr body-x))))
+        (expr-call op lo hi filter body)))))
 
 (defun sexpr->expr-array-app (_ args)
   (unless (and (consp args) (< 1 (length args)))
@@ -162,9 +167,10 @@
 (defun variable->string (x) (symbol-name x))
 
 (defun qexpr->string (fct args) ;(op lo hi var body)
-  (unless (and (= 3 (length args)) (is-expr-lambda (third args)))
+  (unless (and (= 4 (length args))
+	       (is-expr-lambda (fourth args)))
     (error "Invalid argument list for ~a: ~w" fct args))
-  (destructuring-bind (lo hi lexpr) args
+  (destructuring-bind (lo hi filter lexpr) args
     (match-adt1 (expr-lambda var body) lexpr
       (let ((op-s (fct-name fct))
 	    (lo-s (expr->string lo))
