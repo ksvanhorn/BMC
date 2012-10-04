@@ -13,15 +13,15 @@
        (load ,pkg-path)
        (lisp-unit:run-all-tests ,pkg-name))))
 
-#|
+;#|
 (runtests adt)
 (runtests utils)
 (runtests expr)
 (runtests model)
-|#
+;|#
 (runtests mcimpl)
-#|
+;#|
 (runtests simplify)
 (runtests prove)
 (runtests compile)
-|#
+;|#

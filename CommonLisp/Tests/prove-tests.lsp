@@ -31,9 +31,16 @@
     (expr-lam 'y1 (sexpr->expr '(+ (* y z) y1)))
     (prove::subst-expr
       'x (sexpr->expr '(* y z)) (expr-lam 'y (sexpr->expr '(+ x y)))))
-  (let ((e (expr-lam 'x (sexpr->expr '(+ x y)))))
+  (let ((e0 (expr-lam 'x (sexpr->expr '(+ x y))))
+	(e1 (expr-lam 'x (sexpr->expr '(+ x y)))))
     (assert-equalp
-      e (prove::subst-expr 'x (sexpr->expr '(^ y 2)) e)))
+      e1 (prove::subst-expr 'x (sexpr->expr '(^ y 2)) e0)))
+
+  ; Regression test
+  (let ((e0 (sexpr->expr '(:let (a 37) (+ y a))))
+	(e1 (sexpr->expr '(:let (a 37) (+ y a)))))
+    (assert-equalp
+      e1 (prove::subst-expr 'a (sexpr->expr '(^2 foo)) e0)))
 )
 
 (define-test pat-match-tests

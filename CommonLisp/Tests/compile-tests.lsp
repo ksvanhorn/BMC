@@ -240,6 +240,15 @@
 		(cexpr->string (sexpr->expr '(- |x| |y|))))
   (assert-equal "-(X) * Y + -(Z)"
 		(cexpr->string (sexpr->expr '(+ (* (neg x) y) (neg z)))))
+  (assert-equal "BMC.Sum(M, N, (I => X[I - 1]))"
+    (cexpr->string (sexpr->expr '(:quant qsum i (m n) (@ x i)))))
+  (assert-equal "BMC.Sum(M, N, (I => W[I - 1] < X[I - 1]), (I => Y[I - 1]))"
+    (cexpr->string (sexpr->expr '(:quant qsum i (m n) (< (@ w i) (@ x i))
+					 (@ y i)))))
+  (assert-equal "(x < y ? a + b : a * b)"
+    (cexpr->string (sexpr->expr '(if-then-else (< |x| |y|)
+					       (+ |a| |b|)
+					       (* |a| |b|)))))
 ;  (assert-equal "(let x = y ^ 2 in c * x)"
 ;		(cexpr->string (sexpr->expr '(:let (|x| (^ |y| 2))
 ;					       (* |c| |x|)))))
@@ -394,6 +403,18 @@ public DMatrix b;
 "
       (ppstr (compile::gen-decls "Array vars" (sexpr->decls decls)))))
 
+  (assert-equal
+"public MyClassName Copy()
+{
+    MyClassName the_copy = new MyClassName();
+    the_copy.a = BMC.Copy(this.a);
+    the_copy.b = BMC.Copy(this.b);
+    the_copy.c = BMC.Copy(this.c);
+    return the_copy;
+}
+"
+    (ppstr (compile::write-csharp-copy "MyClassName" '(|a| |b| |c|))))
+
   (let ((vars '((|a| (real 2)) (|b| (real 2 2)) (|c| (realp n))
 		(|d| (real n (- m 1))) (|e| real)
 		(|f| (integerp (+ k 1) n)) (|g| (integerp0 k))
@@ -492,48 +513,48 @@ public DMatrix b;
 ; updating deterministic vars
 )
 
-(define-test prior-draw-tests
+(define-test rel-draw-tests
   (assert-equal
     "BMC.DrawDirichlet(p, alpha_p);
 "
-    (ppstr (compile::write-prior-draw-rel
+    (ppstr (compile::write-rel-draw
 	    (sexpr->rel '(~ |p| (ddirch |alpha_p|))))))
 
   (assert-equal
     "x[i - 1] = BMC.DrawCat(p);
 "
-    (ppstr (compile::write-prior-draw-rel
+    (ppstr (compile::write-rel-draw
 	     (sexpr->rel '(~ (@ |x| |i|) (dcat |p|))))))
 
   (assert-equal
     "Y[i - 1, j - 1] = BMC.DrawNorm(MU, SIGMA);
 "
-    (ppstr (compile::write-prior-draw-rel
+    (ppstr (compile::write-rel-draw
 	     (sexpr->rel '(~ (@ y |i| |j|) (dnorm mu sigma))))))
 
   (assert-equal
     "X = BMC.DrawGamma(A * C, B / D);
 "
-    (ppstr (compile::write-prior-draw-rel
+    (ppstr (compile::write-rel-draw
 	     (sexpr->rel '(~ x (dgamma (* a c) (/ b d)))))))
    (assert-equal
     "BMC.DrawMVNorm(V, MU, SIGMA);
 "
-    (ppstr (compile::write-prior-draw-rel
+    (ppstr (compile::write-rel-draw
 	     (sexpr->rel '(~ v (dmvnorm mu sigma))))))
 
 
   (assert-equal
     "BMC.DrawWishart(Lambda, nu + 3, V);
 "
-    (ppstr (compile::write-prior-draw-rel
+    (ppstr (compile::write-rel-draw
 	     (sexpr->rel '(~ |Lambda| (dwishart (+ |nu| 3) V))))))
 
 
   (assert-equal
     "v[j - 1] = BMC.DrawInterval(x, c);
 "
-    (ppstr (compile::write-prior-draw-rel
+    (ppstr (compile::write-rel-draw
 	      (sexpr->rel '(~ (@ |v| |j|) (dinterval |x| |c|))))))
 
   (assert-equal
@@ -542,14 +563,37 @@ public DMatrix b;
       "    var sigma = alpha / Math.Sqrt(lambda);"
       "    x = BMC.DrawNorm(0, sigma);"
       "}")
-    (ppstr (compile::write-prior-draw-rel
+    (ppstr (compile::write-rel-draw
 	     (sexpr->rel '(:let (|sigma| (/ |alpha| (^1/2 |lambda|)))
 			    (~ |x| (dnorm 0 |sigma|)))))))
 
   (assert-equal
+    (strcat-lines
+      "{"
+      "    var sigma = alpha / Math.Sqrt(lambda);"
+      "    var mu = m - offset;"
+      "    x = BMC.DrawNorm(mu, sigma);"
+      "}")
+    (ppstr (compile::write-rel-draw
+	     (sexpr->rel '(:let (|sigma| (/ |alpha| (^1/2 |lambda|)))
+			  (:let (|mu| (- |m| |offset|))
+			    (~ |x| (dnorm |mu| |sigma|))))))))
+
+  (assert-equal
+    (strcat-lines
+      "var sigma = alpha / Math.Sqrt(lambda);"
+      "var mu = m - offset;"
+      "x = BMC.DrawNorm(mu, sigma);")
+    (ppstr (compile::write-rel-draw
+	     (sexpr->rel '(:let (|sigma| (/ |alpha| (^1/2 |lambda|)))
+			  (:let (|mu| (- |m| |offset|))
+			    (~ |x| (dnorm |mu| |sigma|)))))
+	     nil)))
+
+  (assert-equal
     (strcat-lines "Y = BMC.DrawCat(PVEC);"
 		  "X = BMC.DrawGamma(1, 1);")
-    (ppstr (compile::write-prior-draw-rel
+    (ppstr (compile::write-rel-draw
 	     (sexpr->rel '(:block (~ y (dcat pvec)) (~ x (dgamma 1 1)))))))
 
   (assert-equal
@@ -557,7 +601,7 @@ public DMatrix b;
 	    "if (X[I - 1] == 1) {"
 	    "    Z = BMC.DrawNorm(A, B);"
             "}")
-    (ppstr (compile::write-prior-draw-rel
+    (ppstr (compile::write-rel-draw
 	     (sexpr->rel '(:if (= (@ x i) 1) (~ z (dnorm a b)))))))
  
   (assert-equal
@@ -568,23 +612,55 @@ public DMatrix b;
 	    "else {"
 	    "    W[I - 1] = BMC.DrawCat(Q);"
 	    "}")
-    (ppstr (compile::write-prior-draw-rel
+    (ppstr (compile::write-rel-draw
 	     (sexpr->rel '(:if (< (@ v i) 4)
 			    (~ (@ z i) (dnorm m s))
 			    (~ (@ w i) (dcat q)))))))
 
   (assert-equal
     (strcat-lines
+      "if (V[I - 1] < 4) {"
+      "    var M = MU - DIFF;"
+      "    var S = BMC.Sqr(SS);"
+      "    Z[I - 1] = BMC.DrawNorm(M, S);"
+      "}"
+      "else {"
+      "    var Q = BMC.ArrPlus(Q1, Q2);"
+      "    W[I - 1] = BMC.DrawCat(Q);"
+      "}")
+    (ppstr (compile::write-rel-draw
+	     (sexpr->rel '(:if (< (@ v i) 4)
+			    (:let (m (- mu diff))
+			    (:let (s (^2 ss))
+			      (~ (@ z i) (dnorm m s))))
+			    (:let (q (@+ q1 q2))
+			      (~ (@ w i) (dcat q))))))))
+
+  (assert-equal
+    (strcat-lines
       "for (int i = M - 1; i <= N + 2; ++i) {"
       "    X[i - 1] = BMC.DrawNorm(0, Math.Sqrt(Y[i - 1]));"
       "}")
-    (ppstr (compile::write-prior-draw-rel
+    (ppstr (compile::write-rel-draw
 	     (sexpr->rel '(:for |i| ((- m 1) (+ n 2))
                             (~ (@ x |i|) (dnorm 0 (^1/2 (@ y |i|)))))))))
 
   (assert-equal
+    (strcat-lines
+      "for (int i = M - 1; i <= N + 2; ++i) {"
+      "    var j = i - 2;"
+      "    var MU = FOO[j - 1];"
+      "    X[i - 1] = BMC.DrawNorm(MU, Math.Sqrt(Y[i - 1]));"
+      "}")
+    (ppstr (compile::write-rel-draw
+	     (sexpr->rel '(:for |i| ((- m 1) (+ n 2))
+			    (:let (|j| (- |i| 2))
+			    (:let (mu (@ foo |j|))
+                              (~ (@ x |i|) (dnorm mu (^1/2 (@ y |i|)))))))))))
+
+  (assert-equal
     ""
-    (ppstr (compile::write-prior-draw-rel (make-relation-skip))))
+    (ppstr (compile::write-rel-draw (make-relation-skip))))
 
   (assert-equal
     (strcat-lines
@@ -640,6 +716,63 @@ public DMatrix b;
 	    (:block
 	      (~ (@ k i1) (dnorm h g))))))))
 
+)
+
+(define-test write-csharp-validate-arg-tests
+  (assert-equalp
+"BMC.Check(x < y,
+          \"x < y\");
+" 
+    (ppstr (compile::write-csharp-validate-arg (sexpr->expr '(< |x| |y|)))))
+  (assert-equalp
+"for (int J = M; J <= N; ++J) {
+    BMC.Check(X[J - 1] == Y[J - 1],
+              \"X[J - 1] == Y[J - 1]\");
+}
+"
+    (ppstr (compile::write-csharp-validate-arg
+	     (sexpr->expr '(:quant qand j (m n) (= (@ x j) (@ y j))))))) 
+  (assert-equalp
+"for (int J = M; J <= N; ++J) {
+    if (B[J - 1]) {
+        BMC.Check(X[J - 1] == Y[J - 1],
+                  \"X[J - 1] == Y[J - 1]\");
+    }
+}
+"
+    (ppstr (compile::write-csharp-validate-arg
+	     (sexpr->expr '(:quant qand j (m n) (@ b j)
+				   (= (@ x j) (@ y j)))))))
+)
+
+(define-test write-csharp-updates-tests
+  (assert-equalp
+"public void Update()
+{
+    Update_FOO();
+    Update_BAR();
+    Update_BAZ();
+}
+
+public void Update_FOO()
+{
+    FOO = BMC.DrawNorm(M, S);
+}
+
+public void Update_BAR()
+{
+    BAR = BMC.DrawCat(P);
+}
+
+public void Update_BAZ()
+{
+    BAZ = BMC.DrawGamma(A, B);
+}
+"
+    (ppstr (compile::write-csharp-updates
+	    `((foo . ,(sexpr->rel '(~ foo (dnorm m s))))
+	      (bar . ,(sexpr->rel '(~ bar (dcat p))))
+	      (baz . ,(sexpr->rel '(~ baz (dgamma a b))))))))
 )
 
 (define-test ljd-expr-tests

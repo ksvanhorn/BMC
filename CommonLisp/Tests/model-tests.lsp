@@ -384,4 +384,14 @@ model {
 		  (w (integer 3 n)))))))
 )
 
+(define-test misc-model-tests
+  (assert-equalp
+    '(a b c d)
+    (args-vars-names
+      (model::raw-sexpr->model
+        '(:body (:args (a integerp) (b (real 3 a)))
+		(:reqs)
+		(:vars (c realp0) (d (realp a (* a a))))))))
+)
+
 ;; TODO: Add tests that verify error-checking (check-model)

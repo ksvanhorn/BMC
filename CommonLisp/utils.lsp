@@ -15,6 +15,12 @@
 
 (defun zip (&rest lists) (apply #'mapcar #'list lists))
 
+(defun list->pair-list (the-list)
+  (if (null the-list)
+      '()
+    (destructuring-bind (a b . rest) the-list
+      (cons (cons a b) (list->pair-list rest)))))
+
 (defun append-mapcar (fct lst)
   (apply #'append (mapcar fct lst)))
 

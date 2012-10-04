@@ -61,4 +61,8 @@ bar
 baz
 "
     (strcat-lines "foo" "bar" "baz"))
+
+  (assert-equal '() (list->pair-list '()))
+  (assert-equal '((a . 2)) (list->pair-list '(a 2)))
+  (assert-equal '((a . b) (c . d) (5 . 3)) (list->pair-list '(a b c d 5 3)))
 )

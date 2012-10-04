@@ -23,7 +23,7 @@
     = != < <= > >= is-symm-pd
     .= .!= .< .<= .> .>= .is-symm-pd quad fac
     @ @-slice vec rmat array-length num-dims abs-det mv-gamma-fct trace
-    + - * *! / ^ neg exp tanh max vmax
+    + - * *! / ^ neg exp log tanh max min vmax
     sum dot inv if-then-else ! gamma-fct length
     ^1/2 ^2 ^-1 ^-1/2 ^-2
     @^1/2 @^2 @^-1 @^-1/2 @^-2
@@ -42,4 +42,4 @@
   (member x +distr-symbols+))
 
 (defconstant +distr-symbols+
-  '(ddirch dcat dinterval dnorm dmvnorm dgamma dwishart))
+  '(ddirch dcat dinterval dnorm dmvnorm dgamma dwishart dnorm-trunc))

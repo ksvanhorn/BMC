@@ -32,7 +32,7 @@
     ;; functions
     :@ :@-slice :@-rng :@-idx :vec :rmat :array-length :num-dims
     :abs-det :mv-gamma-fct :trace :quad :fac
-    :+ :- :* :*! :/ :^ :neg :exp :tanh :max :vmax
+    :+ :- :* :*! :/ :^ :neg :exp :log :tanh :max :min :vmax
     :sum :dot :inv :if-then-else :! :gamma-fct :length
     :^1/2 :^2 :^-1 :^-1/2 :^-2
     :@^1/2 :@^2 :@^-1 :@^-1/2 :@^-2
@@ -45,6 +45,7 @@
 
     ;; distributions
     :ddirch :dcat :dinterval :dnorm :dmvnorm :dgamma :dwishart
+    :dnorm-trunc
     ;; densities
     :ddirch-density :dcat-density :dinterval-density
     :dnorm-density :dmvnorm-density :dgamma-density :dwishart-density
@@ -60,6 +61,7 @@
   (:use :cl)
   (:export :starts-with :assoc-lookup :zip :strcat :strcat-lines
 	   :read-file :int-range :is-list-of-length
+	   :list->pair-list
 	   :append-mapcar :fdebug :compound-symbol
 	   :n-symbols-not-in :symbol-not-in
 	   :indent :fmt :*indent-level* :*indent-amount* :*fmt-ostream*))
@@ -88,6 +90,7 @@
    :sexpr->vtype :sexpr->decl :sexpr->decls :sexpr->distr
    :sexpr->rellhs :sexpr->rel
    :vtype->string :distr->string :rellhs->expr :pp-decl :pp-rel :pp-model
+   :args-vars-names
 
    :is-model :make-model :model-args :model-reqs :model-vars :model-body
 
@@ -126,21 +129,23 @@
    :array-slice-index-range-lo :array-slice-index-range-hi
    :is-array-slice-index-all :make-array-slice-index-all))
 
-(defpackage :mcimpl
-  (:use :cl :model :expr :utils :symbols :adt)
-  (:export :sexpr->mcimpl))
-
 (defpackage :prove
   (:use :cl :adt :expr :utils :symbols)
   (:export :is-provable :also-assume :*prover* :can-prove :assuming
-	   :assuming-se))
+	   :assuming-se :subst-expr))
+
+(defpackage :mcimpl
+  (:use :cl :model :expr :utils :symbols :adt :prove)
+  (:export :make-mcimpl :is-mcimpl :mcimpl-parameters :mcimpl-derived
+	   :mcimpl-updates :mcimpl->substituted-updates
+	   :sexpr->mcimpl :read-mcimpl))
 
 (defpackage simplify
   (:use :cl :adt :expr :utils :symbols :prove)
   (:export :simplify-expr))
 
 (defpackage :compile
-  (:use :cl :model :expr :utils :adt :symbols)
+  (:use :cl :mcimpl :model :expr :utils :adt :symbols)
   (:shadow :expr->string)
   (:export :compile-to-csharp))
 

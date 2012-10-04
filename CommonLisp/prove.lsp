@@ -56,7 +56,7 @@
 	    (expr-app fct (mapcar #'subst-expr-1 args)))
 	   ((lambda var body)
 	    (cond ((eq v var)
-		   e)
+		   x)
 		  ((not (member var freev))
 		   (expr-lam var (subst-expr-1 body)))
 		  (t

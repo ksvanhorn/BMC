@@ -2,7 +2,7 @@
 
 ;;; Main function
 
-(defun compile-to-csharp (csharp-name-space class-name mdl)
+(defun compile-to-csharp (csharp-name-space class-name mdl impl)
 #|
   (let ((stoch-vars (stochastic-vars (model-body mdl))))
     (format t "Stochastic: ~a~%~%" stoch-vars))
@@ -26,7 +26,8 @@
       (print-product exp)))
 |#
   (write-csharp-class csharp-name-space class-name
-		      (lambda () (write-csharp-class-body mdl))))
+		      (lambda ()
+			(write-csharp-class-body class-name mdl impl))))
 
 (defun print-product (e)
   (assert (is-expr-apply e))
@@ -113,6 +114,8 @@
 	     ('%pi "Math.PI")
 	     ('%e "Math.E")
 	     ('%true-pred "(x => true)")
+	     ('%infty- "Math.NegativeInfinity")
+	     ('%infty+ "Math.PositiveInfinity")
 	     (t (error "Unimplemented case in compile::const->string: ~a."
 		       x))))))
 
@@ -162,9 +165,24 @@
 	 (bexpr->string fct args lprec rprec))
 	((eq '@-idx fct)
 	 (apply #'expr->string (append args (list lprec rprec))))
+	((eq 'if-then-else fct)
+	 (let ((test (expr->string (first args)))
+	       (true-branch (expr->string (second args)))
+	       (false-branch (expr->string (third args))))
+	   (format nil "(~a ? ~a : ~a)" test true-branch false-branch)))
 	(t
+	 (when (is-fquant-with-default-filter fct args)
+	   (setf args (list (first args) (second args) (fourth args))))
 	 (format nil "~a(~{~a~^, ~})"
 		 (fct-name fct) (mapcar #'expr->string args)))))
+
+(defun is-fquant-with-default-filter (fct args)
+  (and (is-fquant-symbol fct)
+       (progn
+	 (unless (= 4 (length args))
+	   (error "Quantifier with wrong number of arguments: (~a ~{~a~})"
+		  fct args))
+	 (equalp (expr-const '%true-pred) (third args)))))
 
 (defun bexpr->string (op args lprec rprec)
   (let* ((op-prec (precedences op))
@@ -208,11 +226,29 @@
   '((array-length . "BMC.Length")
     (qand . "BMC.ForAll")
     (qsum . "BMC.Sum")
+    (qmin . "BMC.QMin")
+    (qmax . "BMC.QMax")
+    (min . "Math.Min")
+    (max . "Math.Max")
     (=> . "BMC.Implies")
     (<=> . "BMC.Iff")
     (^ . "Math.Pow")
     (exp . "Math.Exp")
     (^1/2 . "Math.Sqrt")
+    (^2 . "BMC.Sqr")
+    (^-1 . "BMC.Inv")
+    (^-2 . "BMC.InvSqr")
+    (^-1/2 . "BMC.InvSqrt")
+    (@^-2 . "BMC.ArrInvSqr")
+    (@^2 . "BMC.ArrSqr")
+    (@+ . "BMC.ArrPlus")
+    (@- . "BMC.ArrMinus")
+    (@* . "BMC.ArrTimes")
+    (dot . "BMC.Dot")
+    (diag_mat . "BMC.DiagonalMatrix")
+    ($* . "BMC.ScalarTimesArr")
+    (o^2 . "BMC.SelfOuterProduct")
+    (q@sum . "BMC.ArrSum")
     (tanh . "Math.Tanh")
     (neg . "-")
     (inv . "BMC.MatrixInverse")
@@ -223,6 +259,8 @@
     (.< . "<")
     (.> . ">")
     (.>= . ">=")
+    (and . "&&")
+    (or . "||")
     (@-slice . "BMC.ArraySlice")
     (@-idx . "BMC.Idx")
     (@-rng . "BMC.Range")
@@ -311,8 +349,10 @@
   (match-adt1 (distribution name args) d
     (vars-in-expr-list args)))
 
-(defun write-csharp-class-body (mdl)
+(defun write-csharp-class-body (class-name mdl impl)
   (write-csharp-declarations mdl)
+  (fmt "")
+  (write-csharp-copy class-name (args-vars-names mdl))
   (fmt "")
   (write-csharp-load-arguments (model-args mdl))
   (fmt "")
@@ -322,10 +362,12 @@
   (fmt "")
   (write-csharp-log-joint-density mdl)
   (fmt "")
-  (flet ((f () (mapc #'write-prior-draw-rel (model-body mdl))))
+  (flet ((f () (mapc #'write-rel-draw (model-body mdl))))
     (write-prior-draw #'f))
   (fmt "")
   (write-undefine-all-vars (model-vars mdl))
+  (fmt "")
+  (write-csharp-updates (mcimpl->substituted-updates impl))
   ; ... more ...
 )
 
@@ -339,6 +381,17 @@
   (gen-decls "Model Arguments" (model-args mdl))
   (fmt "")
   (gen-decls "Model Variables" (model-vars mdl)))
+
+(defun write-csharp-copy (class-name vars)
+  (fmt "public ~a Copy()" class-name)
+  (fmt "{")
+  (indent
+    (fmt "~a the_copy = new MyClassName();" class-name)
+    (dolist (v vars)
+      (fmt "the_copy.~a = BMC.Copy(this.~a);" v v))
+    (fmt "return the_copy;"))
+  (fmt "}")
+)
 
 (defun gen-decls (comment decls)
   (fmt "// ~a" comment)
@@ -450,10 +503,56 @@
   (fmt "{")
   (indent
     (dolist (x (args-checks mdl))
-      (let ((bool-expr (expr->string x)))
-      (fmt "BMC.Check(~a, " bool-expr)
-      (fmt "          \"~a\");" bool-expr))))
+      (write-csharp-validate-arg x)))
   (fmt "}"))
+
+(defun write-csharp-validate-arg (x)
+  (if (is-qand-expr x)
+      (write-csharp-validate-arg-qand x)
+    (let ((bool-expr (expr->string x)))
+      (fmt "BMC.Check(~a," bool-expr)
+      (fmt "          \"~a\");" bool-expr))))
+
+(defun is-qand-expr (x)
+  (adt-case expr x
+    ((apply fct args)
+     (eq 'qand fct))
+    (otherwise nil)))
+
+(defun write-csharp-validate-arg-qand (x)
+  (match-adt1 (expr-apply fct args) x
+    (destructuring-bind (lo hi filter pred) args
+      (let ((var (expr-lambda-var pred))
+	    (body (expr-lambda-body pred)))		
+	(fmt "for (int ~a = ~a; ~a <= ~a; ++~a) {"
+	     var (expr->string lo) var (expr->string hi) var)
+	(indent
+	  (if (equalp (expr-const '%true-pred) filter)
+	      (write-csharp-validate-arg body)
+	    (progn
+	      (unless (eq var (expr-lambda-var filter))
+		(error "Invalid QAND expression: ~a." x))
+	      (fmt "if (~a) {" (expr->string (expr-lambda-body filter)))
+	      (indent
+	        (write-csharp-validate-arg body))
+	      (fmt "}"))))
+	(fmt "}")))))
+
+(defun write-csharp-updates (updates)
+  (fmt "public void Update()")
+  (fmt "{")
+  (indent
+    (dolist (x updates)
+      (fmt "Update_~a();" (car x))))			  
+  (fmt "}")
+  (dolist (x updates)
+    (fmt "")
+    (destructuring-bind (name . upd) x
+      (fmt "public void Update_~a()" name)
+      (fmt "{")
+      (indent
+        (write-rel-draw upd))
+      (fmt "}"))))
 
 (defun args-checks (mdl)
   (remove-if #'is-trivially-true
@@ -596,6 +695,7 @@
     (dcat . "Cat")
     (dgamma . "Gamma")
     (dnorm . "Norm")
+    (dnorm-trunc . "NormTruncated")
     (dwishart . "Wishart")
     (dmvnorm . "MVNorm")
     (dinterval . "Interval")))
@@ -627,29 +727,50 @@
 (defun termination-test-string (var hi)
   (expr->string (expr-call '.<= (expr-var var) hi)))
 
-(defun write-prior-draw-rel (rel)
+(defun write-rel-draw (rel &optional (let-needs-brackets t))
   (adt-case relation rel
     ((stochastic lhs rhs)
-     (write-prior-draw-rel-stoch lhs rhs))
+     (write-rel-draw-stoch lhs rhs))
     ((block members)
-     (mapc #'write-prior-draw-rel members))
+     (mapc #'write-rel-draw members))
     ((if condition true-branch false-branch)
-     (write-prior-draw-rel-if condition true-branch false-branch))
+     (write-rel-draw-if condition true-branch false-branch))
     ((loop var lo hi body)
-     (write-prior-draw-rel-loop var lo hi body))
+     (write-rel-draw-loop var lo hi body))
     ((let var val body)
-     (write-prior-draw-rel-let var val body))
+     (write-rel-draw-let (let-list rel) (strip-lets body) let-needs-brackets))
     ((skip)
      )))
 
-(defun write-prior-draw-rel-let (var val body)
-  (fmt "{")
-  (indent
-    (fmt "var ~a = ~a;" (symbol-name var) (expr->string val))
-    (write-prior-draw-rel body))
-  (fmt "}"))
+(defun let-list (rel)
+  (adt-case relation rel
+    ((let var val body)
+     (cons (cons var val) (let-list body)))
+    (otherwise
+     '())))
 
-(defun write-prior-draw-rel-stoch (lhs rhs)
+(defun strip-lets (rel)
+  (adt-case relation rel
+    ((let var val body)
+     (strip-lets body))
+    (otherwise
+     rel)))
+
+(defun write-rel-draw-let (let-defs body needs-brackets)
+  (flet
+   ((main ()
+      (dolist (x let-defs)
+	(destructuring-bind (var . val) x
+	  (fmt "var ~a = ~a;" (symbol-name var) (expr->string val))))
+      (write-rel-draw body)))
+   (if needs-brackets
+       (progn
+	 (fmt "{")
+	 (indent (main))
+	 (fmt "}"))
+     (main))))
+
+(defun write-rel-draw-stoch (lhs rhs)
   (match-adt1 (distribution name args) rhs
     (if (is-scalar-distr name)
       (fmt "~a = ~a(~{~a~^, ~});"
@@ -671,25 +792,25 @@
   (strcat
     "BMC.Draw" (assoc-lookup symbol +csharp-distr-name-assoc+)))
 
-(defun write-prior-draw-rel-if (condition true-branch false-branch)
+(defun write-rel-draw-if (condition true-branch false-branch)
   (fmt "if (~a) {" (expr->string condition))
   (indent
-    (write-prior-draw-rel true-branch))
+    (write-rel-draw true-branch nil))
   (fmt "}")
   (when (not (is-relation-skip false-branch))
     (fmt "else {")
     (indent
-      (write-prior-draw-rel false-branch))
+      (write-rel-draw false-branch nil))
     (fmt "}")))
 
-(defun write-prior-draw-rel-loop (var lo hi body)
+(defun write-rel-draw-loop (var lo hi body)
   (let ((var-str (variable->string var))
 	(lo-str (expr->string lo))
 	(term-str (expr->string (expr-call '.<= (expr-var var) hi))))
     (fmt "for (int ~a = ~a; ~a; ++~a) {"
 	 var-str lo-str term-str var-str)
     (indent
-      (write-prior-draw-rel body))
+      (write-rel-draw body nil))
     (fmt "}")))
 
 (defun write-undefine-all-vars (var-decls)
