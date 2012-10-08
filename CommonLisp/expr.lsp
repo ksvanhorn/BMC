@@ -87,9 +87,12 @@
   (unless (or (= 4 (length args)) (= 5 (length args)))
     (error "Wrong number of args for quantifier: ~w" args))
   (destructuring-bind (op var (lo-x hi-x) filter-or-body . maybe-body) args
+    (unless (is-fquant-symbol op)
+      (error "Operator ~A of quantifier expression ~W ~
+              is not a valid quantifier symbol" op (cons ':quant args)))
     (unless (is-variable-symbol var)
       (error "Index var ~W of quantifier expression ~W ~
-              is not a valid variable symbol" var (cons op args)))
+              is not a valid variable symbol" var (cons ':quant args)))
     (let ((lo (sexpr->expr lo-x))
 	  (hi (sexpr->expr hi-x))
 	  (filter-x (if maybe-body filter-or-body nil))

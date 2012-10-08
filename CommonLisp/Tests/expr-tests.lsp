@@ -146,6 +146,7 @@
   (assert-error 'error (sexpr->expr '(:quant qsum j (1))))
   (assert-error 'error (sexpr->expr '(:quant qsum j (1 n))))
   (assert-error 'error (sexpr->expr '(:quant qsum j (1 n 3) j)))
+  (assert-error 'error (sexpr->expr '(:quant qfoo j (m n) 1)))
   (assert-error 'error (sexpr->expr '(@)))
   (assert-error 'error (sexpr->expr '(@ x)))
   (assert-error 'error (sexpr->expr '(:let)))

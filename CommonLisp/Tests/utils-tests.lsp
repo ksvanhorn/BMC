@@ -51,6 +51,13 @@ ind-f
 	    (fmt "ind-~a" #\e)))
 	(fmt "ind-~a" #\f))))
 
+  (assert-equal
+    (string #\Newline)
+    (with-output-to-string (s)
+      (let ((*indent-amount* 4)
+	    (*fmt-ostream* s))
+	(fmt-blank-line))))
+
   (assert-equal '(3 4 5) (int-range 3 5))
   (assert-equal '(5) (int-range 5 5))
   (assert-equal '() (int-range 4 3))

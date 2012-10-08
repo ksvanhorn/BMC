@@ -256,13 +256,6 @@
 
 (define-test compile-ljd-tests
   (assert-equal
-"first line
-  second line
-third line
-"
-    (strcat-lines "first line" "  second line" "third line"))
-
-  (assert-equal
     "ljd += BMC.LogDensityDirichlet(p, alpha_p);
 "
     (ppstr (compile::write-ljd-accum-rel "ljd"
@@ -306,13 +299,23 @@ third line
 
   (assert-equal
     (strcat-lines
+      "var sigma = 1 / Math.Sqrt(lambda);"
+      "lp += BMC.LogDensityNorm(X, 0, sigma);")
+    (ppstr (compile::write-ljd-accum-rel "lp"
+	    (sexpr->rel '(:let (|sigma| (/ 1 (^1/2 |lambda|)))
+			   (~ x (dnorm 0 |sigma|))))
+	    nil)))
+
+  (assert-equal
+    (strcat-lines
       "{"
       "    var sigma = 1 / Math.Sqrt(lambda);"
       "    lp += BMC.LogDensityNorm(X, 0, sigma);"
       "}")
     (ppstr (compile::write-ljd-accum-rel "lp"
 	    (sexpr->rel '(:let (|sigma| (/ 1 (^1/2 |lambda|)))
-			   (~ x (dnorm 0 |sigma|)))))))
+			   (~ x (dnorm 0 |sigma|))))
+	    t)))
 
   (assert-equal
     (strcat-lines "lp += BMC.LogDensityCat(Y, P);"
@@ -357,6 +360,126 @@ third line
     ""
     (ppstr (compile::write-ljd-accum-rel "lp" (make-relation-skip))))
 
+  ; Test that brackets placed around "let" only when necessary.
+  (assert-equal
+"{
+    var A = 1;
+    var B = 2;
+    lp += BMC.LogDensityGamma(X, A, B);
+}
+for (int I = M; I <= N; ++I) {
+    var A = 1;
+    var B = 2;
+    lp += BMC.LogDensityGamma(Y[I - 1], A, B);
+}
+if (M < N) {
+    var A = 1;
+    var B = 2;
+    lp += BMC.LogDensityGamma(Z, A, B);
+}
+else {
+    var A = 1;
+    var B = 2;
+    lp += BMC.LogDensityGamma(W, A, B);
+}
+"
+    (ppstr (compile::write-ljd-accum-rel "lp"
+	     (sexpr->rel
+	       '(:block
+		  (:let (a 1)
+                  (:let (b 2)
+                    (~ x (dgamma a b))))
+		  (:for i (m n)
+                    (:let (a 1)
+                    (:let (b 2)
+                      (~ (@ y i) (dgamma a b)))))
+		  (:if (< m n)
+                    (:let (a 1)
+                    (:let (b 2)
+                      (~ z (dgamma a b))))
+		    (:let (a 1)
+		    (:let (b 2)
+                      (~ w (dgamma a b))))))))))
+)
+
+(define-test compile-test-updates-tests
+  (assert-equal
+"Using System;
+Using NUnit.Framework;
+Using Estimation;
+Using Common;
+
+namespace Tests
+{
+    static class TestMyModelUpdates
+    {
+        public static void TestAllUpdates(MyModel x, double tol)
+        {
+            TestUpdate_ALPHA(x, tol);
+            TestUpdate_BETA(x, tol);
+        }
+
+        public static void TestUpdate_ALPHA(MyModel x, double tol)
+        {
+            x = x.Copy();
+            x.Draw();
+            MyModel x1 = x.Copy();
+            x1.Update_ALPHA();
+            double ljd_diff = x1.LogJointDensity() - x.LogJointDensity();
+            double ldd_diff = LogDrawDensity_ALPHA(x1) - LogDrawDensity_ALPHA(x);
+            Assert.AreEqual(0.0, ldd_diff - ljd_diff, tol, \"ALPHA\");
+        }
+
+        private static double LogDrawDensity_ALPHA(MyModel x)
+        {
+            // Implement ldd ALPHA
+        }
+
+        public static void TestUpdate_BETA(MyModel x, double tol)
+        {
+            x = x.Copy();
+            x.Draw();
+            MyModel x1 = x.Copy();
+            x1.Update_BETA();
+            double ljd_diff = x1.LogJointDensity() - x.LogJointDensity();
+            double ldd_diff = LogDrawDensity_BETA(x1) - LogDrawDensity_BETA(x);
+            Assert.AreEqual(0.0, ldd_diff - ljd_diff, tol, \"BETA\");
+        }
+
+        private static double LogDrawDensity_BETA(MyModel x)
+        {
+            // Implement ldd BETA
+        }
+
+    }
+}
+"
+    (ppstr (compile::write-test-updates
+	     (lambda (x) (fmt "// Implement ldd ~a" x))
+	     "MyModel"
+	     '(alpha beta))))
+
+  (assert-equal
+"double ldd = 0.0;
+var foo = x[i - 1];
+ldd += BMC.LogDensityNorm(y[i - 1], foo, s);
+ldd += BMC.LogDensityGamma(z[i - 1, j - 1], a, b);
+return ldd;
+"
+    (let ((alpha-rel
+	   (sexpr->rel '(~ x (dnorm m s))))
+	  (beta-rel
+	   (sexpr->rel '(:let (|foo| (@ |x| |i|))
+			(:block
+			  (~ (@ |y| |i|) (dnorm |foo| |s|))
+			  (~ (@ |z| |i| |j|) (dgamma |a| |b|))))))
+	  (gamma-rel
+	   (sexpr->rel '(~ p (ddirch alpha_p)))))
+      (ppstr (compile::write-log-draw-density-body
+	      'beta
+	      `((alpha . ,alpha-rel)
+		(beta . ,beta-rel)
+		(gamma . ,gamma-rel))))))
 )
 
 (define-test compile-tests
@@ -415,6 +538,17 @@ public DMatrix b;
 "
     (ppstr (compile::write-csharp-copy "MyClassName" '(|a| |b| |c|))))
 
+  (assert-equal
+"public DifferentClassName Copy()
+{
+    DifferentClassName the_copy = new DifferentClassName();
+    the_copy.a = BMC.Copy(this.a);
+    the_copy.b = BMC.Copy(this.b);
+    return the_copy;
+}
+"
+    (ppstr (compile::write-csharp-copy "DifferentClassName" '(|a| |b|))))
+
   (let ((vars '((|a| (real 2)) (|b| (real 2 2)) (|c| (realp n))
 		(|d| (real n (- m 1))) (|e| real)
 		(|f| (integerp (+ k 1) n)) (|g| (integerp0 k))
@@ -465,7 +599,10 @@ public DMatrix b;
 "public double LogJointDensity()
 {
     double ljd1 = 0.0;
-    ljd1 += BMC.LogDensityDirichlet(P, ALPHA_P);
+    {
+        var ALPHA_P = BMC.Vec(1.5e+0, 2.0e+0, 1.0e+0);
+        ljd1 += BMC.LogDensityDirichlet(P, ALPHA_P);
+    }
     for (int i = 1; i <= N; ++i) {
         ljd1 += BMC.LogDensityCat(X[i - 1], P);
     }
@@ -481,7 +618,7 @@ public DMatrix b;
             }
         }
     }
-    return (Double.IsNaN(ljd1) ? Double.NegativeInfinity : ljd1);
+    return ljd1;
 }
 "
     (ppstr
@@ -500,7 +637,8 @@ public DMatrix b;
 		  (y (real n)))
 	   (:invs)
 	   (:body
-	     (~ p (ddirch alpha_p))
+	     (:let (alpha_p (vec 1.5 2.0 1.0))
+	       (~ p (ddirch alpha_p)))
 	     (:for |i| (1 n)
 	       (~ (@ x |i|) (dcat p)))
 	     (~ lambda (dgamma a b))

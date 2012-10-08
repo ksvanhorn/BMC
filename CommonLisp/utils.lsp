@@ -83,6 +83,9 @@
   (apply #'format *fmt-ostream* args)
   (format *fmt-ostream* "~%"))
 
+(defun fmt-blank-line ()
+  (format *fmt-ostream* "~%"))
+
 (defparameter *fmt-ostream* *standard-output*)
 
 ; TODO: add def for common pattern (apply #'append (mapcar <fct> <list>))

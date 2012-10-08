@@ -76,20 +76,22 @@
       (print-factor exp-t)
       (print-factor exp-f))))
 
+(defmacro bracket (&rest body)
+  `(progn
+     (fmt "{")
+     (indent ,@body)
+     (fmt "}")))
+
 (defun write-csharp-class (csharp-name-space class-name write-body)
   (fmt "using System;")
   (fmt "using Common;")
-  (fmt "")
+  (fmt-blank-line)
   (fmt "namespace ~a" csharp-name-space)
-  (fmt "{")
-  (indent
+  (bracket
     (fmt "[Serializable]")
     (fmt "public class ~a" class-name)
-    (fmt "{")
-    (indent
-      (funcall write-body))
-    (fmt "}"))
-  (fmt "}"))
+    (bracket
+      (funcall write-body))))
 
 ;;; Printing expressions
 
@@ -223,54 +225,65 @@
     (if (null a) (symbol-name op) (cdr a))))
 
 (defconstant +oper-names+
-  '((array-length . "BMC.Length")
-    (qand . "BMC.ForAll")
-    (qsum . "BMC.Sum")
-    (qmin . "BMC.QMin")
-    (qmax . "BMC.QMax")
-    (min . "Math.Min")
-    (max . "Math.Max")
-    (=> . "BMC.Implies")
-    (<=> . "BMC.Iff")
-    (^ . "Math.Pow")
-    (exp . "Math.Exp")
-    (^1/2 . "Math.Sqrt")
-    (^2 . "BMC.Sqr")
-    (^-1 . "BMC.Inv")
-    (^-2 . "BMC.InvSqr")
-    (^-1/2 . "BMC.InvSqrt")
-    (@^-2 . "BMC.ArrInvSqr")
-    (@^2 . "BMC.ArrSqr")
-    (@+ . "BMC.ArrPlus")
-    (@- . "BMC.ArrMinus")
-    (@* . "BMC.ArrTimes")
-    (dot . "BMC.Dot")
+  '(
+    (and . "&&")
+    (array-length . "BMC.Length")
+    (cons . "BMC.Cons")
+    (cons-col . "BMC.ConsCol")
+    (cons-row . "BMC.ConsRow")
     (diag_mat . "BMC.DiagonalMatrix")
-    ($* . "BMC.ScalarTimesArr")
+    (dot . "BMC.Dot")
+    (exp . "Math.Exp")
+    (inv . "BMC.MatrixInverse")
+    (inv-pd . "BMC.MatrixInversePD")
+    (is-integerp . "BMC.IsIntegerp")
+    (is-integerp0 . "BMC.IsIntegerp0")
+    (is-real . "BMC.IsReal")
+    (is-realp . "BMC.IsRealp")
+    (is-realp0 . "BMC.IsRealp0")
+    (is-realx . "BMC.IsRealx")
+    (is-symm-pd . "BMC.IsSymmetricPositiveDefinite")
+    (log . "Math.Log")
+    (max . "Math.Max")
+    (min . "Math.Min")
+    (neg . "-")
+    (or . "||")
     (o^2 . "BMC.SelfOuterProduct")
     (q@sum . "BMC.ArrSum")
+    (qand . "BMC.ForAll")
+    (qmax . "BMC.QMax")
+    (qmin . "BMC.QMin")
+    (qnum . "BMC.Count")
+    (qsum . "BMC.Sum")
+    (qvec . "BMC.QVec")
     (tanh . "Math.Tanh")
-    (neg . "-")
-    (inv . "BMC.MatrixInverse")
     (vec . "BMC.Vec")
+    ($* . "BMC.ScalarTimesArr")
+    (<=> . "BMC.Iff")
     (= . "==")
+    (=> . "BMC.Implies")
+    (@* . "BMC.ArrTimes")
+    (@+ . "BMC.ArrPlus")
+    (@- . "BMC.ArrMinus")
+    (@-idx . "BMC.Idx")
+    (@-rng . "BMC.Range")
+    (@-slice . "BMC.ArraySlice")
+    (@^-1 . "BMC.ArrInv")
+    (@^-2 . "BMC.ArrInvSqr")
+    (@^2 . "BMC.ArrSqr")
+    (^ . "Math.Pow")
+    (^-1 . "BMC.Inv")
+    (^-1/2 . "BMC.InvSqrt")
+    (^-2 . "BMC.InvSqr")
+    (^1/2 . "Math.Sqrt")
+    (^2 . "BMC.Sqr")
+
     (.= . "==")
     (.<= . "<=")
     (.< . "<")
     (.> . ">")
     (.>= . ">=")
-    (and . "&&")
-    (or . "||")
-    (@-slice . "BMC.ArraySlice")
-    (@-idx . "BMC.Idx")
-    (@-rng . "BMC.Range")
-    (is-realp . "BMC.IsRealp")
-    (is-realnn . "BMC.IsRealnn")
-    (is-real . "BMC.IsReal")
-    (is-realx . "BMC.IsRealx")
-    (is-integerp0 . "BMC.IsIntegerp0")
-    (is-integerp . "BMC.IsIntegerp")
-    (is-symm-pd . "BMC.IsSymmetricPositiveDefinite")))	 
+))
 
 ;;; End printing expressions
 
@@ -351,23 +364,24 @@
 
 (defun write-csharp-class-body (class-name mdl impl)
   (write-csharp-declarations mdl)
-  (fmt "")
+  (fmt-blank-line)
   (write-csharp-copy class-name (args-vars-names mdl))
-  (fmt "")
+  (fmt-blank-line)
   (write-csharp-load-arguments (model-args mdl))
-  (fmt "")
+  (fmt-blank-line)
   (write-csharp-validate-arguments mdl)
-  (fmt "")
+  (fmt-blank-line)
   (write-csharp-allocate-vars (model-vars mdl))
-  (fmt "")
+  (fmt-blank-line)
   (write-csharp-log-joint-density mdl)
-  (fmt "")
+  (fmt-blank-line)
   (flet ((f () (mapc #'write-rel-draw (model-body mdl))))
     (write-prior-draw #'f))
-  (fmt "")
+  (fmt-blank-line)
   (write-undefine-all-vars (model-vars mdl))
-  (fmt "")
+  (fmt-blank-line)
   (write-csharp-updates (mcimpl->substituted-updates impl))
+  (fmt-blank-line)
   ; ... more ...
 )
 
@@ -379,19 +393,16 @@
 
 (defun write-csharp-declarations (mdl)
   (gen-decls "Model Arguments" (model-args mdl))
-  (fmt "")
+  (fmt-blank-line)
   (gen-decls "Model Variables" (model-vars mdl)))
 
 (defun write-csharp-copy (class-name vars)
   (fmt "public ~a Copy()" class-name)
-  (fmt "{")
-  (indent
-    (fmt "~a the_copy = new MyClassName();" class-name)
+  (bracket
+    (fmt "~a the_copy = new ~a();" class-name class-name)
     (dolist (v vars)
       (fmt "the_copy.~a = BMC.Copy(this.~a);" v v))
-    (fmt "return the_copy;"))
-  (fmt "}")
-)
+    (fmt "return the_copy;")))
 
 (defun gen-decls (comment decls)
   (fmt "// ~a" comment)
@@ -439,9 +450,8 @@
 
 (defun write-csharp-allocate-vars (var-decls)
   (fmt "public void AllocateModelVariables()")
-  (fmt "{")
-  (indent (wcs-allocate-vars var-decls))
-  (fmt "}"))
+  (bracket
+    (wcs-allocate-vars var-decls)))
 
 (defun wcs-allocate-vars (var-decls)
   (dolist (d var-decls)
@@ -466,16 +476,14 @@
 
 (defun write-csharp-load-arguments (arg-decls)
   (fmt "public void LoadArguments(BMC.Loader loader)")
-  (fmt "{")
-  (indent
+  (bracket
     (dolist (d arg-decls)
       (match-adt1 (decl var typ) d
 	(let ((vname (symbol-name var))
 	      (infix (csharp-load-type-name typ))
 	      (dim-strings (type->dim-strings typ)))
 	  (fmt "~a = loader.Load~a(\"~a\"~{, ~a~});"
-	       vname infix vname dim-strings)))))
-  (fmt "}"))
+	       vname infix vname dim-strings))))))
 
 (defun type->dim-strings (typ)
   (adt-case vtype typ
@@ -500,11 +508,9 @@
 
 (defun write-csharp-validate-arguments (mdl)
   (fmt "public void ValidateArguments()")
-  (fmt "{")
-  (indent
+  (bracket
     (dolist (x (args-checks mdl))
-      (write-csharp-validate-arg x)))
-  (fmt "}"))
+      (write-csharp-validate-arg x))))
 
 (defun write-csharp-validate-arg (x)
   (if (is-qand-expr x)
@@ -540,19 +546,20 @@
 
 (defun write-csharp-updates (updates)
   (fmt "public void Update()")
-  (fmt "{")
-  (indent
+  (bracket
     (dolist (x updates)
-      (fmt "Update_~a();" (car x))))			  
-  (fmt "}")
+      (fmt "Update_~a();" (car x))))
   (dolist (x updates)
-    (fmt "")
+    (fmt-blank-line)
     (destructuring-bind (name . upd) x
       (fmt "public void Update_~a()" name)
-      (fmt "{")
-      (indent
-        (write-rel-draw upd))
-      (fmt "}"))))
+      (bracket
+        (write-rel-draw upd nil)))))
+
+(defun write-csharp-test-of-updates (class-name)
+  (fmt "public static void TestUpdates(~a )" class-name)
+  (bracket
+   ))
 
 (defun args-checks (mdl)
   (remove-if #'is-trivially-true
@@ -636,26 +643,61 @@
 			    (expr-const '%true-pred) (expr-lam idxvar ch)))))
     ch))
 
+(defun write-test-updates (write-ldd-body class-name update-names)
+  (dolist (x '("System" "NUnit.Framework" "Estimation" "Common"))
+    (fmt "Using ~a;" x))
+  (fmt-blank-line)
+  (fmt "namespace Tests")
+  (bracket
+    (fmt "static class Test~aUpdates" class-name)
+    (bracket
+      (fmt "public static void TestAllUpdates(~a x, double tol)" class-name)
+      (bracket
+        (dolist (update-name update-names)
+          (fmt "TestUpdate_~a(x, tol);" update-name)))
+      (fmt-blank-line)
+      (dolist (update-name update-names)
+	(fmt "public static void TestUpdate_~a(~a x, double tol)"
+	     update-name class-name)
+	(bracket
+	  (fmt "x = x.Copy();")
+          (fmt "x.Draw();")
+	  (fmt "~a x1 = x.Copy();" class-name)
+	  (fmt "x1.Update_~a();" update-name)
+	  (fmt "double ljd_diff = x1.LogJointDensity() - x.LogJointDensity();")
+	  (fmt "double ldd_diff = LogDrawDensity_~a(x1) - LogDrawDensity_~a(x);"
+                update-name update-name)
+	  (fmt "Assert.AreEqual(0.0, ldd_diff - ljd_diff, tol, \"~a\");"
+	       update-name))
+	(fmt-blank-line)
+	(fmt "private static double LogDrawDensity_~a(~a x)"
+	     update-name class-name class-name)
+	(bracket
+          (funcall write-ldd-body update-name))
+	(fmt-blank-line)))))
+
+(defun write-log-draw-density-body (update-name updates-assoc)
+  (fmt "double ldd = 0.0;")
+  (write-ljd-accum-rel "ldd" (assoc-lookup update-name updates-assoc) nil)
+  (fmt "return ldd;"))
+
 (defun write-csharp-log-joint-density (mdl)
   (let* ((excluded (vars-in-model mdl))
 	 (accum-var (symbol-not-in excluded "ljd")))
     (fmt "public double LogJointDensity()")
-    (fmt "{")
-    (indent
+    (bracket
       (fmt "double ~a = 0.0;" accum-var)
       (dolist (r (model-body mdl))
-	(write-ljd-accum-rel accum-var r))
-      (fmt "return (Double.IsNaN(~a) ? Double.NegativeInfinity : ~a);"
-	   accum-var accum-var))
-    (fmt "}")))
+	(write-ljd-accum-rel accum-var r t))
+      (fmt "return ~a;" accum-var))))
 
-(defun write-ljd-accum-rel (accum rel)
+(defun write-ljd-accum-rel (accum rel &optional (let-needs-brackets nil))
   (let ((*ljd-accum* accum))
-    (write-ljd-acc-rel rel)))
+    (write-ljd-acc-rel rel let-needs-brackets)))
 
 (defparameter *ljd-accum* nil)
 
-(defun write-ljd-acc-rel (rel)
+(defun write-ljd-acc-rel (rel &optional (let-needs-brackets t))
   (adt-case relation rel
     ((stochastic lhs rhs)
      (write-ljd-acc-rel-stoch lhs rhs))
@@ -666,15 +708,26 @@
     ((loop var lo hi body)
      (write-ljd-acc-rel-loop var lo hi body))
     ((let var val body)
-     (write-ljd-acc-rel-let var val body))
+     (write-ljd-acc-rel-let
+       (let-list rel) (strip-lets body) let-needs-brackets))
+;     (write-ljd-acc-rel-let var val body))
     ((skip))))
 
+(defun write-ljd-acc-rel-let (let-defs body needs-brackets)
+  (flet
+    ((main ()
+       (dolist (x let-defs)
+         (destructuring-bind (var . val) x
+           (fmt "var ~a = ~a;" (symbol-name var) (expr->string val))))
+       (write-ljd-acc-rel body)))
+    (if needs-brackets (bracket (main)) (main))))
+
+#|
 (defun write-ljd-acc-rel-let (var val body)
-  (fmt "{")
-  (indent
+  (bracket
     (fmt "var ~a = ~a;" (symbol-name var) (expr->string val))
-    (write-ljd-acc-rel body))
-  (fmt "}"))
+    (write-ljd-acc-rel body)))
+|#
 
 (defun write-ljd-acc-rel-stoch (lhs rhs)
   (match-adt1 (distribution name args) rhs
@@ -707,12 +760,12 @@
 (defun write-ljd-acc-rel-if (condition true-branch false-branch)
   (fmt "if (~a) {" (expr->string condition))
   (indent
-    (write-ljd-acc-rel true-branch))
+    (write-ljd-acc-rel true-branch nil))
   (fmt "}")
   (when (not (is-relation-skip false-branch))
     (fmt "else {")
     (indent
-      (write-ljd-acc-rel false-branch))
+      (write-ljd-acc-rel false-branch nil))
     (fmt "}")))
 
 (defun write-ljd-acc-rel-loop (var lo hi body)
@@ -721,7 +774,7 @@
 	(term-str (termination-test-string var hi)))
     (fmt "for (int ~a = ~a; ~a; ++~a) {" var-str lo-str term-str var-str)
     (indent
-      (write-ljd-acc-rel body))
+      (write-ljd-acc-rel body nil))
     (fmt "}")))
 
 (defun termination-test-string (var hi)
@@ -764,10 +817,8 @@
 	  (fmt "var ~a = ~a;" (symbol-name var) (expr->string val))))
       (write-rel-draw body)))
    (if needs-brackets
-       (progn
-	 (fmt "{")
-	 (indent (main))
-	 (fmt "}"))
+       (bracket
+	 (main))
      (main))))
 
 (defun write-rel-draw-stoch (lhs rhs)

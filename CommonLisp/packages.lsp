@@ -33,14 +33,14 @@
     :@ :@-slice :@-rng :@-idx :vec :rmat :array-length :num-dims
     :abs-det :mv-gamma-fct :trace :quad :fac
     :+ :- :* :*! :/ :^ :neg :exp :log :tanh :max :min :vmax
-    :sum :dot :inv :if-then-else :! :gamma-fct :length
+    :sum :dot :inv :inv-pd :if-then-else :! :gamma-fct :length
     :^1/2 :^2 :^-1 :^-1/2 :^-2
     :@^1/2 :@^2 :@^-1 :@^-1/2 :@^-2
     :@+ :@- :@* :@/ :$*
     :diag_mat :o* :o^2 :cons :cons-col :cons-row
 
     ;; finite quantifiers
-    :qand :qor :qsum :qprod :qprod! :qvec :q@sum :qrmat
+    :qand :qor :qmin :qmax :qnum :qsum :qprod :qprod! :qvec :q@sum :qrmat
     :.qand :.qor
 
     ;; distributions
@@ -64,7 +64,8 @@
 	   :list->pair-list
 	   :append-mapcar :fdebug :compound-symbol
 	   :n-symbols-not-in :symbol-not-in
-	   :indent :fmt :*indent-level* :*indent-amount* :*fmt-ostream*))
+	   :indent :fmt :fmt-blank-line
+	   :*indent-level* :*indent-amount* :*fmt-ostream*))
 
 (defpackage :adt
   (:use :cl :utils)
@@ -147,5 +148,5 @@
 (defpackage :compile
   (:use :cl :mcimpl :model :expr :utils :adt :symbols)
   (:shadow :expr->string)
-  (:export :compile-to-csharp))
+  (:export :compile-to-csharp :write-test-updates :write-log-draw-density-body))
 
