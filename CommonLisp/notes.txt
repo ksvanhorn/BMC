@@ -30,6 +30,10 @@ TODO
 
 Handle quantifiers having non-trivial filters when printing out expressions.
 
++Add update parameters to class.
+Generation of update
+Computation of log proposal density
+
 
 - Draw from joint distribution.
 - Make copy of sampler object.
@@ -37,4 +41,52 @@ Handle quantifiers having non-trivial filters when printing out expressions.
 - Compute ljd_new - ljd_old + log_proposal_density_new - log_proposal_density_old
 - Compute given acceptance ratio
 - Compare.
+
+- CHECK THAT log acceptance factor DOES NOT DEPEND ON ANY VARS DECLARED IN
+  A LET ENCLOSING THE M-H RELATION (other than index variables?)
+- For updates, need to check that ranges of enclosing for loops and tests
+  of enclosing if-then-else's have no dependence on vars being updated.
+- Need to fix TestUpdate_FOO(MyModel x, double tol) to include parameters
+  for vars of any enclosing let's and loops used in the update.
+
+Tues.
+[in at 10:02]
+[out at 11:42] 1:40
+[back at 1:08]
+[out at 4:20] 3:12
+[back at 5:28]
+[out at 6:55] 1:27
+Total: 6:19
+
+Wed.
+[in at 9:42]
+[out at 12:48] 3:06
+[back at 2:30]
+[out at 5:27] 3:00 - 0:03
+[back at 7:57]
+[out at 8:27] 0:30
+
+NEXT: Implement code for doing unit test of M-H updates.
+
+// These go in the test class
+
+public void TestUpdate_FOO(MyModel x, double tol)
+{
+  x = x.Copy();
+  x.Draw();
+  MyModel x1 = x.Copy();
+  x1.UpdateFromProposal_FOO();
+  double expected =
+    (LogProposalDensity_FOO(x) - LogProposalDensity_FOO(x1)) +
+    (x1.LogJointDensity() - x0.LogJointDensity());
+  double log_acceptance_ratio =
+    x1.LogAcceptanceFactor_FOO() - x.LogAcceptanceFactor_FOO();
+  Assert.AreEqual(expected, log_acceptance_ratio, tol, "FOO");  
+}
+
+public static double LogProposalDensity_FOO(MyModel x)
+{
+  ...
+}
+
 

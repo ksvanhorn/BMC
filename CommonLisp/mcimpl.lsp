@@ -3,6 +3,9 @@
 (defadt1 mcimpl
   parameters derived updates)
 
+(defun params-names (impl)
+  (mapcar #'decl-var (mcimpl-parameters impl)))
+
 (defun read-mcimpl (ifname)
   (sexpr->mcimpl (read-file ifname)))
 
@@ -79,6 +82,9 @@
     ((let var val body)
      (append (free-vars-in-expr val)
 	     (remove var (free-vars-in-rel body))))
+    ((mh proposal-distribution log-acceptance-factor)
+     (append (free-vars-in-rel proposal-distribution)
+	     (free-vars-in-expr log-acceptance-factor)))
     ((skip)
      '())))
 

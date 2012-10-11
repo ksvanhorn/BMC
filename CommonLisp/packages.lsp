@@ -40,7 +40,7 @@
     :diag_mat :o* :o^2 :cons :cons-col :cons-row
 
     ;; finite quantifiers
-    :qand :qor :qmin :qmax :qnum :qsum :qprod :qprod! :qvec :q@sum :qrmat
+    :qand :qor :qmin :qmax :qnum :qsum :qprod :qprod! :qvec :q@sum :qmat
     :.qand :.qor
 
     ;; distributions
@@ -90,7 +90,8 @@
    :read-model :sexpr->model
    :sexpr->vtype :sexpr->decl :sexpr->decls :sexpr->distr
    :sexpr->rellhs :sexpr->rel
-   :vtype->string :distr->string :rellhs->expr :pp-decl :pp-rel :pp-model
+   :vtype->string :distr->string :rellhs->expr :rellhs->string
+   :pp-decl :pp-rel :pp-model
    :args-vars-names
 
    :is-model :make-model :model-args :model-reqs :model-vars :model-body
@@ -114,6 +115,8 @@
    :relation-loop-lo :relation-loop-hi :relation-loop-body
    :is-relation-let :make-relation-let
    :relation-let-var :relation-let-val :relation-let-body
+   :is-relation-mh :make-relation-mh
+   :relation-mh-proposal-distribution :relation-mh-log-acceptance-factor
    :is-relation-skip :make-relation-skip
 
    :is-rellhs
@@ -139,7 +142,8 @@
   (:use :cl :model :expr :utils :symbols :adt :prove)
   (:export :make-mcimpl :is-mcimpl :mcimpl-parameters :mcimpl-derived
 	   :mcimpl-updates :mcimpl->substituted-updates
-	   :sexpr->mcimpl :read-mcimpl))
+	   :free-vars-in-rellhs
+	   :sexpr->mcimpl :read-mcimpl :params-names))
 
 (defpackage simplify
   (:use :cl :adt :expr :utils :symbols :prove)

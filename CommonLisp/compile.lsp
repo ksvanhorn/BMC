@@ -121,7 +121,13 @@
 	     (t (error "Unimplemented case in compile::const->string: ~a."
 		       x))))))
 
-(defun variable->string (x) (symbol-name x))
+(defun variable->string (x)
+  (let ((s (symbol-name x)))
+    (unless (every #'identcharp s)
+      (error "Illegal variable name: ~a." s))
+    s))
+
+(defun identcharp (c) (or (alphanumericp c) (eql #\_ c)))
 
 (defun aexpr->string (fct args lprec rprec)
   (case fct
@@ -163,6 +169,11 @@
     (format t "(~a)" (expr->string e))))
 
 (defun fexpr->string (fct args lprec rprec)
+  (when (is-fquant-with-default-filter fct args)
+    (setf args (list (first args) (second args) (fourth args))))
+  (when (eq '! fct)
+    (setf fct :let)
+    (setf args (reverse args)))
   (cond ((is-binop fct)
 	 (bexpr->string fct args lprec rprec))
 	((eq '@-idx fct)
@@ -173,8 +184,6 @@
 	       (false-branch (expr->string (third args))))
 	   (format nil "(~a ? ~a : ~a)" test true-branch false-branch)))
 	(t
-	 (when (is-fquant-with-default-filter fct args)
-	   (setf args (list (first args) (second args) (fourth args))))
 	 (format nil "~a(~{~a~^, ~})"
 		 (fct-name fct) (mapcar #'expr->string args)))))
 
@@ -222,7 +231,9 @@
 
 (defun fct-name (op)
   (let ((a (assoc op +oper-names+)))
-    (if (null a) (symbol-name op) (cdr a))))
+    (when (null a)
+      (error "Don't know C# name of function ~a." op))
+    (cdr a)))
 
 (defconstant +oper-names+
   '(
@@ -232,6 +243,7 @@
     (cons-col . "BMC.ConsCol")
     (cons-row . "BMC.ConsRow")
     (diag_mat . "BMC.DiagonalMatrix")
+    (dmvnorm-density . "BMC.DensityMVNorm")
     (dot . "BMC.Dot")
     (exp . "Math.Exp")
     (inv . "BMC.MatrixInverse")
@@ -243,6 +255,7 @@
     (is-realp0 . "BMC.IsRealp0")
     (is-realx . "BMC.IsRealx")
     (is-symm-pd . "BMC.IsSymmetricPositiveDefinite")
+    (:let . "BMC.Let")
     (log . "Math.Log")
     (max . "Math.Max")
     (min . "Math.Min")
@@ -254,15 +267,29 @@
     (qmax . "BMC.QMax")
     (qmin . "BMC.QMin")
     (qnum . "BMC.Count")
+    (qmat . "BMC.QMatrix")
     (qsum . "BMC.Sum")
     (qvec . "BMC.QVec")
+    (rmat . "BMC.RowMatrix")
+    (sum . "BMC.Sum")
     (tanh . "Math.Tanh")
     (vec . "BMC.Vec")
+    (vmax . "BMC.VMax")
+
+    (+ . "+")
+    (- . "-")
+    (* . "*")
+    (/ . "/")
+    (!= . "!=")
+    (< . "<")
+    (<= . "<=")
+
     ($* . "BMC.ScalarTimesArr")
     (<=> . "BMC.Iff")
     (= . "==")
     (=> . "BMC.Implies")
     (@* . "BMC.ArrTimes")
+    (@/ . "BMC.ArrDivide")
     (@+ . "BMC.ArrPlus")
     (@- . "BMC.ArrMinus")
     (@-idx . "BMC.Idx")
@@ -363,13 +390,16 @@
     (vars-in-expr-list args)))
 
 (defun write-csharp-class-body (class-name mdl impl)
-  (write-csharp-declarations mdl)
+  (write-csharp-declarations mdl impl)
   (fmt-blank-line)
-  (write-csharp-copy class-name (args-vars-names mdl))
+  (write-csharp-copy class-name
+		     (append (params-names impl) (args-vars-names mdl)))
   (fmt-blank-line)
   (write-csharp-load-arguments (model-args mdl))
   (fmt-blank-line)
   (write-csharp-validate-arguments mdl)
+  (fmt-blank-line)
+  (write-csharp-validate-parameters impl)
   (fmt-blank-line)
   (write-csharp-allocate-vars (model-vars mdl))
   (fmt-blank-line)
@@ -379,6 +409,8 @@
     (write-prior-draw #'f))
   (fmt-blank-line)
   (write-undefine-all-vars (model-vars mdl))
+  (fmt-blank-line)
+  (write-csharp-accept-method)
   (fmt-blank-line)
   (write-csharp-updates (mcimpl->substituted-updates impl))
   (fmt-blank-line)
@@ -391,7 +423,9 @@
     (funcall gen-body))
   (fmt "}"))  
 
-(defun write-csharp-declarations (mdl)
+(defun write-csharp-declarations (mdl impl)
+  (gen-decls "Update parameters" (mcimpl-parameters impl))
+  (fmt-blank-line)
   (gen-decls "Model Arguments" (model-args mdl))
   (fmt-blank-line)
   (gen-decls "Model Variables" (model-vars mdl)))
@@ -507,14 +541,20 @@
   '((boolean . "Boolean") (integer . "Integer") (realxn . "Real")))
 
 (defun write-csharp-validate-arguments (mdl)
-  (fmt "public void ValidateArguments()")
+  (fmt "public void ValidateModelArguments()")
   (bracket
     (dolist (x (args-checks mdl))
-      (write-csharp-validate-arg x))))
+      (write-csharp-check x))))
 
-(defun write-csharp-validate-arg (x)
+(defun write-csharp-validate-parameters (impl)
+  (fmt "public void ValidateUpdateParameters()")
+  (bracket
+    (dolist (x (params-checks impl))
+      (write-csharp-check x))))
+
+(defun write-csharp-check (x)
   (if (is-qand-expr x)
-      (write-csharp-validate-arg-qand x)
+      (write-csharp-check-qand x)
     (let ((bool-expr (expr->string x)))
       (fmt "BMC.Check(~a," bool-expr)
       (fmt "          \"~a\");" bool-expr))))
@@ -525,7 +565,7 @@
      (eq 'qand fct))
     (otherwise nil)))
 
-(defun write-csharp-validate-arg-qand (x)
+(defun write-csharp-check-qand (x)
   (match-adt1 (expr-apply fct args) x
     (destructuring-bind (lo hi filter pred) args
       (let ((var (expr-lambda-var pred))
@@ -534,13 +574,13 @@
 	     var (expr->string lo) var (expr->string hi) var)
 	(indent
 	  (if (equalp (expr-const '%true-pred) filter)
-	      (write-csharp-validate-arg body)
+	      (write-csharp-check body)
 	    (progn
 	      (unless (eq var (expr-lambda-var filter))
 		(error "Invalid QAND expression: ~a." x))
 	      (fmt "if (~a) {" (expr->string (expr-lambda-body filter)))
 	      (indent
-	        (write-csharp-validate-arg body))
+	        (write-csharp-check body))
 	      (fmt "}"))))
 	(fmt "}")))))
 
@@ -556,14 +596,13 @@
       (bracket
         (write-rel-draw upd nil)))))
 
-(defun write-csharp-test-of-updates (class-name)
-  (fmt "public static void TestUpdates(~a )" class-name)
-  (bracket
-   ))
-
 (defun args-checks (mdl)
   (remove-if #'is-trivially-true
 	     (remove-duplicates (args-checks-raw mdl) :test #'equalp)))
+
+(defun params-checks (impl)
+  (let ((checks0 (append-mapcar #'decl-checks (mcimpl-parameters impl))))
+    (remove-if #'is-trivially-true (remove-duplicates checks0))))
 
 (defun is-trivially-true (e)
   (adt-case expr e
@@ -678,7 +717,10 @@
 
 (defun write-log-draw-density-body (update-name updates-assoc)
   (fmt "double ldd = 0.0;")
-  (write-ljd-accum-rel "ldd" (assoc-lookup update-name updates-assoc) nil)
+  ; REMOVE handler-case wrapper when done debugging...
+  (handler-case
+      (write-ljd-accum-rel "ldd" (assoc-lookup update-name updates-assoc) nil)
+    (error (e) (fmt "*** ERROR: ~a" e)))
   (fmt "return ldd;"))
 
 (defun write-csharp-log-joint-density (mdl)
@@ -710,7 +752,6 @@
     ((let var val body)
      (write-ljd-acc-rel-let
        (let-list rel) (strip-lets body) let-needs-brackets))
-;     (write-ljd-acc-rel-let var val body))
     ((skip))))
 
 (defun write-ljd-acc-rel-let (let-defs body needs-brackets)
@@ -721,13 +762,6 @@
            (fmt "var ~a = ~a;" (symbol-name var) (expr->string val))))
        (write-ljd-acc-rel body)))
     (if needs-brackets (bracket (main)) (main))))
-
-#|
-(defun write-ljd-acc-rel-let (var val body)
-  (bracket
-    (fmt "var ~a = ~a;" (symbol-name var) (expr->string val))
-    (write-ljd-acc-rel body)))
-|#
 
 (defun write-ljd-acc-rel-stoch (lhs rhs)
   (match-adt1 (distribution name args) rhs
@@ -792,6 +826,9 @@
      (write-rel-draw-loop var lo hi body))
     ((let var val body)
      (write-rel-draw-let (let-list rel) (strip-lets body) let-needs-brackets))
+    ((mh proposal-distribution log-acceptance-factor)
+     (write-rel-draw-mh
+       proposal-distribution log-acceptance-factor let-needs-brackets))
     ((skip)
      )))
 
@@ -815,7 +852,7 @@
       (dolist (x let-defs)
 	(destructuring-bind (var . val) x
 	  (fmt "var ~a = ~a;" (symbol-name var) (expr->string val))))
-      (write-rel-draw body)))
+      (write-rel-draw body nil)))
    (if needs-brackets
        (bracket
 	 (main))
@@ -837,7 +874,7 @@
   (member symbol +scalar-distributions+))
 
 (defconstant +scalar-distributions+
-  '(dcat dnorm dgamma dinterval))
+  '(dcat dnorm dgamma dinterval dnorm-trunc dgamma-trunc))
 
 (defun csharp-distr-draw-name (symbol)
   (strcat
@@ -863,6 +900,62 @@
     (indent
       (write-rel-draw body nil))
     (fmt "}")))
+
+(defun write-rel-draw-mh (prop-distr log-acc-factor let-needs-brackets)
+  (flet ((main ()
+	   (fmt "double _laf0 = ~a;" (expr->string log-acc-factor))
+	   (write-mh-saves prop-distr)
+	   (fmt-blank-line)
+	   (write-rel-draw prop-distr t)
+	   (fmt-blank-line)
+	   (fmt "double _laf1 = ~a;" (expr->string log-acc-factor))
+	   (fmt "if (!Accept(_laf1 - _laf0)) {")
+	   (indent
+	     (write-mh-restores prop-distr))
+	   (fmt "}")))
+    (if let-needs-brackets
+	(bracket (main))
+	(main))))
+
+(defun write-mh-saves (prop-distr)
+  (flet ((f (lhs-str sav-str)
+	   (fmt "var ~a = BMC.Copy(~a);" sav-str lhs-str)))
+    (write-mh-saves-restores prop-distr (cons "write-mh-saves" #'f) '())))
+
+(defun write-mh-restores (prop-distr)
+  (flet ((f (lhs-str sav-str)
+	   (fmt "~a = ~a;" lhs-str sav-str)))
+    (write-mh-saves-restores prop-distr (cons "write-mh-restores" #'f) '())))
+
+(defun write-mh-saves-restores (prop-distr x let-vars)
+  (adt-case relation prop-distr
+    ((stochastic lhs rhs)
+     (let ((fv (free-vars-in-rellhs lhs)))
+       (dolist (v let-vars)
+	 (when (member v fv)
+	   (error "Unimplemented (problematic) case in ~a" (car x)))))
+     (funcall (cdr x) (crellhs->string lhs) (save-name lhs)))
+    ((block members)
+     (dolist (r members)
+       (write-mh-saves-restores r x let-vars)))
+    ((let var val body)
+     (write-mh-saves-restores body x (cons var let-vars)))
+    (otherwise
+     (error "Unimplemented case in ~a; prop-distr: ~a." (car x) prop-distr))))
+
+(defun save-name (lhs)
+  (flet ((encode-char (c)
+	   (if (alphanumericp c)
+	       (string c)
+	       (case c
+		 (#\[ "_lb")
+		 (#\] "_rb")
+		 (#\_ "__")
+		 (#\, "_cm")
+		 (#\Space "_sp")
+		 (otherwise (error "Unimplemented case in save-name"))))))
+    (let ((lhs-str (model:rellhs->string lhs)))
+      (apply #'strcat "_save_" (map 'list #'encode-char lhs-str)))))
 
 (defun write-undefine-all-vars (var-decls)
   (fmt "private void UndefineAllVars() {")
@@ -906,6 +999,14 @@
 		   (indent (f (rest iv-list) (rest dim-list)))
 		   (fmt "}")))))
       (f idx-vars dims))))
+
+(defun write-csharp-accept-method ()
+  (fmt "public static bool Accept(double log_acceptance_ratio)")
+  (bracket
+   (fmt "if (Double.IsNaN(log_acceptance_ratio))")
+   (indent
+    (fmt "throw new Exception(\"Log of acceptance ratio is NaN\");"))
+   (fmt "return (log_acceptance_ratio >= 0 || BMC.DrawUniform(0.0, 1.0) < Math.Exp(log_acceptance_ratio));")))
 
 (defparameter *stoch-vars* nil)
 

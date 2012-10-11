@@ -1,7 +1,7 @@
 (in-package :symbols)
 
 (defun is-fquant-symbol (s)
-  (member s '(qand .qand qmin qmax qor .qor qnum qsum qprod qprod! qvec q@sum qrmat)))
+  (member s '(qand .qand qmin qmax qor .qor qnum qsum qprod qprod! qvec q@sum qmat)))
 
 (defun is-const-symbol (s)
   (member s '(@-all true false %pi %e %undef %infty+ %infty- %true-pred)))

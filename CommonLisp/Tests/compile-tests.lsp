@@ -1,5 +1,6 @@
 (defpackage :compile-tests
-  (:use :cl :lisp-unit :compile :model :expr :symbols :utils :testing-utilities))
+  (:use :cl :lisp-unit :compile :mcimpl :model :expr :symbols
+	:utils :testing-utilities))
 (in-package :compile-tests)
 
 (defun sexpr->decls (decls) (mapcar #'model:sexpr->decl decls))
@@ -204,6 +205,18 @@
 		      (:invs)
 		      (:body)))))
 
+  (assert-equalp
+    (sexpr->exprs
+     '((is-realp x)
+       (< 0 y)
+       (= (array-length 1 z) n)
+       (:quant qand |i1| (1 n) (is-realp (@ z |i1|)))))
+    (compile::params-checks
+     (sexpr->mcimpl
+      '(:mcimpl
+	(:parameters (x realp) (y integerp) (z (realp n)))
+	(:derived)
+	(:updates)))))
 )
 
 (defun cexpr->string (e) (compile::expr->string e))
@@ -249,9 +262,10 @@
     (cexpr->string (sexpr->expr '(if-then-else (< |x| |y|)
 					       (+ |a| |b|)
 					       (* |a| |b|)))))
-;  (assert-equal "(let x = y ^ 2 in c * x)"
-;		(cexpr->string (sexpr->expr '(:let (|x| (^ |y| 2))
-;					       (* |c| |x|)))))
+
+  (assert-equal "BMC.Let(y * y, (x => c * x))"
+    (cexpr->string (sexpr->expr '(:let (|x| (* |y| |y|))
+				   (* |c| |x|)))))
 )
 
 (define-test compile-ljd-tests
@@ -647,8 +661,6 @@ public DMatrix b;
 	         (:if (= (@ x |i|) 1)
 		   (~ (@ y |i|) (dnorm 0 sigma))
 		   (~ (@ y |i|) (dgamma b a)))))))))))
-
-; updating deterministic vars
 )
 
 (define-test rel-draw-tests
@@ -796,6 +808,152 @@ public DMatrix b;
 			    (:let (mu (@ foo |j|))
                               (~ (@ x |i|) (dnorm mu (^1/2 (@ y |i|)))))))))))
 
+  (flet ((save-name-se (se) (compile::save-name (sexpr->rellhs se))))
+    (assert-equal "_save_x" (save-name-se '|x|))
+    (assert-equal "_save_foo__bar" (save-name-se '|foo_bar|))
+    (assert-equal "_save_Y_lbI_rb" (save-name-se '(@ y i)))
+    (assert-equal "_save_z_lbi_cm_sp_rb" (save-name-se '(@ |z| |i| :all))))
+
+  (assert-equal
+   (strcat-lines
+    "var _save_X = BMC.Copy(X);")
+   (ppstr
+    (compile::write-mh-saves
+     (sexpr->rel '(~ x (dnorm m s))))))
+
+  (assert-equal
+   (strcat-lines
+    "X = _save_X;")
+   (ppstr
+    (compile::write-mh-restores
+     (sexpr->rel '(~ x (dnorm m s))))))
+
+  (assert-equal
+   (strcat-lines
+    "var _save_Y_lbJ_rb = BMC.Copy(Y[J - 1]);"
+    "var _save_X = BMC.Copy(X);")
+   (ppstr
+    (compile::write-mh-saves
+     (sexpr->rel '(:block (~ (@ y j) (dgamma a b)) (~ x (dnorm m s)))))))
+
+  (assert-equal
+   (strcat-lines
+    "Y[J - 1] = _save_Y_lbJ_rb;"
+    "X = _save_X;")
+   (ppstr
+    (compile::write-mh-restores
+     (sexpr->rel '(:block (~ (@ y j) (dgamma a b)) (~ x (dnorm m s)))))))
+
+  (assert-equal
+   (strcat-lines
+    "var _save_V = BMC.Copy(V);")
+   (ppstr
+    (compile::write-mh-saves
+     (sexpr->rel
+      '(:let (m emm) (:let (n 5) (~ v (dcat p))))))))
+
+  (assert-equal
+   (strcat-lines
+    "V = _save_V;")
+   (ppstr
+    (compile::write-mh-restores
+     (sexpr->rel
+      '(:let (m emm) (:let (n 5) (~ v (dcat p))))))))
+
+  (assert-equal
+    (strcat-lines
+     "var _save_Y_lbI_rb = BMC.Copy(Y[I - 1]);"
+     "var _save_W_lbI_cm_spJ_rb = BMC.Copy(W[I - 1, J - 1]);")
+    (ppstr
+      (compile::write-mh-saves
+        (sexpr->rel
+	  '(:let (foo (+ bar 7))
+	   (:let (baz (* bin boop))
+	     (:block (~ (@ y i) (dnorm 0 1))
+	             (~ (@ w i j) (dgamma 1 1)))))))))
+
+  (assert-equal
+    (strcat-lines
+     "Y[I - 1] = _save_Y_lbI_rb;"
+     "W[I - 1, J - 1] = _save_W_lbI_cm_spJ_rb;")
+    (ppstr
+      (compile::write-mh-restores
+        (sexpr->rel
+	  '(:let (foo (+ bar 7))
+	   (:let (baz (* bin boop))
+	     (:block (~ (@ y i) (dnorm 0 1))
+	             (~ (@ w i j) (dgamma 1 1)))))))))
+
+  (dolist (f '(#'compile::write-mh-saves #'compile::write-mh-restores))
+
+    (assert-error 'error   ; Until I figure out how to handle this case...
+      (ppstr
+       (funcall f
+        (sexpr->rel
+          '(:let (m j) (:let (n 5) (~ (@ v m n) (dcat p))))))))
+
+    (assert-error 'error   ; Until I figure out how to handle this case...
+      (ppstr
+       (funcall f
+        (sexpr->rel
+          '(:let (m j)
+           (:let (n 5)
+             (:block (~ (@ v m n) (dcat p))
+	             (~ x (dcat q)))))))))
+
+    (assert-error 'error   ; Until I figure out how to handle this case...
+      (ppstr
+       (funcall f
+        (sexpr->rel '(:for j (k r) (~ (@ w j) (dnorm a b)))))))
+
+    (assert-error 'error   ; Until I figure out how to handle this case...
+      (ppstr
+       (funcall f
+        (sexpr->rel '(:if test (~ w (dnorm a b))
+		               (~ y (dgamma a b))))))) )
+
+  (assert-equal
+"double _laf0 = SIGMA * (X - MU);
+var _save_X = BMC.Copy(X);
+
+X = BMC.DrawNorm(MU, SIGMA);
+
+double _laf1 = SIGMA * (X - MU);
+if (!Accept(_laf1 - _laf0)) {
+    X = _save_X;
+}
+"
+   (ppstr
+    (compile::write-rel-draw
+     (sexpr->rel '(:metropolis-hastings
+		   :proposal-distribution (~ x (dnorm mu sigma))
+		   :log-acceptance-factor (* sigma (- x mu))))
+     nil)))
+
+  (assert-equal
+"for (int I = M; I <= N; ++I) {
+    var MU = BMC.Dot(Y, GAMMA);
+    var SIGMA = Math.Exp(U * V[I - 1]);
+    double _laf0 = Z[I - 1] / SIGMA;
+    var _save_Z_lbI_rb = BMC.Copy(Z[I - 1]);
+
+    Z[I - 1] = BMC.DrawNormTruncated(MU, SIGMA, A, B);
+
+    double _laf1 = Z[I - 1] / SIGMA;
+    if (!Accept(_laf1 - _laf0)) {
+        Z[I - 1] = _save_Z_lbI_rb;
+    }
+}
+"
+    (let ((r (sexpr->rel
+	      '(:for i (m n)
+		(:let (mu (dot y gamma))
+		(:let (sigma (exp (* u (@ v i))))
+		  (:metropolis-hastings
+		   :proposal-distribution (~ (@ z i) (dnorm-trunc mu sigma a b))
+		   :log-acceptance-factor (/ (@ z i) sigma))))))))
+      (ppstr (compile::write-rel-draw r))))
+
   (assert-equal
     ""
     (ppstr (compile::write-rel-draw (make-relation-skip))))
@@ -856,19 +1014,19 @@ public DMatrix b;
 
 )
 
-(define-test write-csharp-validate-arg-tests
+(define-test write-csharp-check-tests
   (assert-equalp
 "BMC.Check(x < y,
           \"x < y\");
 " 
-    (ppstr (compile::write-csharp-validate-arg (sexpr->expr '(< |x| |y|)))))
+    (ppstr (compile::write-csharp-check (sexpr->expr '(< |x| |y|)))))
   (assert-equalp
 "for (int J = M; J <= N; ++J) {
     BMC.Check(X[J - 1] == Y[J - 1],
               \"X[J - 1] == Y[J - 1]\");
 }
 "
-    (ppstr (compile::write-csharp-validate-arg
+    (ppstr (compile::write-csharp-check
 	     (sexpr->expr '(:quant qand j (m n) (= (@ x j) (@ y j))))))) 
   (assert-equalp
 "for (int J = M; J <= N; ++J) {
@@ -878,13 +1036,13 @@ public DMatrix b;
     }
 }
 "
-    (ppstr (compile::write-csharp-validate-arg
+    (ppstr (compile::write-csharp-check
 	     (sexpr->expr '(:quant qand j (m n) (@ b j)
 				   (= (@ x j) (@ y j)))))))
 )
 
 (define-test write-csharp-updates-tests
-  (assert-equalp
+  (assert-equal
 "public void Update()
 {
     Update_FOO();

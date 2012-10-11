@@ -139,6 +139,32 @@
     (sexpr->rel '(for j (m n p) (~ (@ x j) (dnorm 0 3)))))
   (assert-error 'error
     (sexpr->rel '(for j (m n) (* j 3))))
+
+  (assert-equalp
+    (make-relation-mh
+     :proposal-distribution (sexpr->rel '(~ x (dnorm m s)))
+     :log-acceptance-factor (sexpr->expr '(+ x y)))
+    (sexpr->rel '(:metropolis-hastings
+		  :proposal-distribution (~ x (dnorm m s))
+		  :log-acceptance-factor (+ x y))))
+
+  (assert-error 'error (sexpr->rel '(:metropolis-hastings)))
+  (assert-error 'error (sexpr->rel '(:metropolis-hastings foo)))
+  (assert-error 'error
+    (sexpr->rel '(:metropolis-hastings :proposal-distribution)))
+  (assert-error 'error
+    (sexpr->rel '(:metropolis-hastings :proposal-distribution foo)))
+  (assert-error 'error
+    (sexpr->rel '(:metropolis-hastings
+		  :proposal-distribution (~ x (dnorm m s)))))
+  (assert-error 'error
+    (sexpr->rel '(:metropolis-hastings
+		  :proposal-distribution (~ x (dnorm m s))
+		  foo)))
+  (assert-error 'error
+    (sexpr->rel '(:metropolis-hastings
+		  :proposal-distribution (~ x (dnorm m s))
+		  :log-acceptance-factor)))
 )
 
 (define-test rellhs->expr-tests

@@ -14,6 +14,7 @@
   (if condition true-branch false-branch)
   (loop var lo hi body)
   (let var val body)
+  (mh proposal-distribution log-acceptance-factor) ; Metropolis-Hastings
   (skip))
 
 (defadt1 distribution name args)
@@ -90,7 +91,22 @@
 	((starts-with :if x) (sexpr->if-rel (cdr x)))
 	((starts-with :for x) (sexpr->loop-rel (cdr x)))
 	((starts-with :let x) (sexpr->let-rel (cdr x)))
+	((starts-with :metropolis-hastings x) (sexpr->mh-rel (cdr x)))
 	(t (error "Invalid relation: ~W." x))))
+
+(defun sexpr->mh-rel (x)
+  (check-mh-rel x)
+  (destructuring-bind (keyword-pd sexpr-pd keyword-laf sexpr-laf) x
+    (make-relation-mh
+      :proposal-distribution (sexpr->rel sexpr-pd)
+      :log-acceptance-factor (sexpr->expr sexpr-laf))))
+
+(defun check-mh-rel (x)
+  (unless (and (consp x) (= 4 (length x))
+	       (eq :proposal-distribution (first x))
+	       (eq :log-acceptance-factor (third x)))
+    (error "Invalid Metropolis-Hastings update: ~W."
+	   (cons :metropolis-hastings x))))
 
 (defun sexpr->let-rel (x)
   (check-let-rel x)
