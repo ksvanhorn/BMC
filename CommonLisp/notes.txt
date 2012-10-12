@@ -51,15 +51,6 @@ Computation of log proposal density
 
 
 NEXT: Implement code for doing unit test of M-H updates.
-Case 1:
-  [implicit lets for derived vars; M-H updates don't change values]
-  for r in 1 : nresp
-    [some lets whose values are modified by M-H update]
-    M-H
-Case 2:
-  [some lets whose values are not modified by update]
-  for dummy in 1 : num_nu_updates
-    M-H
 General:
   [outer layers consisting of
    - lets: updates leave RHS unchanged
@@ -88,12 +79,23 @@ Additional test:
    gets updated more than once.]
 
 Remaining problem: what about defined vars used in M-H update?
+- By definition, refers to value in initial state
 - case where used in :log-acceptance-factor
 
 (:metropolis-hastings
  :lets ((a adef) (b bdef)...)
  :proposal-distribution <pde>
- :log-acceptance-factor <lafe>)
+ :log-acceptance-factor <lafe>
+ :recompute <list of derived vars>)
+
+mu_ksi_a_S after (@ segment r) updated [unchanged]
+mu_ksi_b_S after (@ segment r) updated [unchanged]
+sigma_ksi_S after (@ segment r) updated [unchanged]
+mu_x_S in LAF (segment[r], ksi[r] udpate) [unchanged]
+msigma_x_S in LAF (segment[r], ksi[r] update) [unchanged]
+
+LAF: detS, T11, T12, S22, T22
+
   
 
 (:quant qand i (m n) (p i)) == (reduce-qand true (qvec i (m n) (p i)))

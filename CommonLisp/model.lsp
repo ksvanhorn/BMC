@@ -14,7 +14,8 @@
   (if condition true-branch false-branch)
   (loop var lo hi body)
   (let var val body)
-  (mh proposal-distribution log-acceptance-factor) ; Metropolis-Hastings
+  (mh lets proposal-distribution log-acceptance-factor recompute)
+    ; Metropolis-Hastings
   (skip))
 
 (defadt1 distribution name args)
@@ -96,15 +97,32 @@
 
 (defun sexpr->mh-rel (x)
   (check-mh-rel x)
-  (destructuring-bind (keyword-pd sexpr-pd keyword-laf sexpr-laf) x
+  (destructuring-bind
+    (keyword-lets sexpr-lets
+     keyword-pd sexpr-pd
+     keyword-laf sexpr-laf
+     keyword-recomp recomp) x
     (make-relation-mh
+      :lets (sexpr->lets sexpr-lets)
       :proposal-distribution (sexpr->rel sexpr-pd)
-      :log-acceptance-factor (sexpr->expr sexpr-laf))))
+      :log-acceptance-factor (sexpr->expr sexpr-laf)
+      :recompute recomp)))
+
+(defun sexpr->lets (se)
+  (mapcar (lambda (x) (cons (first x) (sexpr->expr (second x)))) se))
 
 (defun check-mh-rel (x)
-  (unless (and (consp x) (= 4 (length x))
-	       (eq :proposal-distribution (first x))
-	       (eq :log-acceptance-factor (third x)))
+  (unless (and (consp x) (= 8 (length x))
+	       (eq :lets (nth 0 x))
+	       (let ((lets (nth 1 x)))
+		 (and (listp lets)
+		      (every (lambda (d) (= 2 (length d))) lets)
+		      (every (lambda (d) (symbolp (first d))) lets)))
+	       (eq :proposal-distribution (nth 2 x))
+	       (eq :log-acceptance-factor (nth 4 x))
+	       (eq :recompute (nth 6 x))
+	       (let ((rc (nth 7 x)))
+		 (and (listp rc) (every #'symbolp rc))))
     (error "Invalid Metropolis-Hastings update: ~W."
 	   (cons :metropolis-hastings x))))
 

@@ -204,6 +204,29 @@
       (mcimpl::sexpr->derived '(:derived (foo (+ a b))))
       (sexpr->rel '(~ w (dnorm x s)))))
 
+; TODO: M-H :lets references derived var
+; TODO: M-H :proposal-distribution references derived var
+; TODO: M-H :log-acceptance-factor references derived var
+; TODO: M-H :recompute lists a derived var
+; TODO: combinations?
+; TODO: M-H :recompute lists a var that is not a derived var
+; TODO: derived var not referenced at all in M-H
+#|
+  (assert-equalp
+    (sexpr->rel
+      '(:metropolis-hastings
+	:lets ((
+    (mcimipl::subst-derived
+      (mcimpl::sexpr->derived
+        '(:derived (m m-val) (y y-val)))
+      (sexpr->rel
+        '(:metropolis-hastings
+	  :lets ((a (+ x y)))
+	  :proposal-distribution (~ z (dnorm m s))
+	  :log-acceptance-factor 1
+	  :recompute ()))))
+|#
+
   (assert-equalp
     (sexpr->rel
       '(:let (nu (vec alpha beta gamma))
@@ -289,7 +312,8 @@
     (mcimpl::free-vars-in-rel
       (sexpr->rel '(:metropolis-hastings
 		    :proposal-distribution (~ (@ x i) (dnorm mu sigma))
-		    :log-acceptance-factor (+ a (* 3 b))))))
+		    :log-acceptance-factor (+ a (* 3 b))
+		    :recompute (ignore these)))))
 )
 
 ; TODO:

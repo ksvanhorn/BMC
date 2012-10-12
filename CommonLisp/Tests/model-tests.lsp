@@ -142,29 +142,146 @@
 
   (assert-equalp
     (make-relation-mh
+     :lets `((m . ,(sexpr->expr '(+ n 1)))
+	     (a . ,(sexpr->expr '(* x y))))
      :proposal-distribution (sexpr->rel '(~ x (dnorm m s)))
-     :log-acceptance-factor (sexpr->expr '(+ x y)))
+     :log-acceptance-factor (sexpr->expr '(+ x y))
+     :recompute '(foo bar))
     (sexpr->rel '(:metropolis-hastings
+		  :lets ((m (+ n 1))
+			 (a (* x y)))
 		  :proposal-distribution (~ x (dnorm m s))
-		  :log-acceptance-factor (+ x y))))
+		  :log-acceptance-factor (+ x y)
+		  :recompute (foo bar))))
 
-  (assert-error 'error (sexpr->rel '(:metropolis-hastings)))
-  (assert-error 'error (sexpr->rel '(:metropolis-hastings foo)))
-  (assert-error 'error
-    (sexpr->rel '(:metropolis-hastings :proposal-distribution)))
-  (assert-error 'error
-    (sexpr->rel '(:metropolis-hastings :proposal-distribution foo)))
+  (assert-equalp
+    (make-relation-mh
+     :lets '()
+     :proposal-distribution (sexpr->rel '(~ x (dnorm m s)))
+     :log-acceptance-factor (sexpr->expr '(+ x y))
+     :recompute '())
+    (sexpr->rel '(:metropolis-hastings
+		  :lets ()
+		  :proposal-distribution (~ x (dnorm m s))
+		  :log-acceptance-factor (+ x y)
+		  :recompute ())))
+
   (assert-error 'error
     (sexpr->rel '(:metropolis-hastings
-		  :proposal-distribution (~ x (dnorm m s)))))
+		  :lets not-a-list
+		  :proposal-distribution (~ x (dnorm m s))
+		  :log-acceptance-factor (+ x y)
+		  :recompute ())))
+  (assert-error 'error
+    (sexpr->rel '(:metropolis-hastings
+		  :lets (not-a-def)
+		  :proposal-distribution (~ x (dnorm m s))
+		  :log-acceptance-factor (+ x y)
+		  :recompute ())))
+  (assert-error 'error
+    (sexpr->rel '(:metropolis-hastings
+		  :lets ((v))
+		  :proposal-distribution (~ x (dnorm m s))
+		  :log-acceptance-factor (+ x y)
+		  :recompute ())))
+  (assert-error 'error
+    (sexpr->rel '(:metropolis-hastings
+		  :lets ((1 v))
+		  :proposal-distribution (~ x (dnorm m s))
+		  :log-acceptance-factor (+ x y)
+		  :recompute ())))
+  (assert-error 'error
+    (sexpr->rel '(:metropolis-hastings
+		  :lets ((v 1 extra))
+		  :proposal-distribution (~ x (dnorm m s))
+		  :log-acceptance-factor (+ x y)
+		  :recompute ())))
   (assert-error 'error
     (sexpr->rel '(:metropolis-hastings
 		  :proposal-distribution (~ x (dnorm m s))
-		  foo)))
+		  :log-acceptance-factor (+ x y)
+		  :recompute())))
   (assert-error 'error
     (sexpr->rel '(:metropolis-hastings
+		  :lets ()
+		  :log-acceptance-factor (* x u v w)
+		  :recompute (u v))))
+  (assert-error 'error
+    (sexpr->rel '(:metropolis-hastings
+		  :lets ()
 		  :proposal-distribution (~ x (dnorm m s))
-		  :log-acceptance-factor)))
+		  :recompute (u v))))
+  (assert-error 'error
+    (sexpr->rel '(:metropolis-hastings
+		  :lets ()
+		  :proposal-distribution (~ x (dnorm m s))
+		  :log-acceptance-factor (* x u v w))))
+  (assert-error 'error
+    (sexpr->rel '(:metropolis-hastings
+		  :lets
+		  :proposal-distribution (~ x (dnorm m s))
+		  :log-acceptance-factor (* x u v w)
+		  :recompute (u v))))
+  (assert-error 'error
+    (sexpr->rel '(:metropolis-hastings
+		  :lets ()
+		  :proposal-distribution
+		  :log-acceptance-factor (* x u v w)
+		  :recompute (u v))))
+  (assert-error 'error
+    (sexpr->rel '(:metropolis-hastings
+		  :lets ()
+		  :proposal-distribution (~ x (dnorm m s))
+		  :log-acceptance-factor
+		  :recompute (u v))))
+  (assert-error 'error
+    (sexpr->rel '(:metropolis-hastings
+		  :lets ()
+		  :proposal-distribution (~ x (dnorm m s))
+		  :log-acceptance-factor (* x u v w)
+		  :recompute)))
+  (assert-error 'error
+    (sexpr->rel '(:metropolis-hastings
+		  :wrong-keyword ()
+		  :proposal-distribution (~ x (dnorm m s))
+		  :log-acceptance-factor (* x u v w)
+		  :recompute (u v))))
+  (assert-error 'error
+    (sexpr->rel '(:metropolis-hastings
+		  :lets ()
+		  :wrong-keyword (~ x (dnorm m s))
+		  :log-acceptance-factor (* x u v w)
+		  :recompute (u v))))
+  (assert-error 'error
+    (sexpr->rel '(:metropolis-hastings
+		  :lets ()
+		  :proposal-distribution (~ x (dnorm m s))
+		  :wrong-keyword (* x u v w)
+		  :recompute (u v))))
+  (assert-error 'error
+    (sexpr->rel '(:metropolis-hastings
+		  :lets ()
+		  :proposal-distribution (~ x (dnorm m s))
+		  :log-acceptance-factor (* x u v w)
+		  :wrong-keyword (u v))))
+  (assert-error 'error
+    (sexpr->rel '(:metropolis-hastings
+		  :lets ()
+		  :proposal-distribution (~ x (dnorm m s))
+		  :log-acceptance-factor (* x u v w)
+		  :recompute foo)))
+  (assert-error 'error
+    (sexpr->rel '(:metropolis-hastings
+		  :lets ()
+		  :proposal-distribution (~ x (dnorm m s))
+		  :log-acceptance-factor (* x u v w)
+		  :recompute (u (not a symbol) v))))
+  (assert-error 'error
+    (sexpr->rel '(:metropolis-hastings
+		  :lets ()
+		  :proposal-distribution (~ x (dnorm m s))
+		  :log-acceptance-factor (* x u v w)
+		  :recompute (u 1 v))))
 )
 
 (define-test rellhs->expr-tests
