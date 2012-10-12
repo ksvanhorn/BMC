@@ -49,24 +49,72 @@ Computation of log proposal density
 - Need to fix TestUpdate_FOO(MyModel x, double tol) to include parameters
   for vars of any enclosing let's and loops used in the update.
 
-Tues.
-[in at 10:02]
-[out at 11:42] 1:40
-[back at 1:08]
-[out at 4:20] 3:12
-[back at 5:28]
-[out at 6:55] 1:27
-Total: 6:19
-
-Wed.
-[in at 9:42]
-[out at 12:48] 3:06
-[back at 2:30]
-[out at 5:27] 3:00 - 0:03
-[back at 7:57]
-[out at 8:27] 0:30
 
 NEXT: Implement code for doing unit test of M-H updates.
+Case 1:
+  [implicit lets for derived vars; M-H updates don't change values]
+  for r in 1 : nresp
+    [some lets whose values are modified by M-H update]
+    M-H
+Case 2:
+  [some lets whose values are not modified by update]
+  for dummy in 1 : num_nu_updates
+    M-H
+General:
+  [outer layers consisting of
+   - lets: updates leave RHS unchanged
+   - ifs: updates leave test unchanged
+   - for: updates leave bounds unchanged]
+  [Generate test for outer layer: test generates same code
+   as impl itself, except that acceptance test is replaced
+   by assertion that the relevant vars should be unchanged.]
+  [inner layer: lets wrapped around a M-H rel.]
+  [Generate test for inner layer: same code as impl itself,
+   except that inner layer replaced by
+   - evaluate LogJointDensity()
+   - lets
+   - evaluate proposal density
+
+   - draw from proposal density
+   - compute log acceptance ratio
+
+   - evaluate LogJointDensity()
+   - lets
+   - evaluate proposal density
+
+   - Compare lar to (ljd1 + lpd1 - ljd0 - lpd0)]
+Additional test:
+  [Test that M-H proposal distr is valid by checking that no value
+   gets updated more than once.]
+
+Remaining problem: what about defined vars used in M-H update?
+- case where used in :log-acceptance-factor
+
+(:metropolis-hastings
+ :lets ((a adef) (b bdef)...)
+ :proposal-distribution <pde>
+ :log-acceptance-factor <lafe>)
+  
+
+(:quant qand i (m n) (p i)) == (reduce-qand true (qvec i (m n) (p i)))
+
+(:quant qor i (m n) (p i)) == (reduce-qor false (qvec i (m n) (p i)))
+
+(:quant qmin i (m n) (f i)) == (reduce-qmin %infty+ (qvec i (m n) (p i)))
+
+(:quant qmax i (m n) (f i)) == (reduce-qmax %infty- (qvec i (m n) (p i)))
+
+(:quant qnum i (m n) (p i)) == (reduce-f 0 (qvec i (m n) (p i)))
+where f(n, y) = n + bool-to-int(y)
+
+(:quant qsum i (m n) (f i)) == (reduce-+ 0 (qvec i (m n) (f i)))
+  
+(:quant qprod i (m n) (f i)) == (reduce-* 0 (qvec i (m n) (f i)))
+
+(:quant q@sum i (m n) (f i)) == (reduce-@+ (qvec i (m n) (f i))) if m <= n
+                             == %undef                           otherwise ???
+
+(:quant qmat i (m n) (f i)) == (reduce-cons-row ? (qvec i (m n) (f i)))
 
 // These go in the test class
 
