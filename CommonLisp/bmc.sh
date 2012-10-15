@@ -36,11 +36,11 @@
   (with-open-file (ostrm (strcat ofname-base "-tests.cs") :direction :output)
     (let ((*indent-amount* 4)
 	  (*fmt-ostream* ostrm)
-	  (updates-assoc (mcimpl->substituted-updates impl)))
+	  (updates (mcimpl-updates impl)))
       (write-test-updates
-        (lambda (x) (write-log-draw-density-body x updates-assoc))
+        (lambda (x) (write-log-draw-density-body x updates))
 	class-name
-	(mapcar #'car updates-assoc)))))
+	(mapcar #'car updates))))))
 
   ; TODO: rework unit tests
   ; TODO: validation of initial Markov chain state

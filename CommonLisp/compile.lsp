@@ -140,7 +140,11 @@
     (error "@ expression must have at least two arguments"))
   (format nil "~a[~{~a~^, ~}]"
 	 (array-expr->string (first args))
-	 (mapcar #'expr->string (mapcar #'dec-expr (rest args)))))
+	 (mapcar #'index-expr->string (rest args))
+	 #|(mapcar #'expr->string (mapcar #'dec-expr (rest args)))|#))
+
+(defun index-expr->string (x)
+  (expr->string (dec-expr x)))
 
 (defun dec-expr (expr)
   (expr-call '- expr (expr-const 1)))
@@ -412,7 +416,7 @@
   (fmt-blank-line)
   (write-csharp-accept-method)
   (fmt-blank-line)
-  (write-csharp-updates (mcimpl->substituted-updates impl))
+  (write-csharp-updates impl)
   (fmt-blank-line)
   ; ... more ...
 )
@@ -682,7 +686,90 @@
 			    (expr-const '%true-pred) (expr-lam idxvar ch)))))
     ch))
 
-(defun write-test-updates (write-ldd-body class-name update-names)
+(defun model-variables-assigned-in (rel)
+  (adt-case relation rel
+    ((stochastic lhs)
+     (model-vars-assigned-in-rellhs lhs))
+    ((block members)
+     (append-mapcar #'model-variables-assigned-in members))
+    ((if condition true-branch false-branch)
+     (append (model-variables-assigned-in true-branch)
+	     (model-variables-assigned-in false-branch)))
+    ((loop var lo hi body)
+     (model-variables-assigned-in body))
+    ((let var val body)
+     (model-variables-assigned-in body))
+    ((skip)
+     '())
+    ((mh lets proposal-distribution log-acceptance-factor)
+     (model-variables-assigned-in proposal-distribution))))
+
+(defun model-vars-assigned-in-rellhs (lhs)
+  (adt-case rellhs lhs
+   ((simple var)
+    (list var))
+   ((array-elt var indices)
+    (list var))
+   ((array-slice var indices)
+    (list var))))
+
+(defun write-assigned-test (lhs dim-fct)
+  (adt-case rellhs lhs
+    ((simple var)
+     (write-assigned-test-rellhs-simple var dim-fct))
+    ((array-elt var indices)
+     (write-assigned-test-rellhs-array-elt var indices dim-fct))
+    ((array-slice var indices)
+     (error "Unimplemented case in compile::write-assigned-test."))))
+
+(defun write-assigned-test-rellhs-array-elt (var indices dim-fct)
+  (let ((n (funcall dim-fct var))
+	(vstr (variable->string var))
+	(idxstr-list (mapcar #'index-expr->string indices)))
+    (unless (= n (length indices))
+      (error "Wrong number of indices in LHS of update: ~a."
+	     (make-rellhs-array-elt :var var :indices indices)))
+    (case n
+      (1
+       (let ((idxstr (first idxstr-list)))
+         (fmt "Assert.IsFalse(_assigned_~a[~a], \"~a[{0}] assigned\", ~a);"
+	      vstr idxstr vstr idxstr)
+         (fmt "_assigned_~a[~a] = true;" vstr idxstr)))
+      (2
+       (let ((idxstr1 (first idxstr-list))
+	     (idxstr2 (second idxstr-list)))
+	 (fmt "Assert.IsFalse(_assigned_~a[~a, ~a], \"~a[{0}, {1}] assigned\", ~a, ~a);"
+	      vstr idxstr1 idxstr2 vstr idxstr1 idxstr2)
+	 (fmt "_assigned_~a[~a, ~a] = true;" vstr idxstr1 idxstr2)))
+      (otherwise
+       (error "Unimplemented case in write-assigned-test-rellhs-array-elt")))))
+
+(defun write-assigned-test-rellhs-simple (var dim-fct)
+  (let ((vstr (variable->string var)))
+    (case (funcall dim-fct var)
+      (0
+       (fmt "Assert.IsFalse(_assigned_~a, \"~a assigned\");" vstr vstr)
+       (fmt "_assigned_~a = true;" vstr))
+      (1
+       (fmt "for (int _idx = 0; _idx < _assigned_~a.Length; ++_idx) {" vstr)
+       (indent
+	(fmt "Assert.IsFalse(_assigned_~a[_idx], \"~a[{0}] assigned\", _idx);"
+	     vstr vstr)
+	(fmt "_assigned_~a[_idx] = true;" vstr))
+       (fmt "}"))
+      (2
+       (fmt "for (int _idx1 = 0; _idx1 < _assigned_~a.NBRows(); ++_idx1) {"
+	    vstr)
+       (indent
+	(fmt "for (int _idx2 = 0; _idx2 < _assigned_~a.NBCols(); ++_idx2) {"
+	     vstr)
+	(indent
+	 (fmt "Assert.IsFalse(_assigned_~a[_idx1, _idx2], \"~a[{0},{1}] assigned\", _idx1, _idx2);" vstr vstr)
+	 (fmt "_assigned_~a[_idx1, _idx2] = true;" vstr))
+	(fmt "}"))
+       (fmt "}")))))
+
+(defun write-test-updates (write-test-update-fct class-name update-names)
   (dolist (x '("System" "NUnit.Framework" "Estimation" "Common"))
     (fmt "Using ~a;" x))
   (fmt-blank-line)
@@ -696,8 +783,12 @@
           (fmt "TestUpdate_~a(x, tol);" update-name)))
       (fmt-blank-line)
       (dolist (update-name update-names)
+	(funcall write-test-update-fct update-name)))))
+
+#|
+      (dolist (update-name update-names)
 	(fmt "public static void TestUpdate_~a(~a x, double tol)"
-	     update-name class-name)
+	     update-name class-name))
 	(bracket
 	  (fmt "x = x.Copy();")
           (fmt "x.Draw();")
@@ -714,13 +805,11 @@
 	(bracket
           (funcall write-ldd-body update-name))
 	(fmt-blank-line)))))
+|#
 
-(defun write-log-draw-density-body (update-name updates-assoc)
+(defun write-log-draw-density-body (update-name updates)
   (fmt "double ldd = 0.0;")
-  ; REMOVE handler-case wrapper when done debugging...
-  (handler-case
-      (write-ljd-accum-rel "ldd" (assoc-lookup update-name updates-assoc) nil)
-    (error (e) (fmt "*** ERROR: ~a" e)))
+  (write-ljd-accum-rel "ldd" (assoc-lookup update-name updates) nil)
   (fmt "return ldd;"))
 
 (defun write-csharp-log-joint-density (mdl)
@@ -814,6 +903,8 @@
 (defun termination-test-string (var hi)
   (expr->string (expr-call '.<= (expr-var var) hi)))
 
+(defparameter *write-rel-draw-visitor* (lambda (rel) nil))
+
 (defun write-rel-draw (rel &optional (let-needs-brackets t))
   (adt-case relation rel
     ((stochastic lhs rhs)
@@ -826,9 +917,9 @@
      (write-rel-draw-loop var lo hi body))
     ((let var val body)
      (write-rel-draw-let (let-list rel) (strip-lets body) let-needs-brackets))
-    ((mh proposal-distribution log-acceptance-factor)
+    ((mh lets proposal-distribution log-acceptance-factor)
      (write-rel-draw-mh
-       proposal-distribution log-acceptance-factor let-needs-brackets))
+       lets proposal-distribution log-acceptance-factor let-needs-brackets))
     ((skip)
      )))
 
@@ -868,7 +959,8 @@
       (fmt "~a(~a~{, ~a~});"
 	   (csharp-distr-draw-name name)
 	   (crellhs->string lhs)
-	   (mapcar #'expr->string args)))))
+	   (mapcar #'expr->string args)))
+    (funcall *write-rel-draw-visitor* lhs)))
 
 (defun is-scalar-distr (symbol)
   (member symbol +scalar-distributions+))
@@ -901,13 +993,19 @@
       (write-rel-draw body nil))
     (fmt "}")))
 
-(defun write-rel-draw-mh (prop-distr log-acc-factor let-needs-brackets)
+(defun write-rel-draw-mh (lets prop-distr log-acc-factor let-needs-brackets)
   (flet ((main ()
+	   (dolist (d lets)
+	     (destructuring-bind (v . val) d
+	       (fmt "var ~a = ~a;" (variable->string v) (expr->string val))))
 	   (fmt "double _laf0 = ~a;" (expr->string log-acc-factor))
 	   (write-mh-saves prop-distr)
 	   (fmt-blank-line)
 	   (write-rel-draw prop-distr t)
 	   (fmt-blank-line)
+	   (dolist (d lets)
+	     (destructuring-bind (v . val) d
+	       (fmt "~a = ~a;" (variable->string v) (expr->string val))))
 	   (fmt "double _laf1 = ~a;" (expr->string log-acc-factor))
 	   (fmt "if (!Accept(_laf1 - _laf0)) {")
 	   (indent

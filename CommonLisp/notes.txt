@@ -85,8 +85,7 @@ Remaining problem: what about defined vars used in M-H update?
 (:metropolis-hastings
  :lets ((a adef) (b bdef)...)
  :proposal-distribution <pde>
- :log-acceptance-factor <lafe>
- :recompute <list of derived vars>)
+ :log-acceptance-factor <lafe>)
 
 mu_ksi_a_S after (@ segment r) updated [unchanged]
 mu_ksi_b_S after (@ segment r) updated [unchanged]
@@ -96,6 +95,19 @@ msigma_x_S in LAF (segment[r], ksi[r] update) [unchanged]
 
 LAF: detS, T11, T12, S22, T22
 
+Proposal distribution: x -> x-new
+(:let (a adef)
+(:let (b bdef)
+(pd-density x-new ...)))
+
+Proposal distribution: x-new -> x
+(:let (a adef-new)
+(:let (b bdef-new)
+(pd-density x ...)))
+
+REDO:
+- No :derived section
+- No :recompute section
   
 
 (:quant qand i (m n) (p i)) == (reduce-qand true (qvec i (m n) (p i)))

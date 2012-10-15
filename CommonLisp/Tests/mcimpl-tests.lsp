@@ -22,38 +22,6 @@
     (mcimpl::sexpr->parameters '((v realp))))
 )
 
-(define-test sexpr->derived-tests
-  (assert-equalp
-    '()
-    (mcimpl::sexpr->derived '(:derived)))
-
-  (assert-equalp
-    `((foo . ,(expr-call '+ (expr-var 'x) (expr-var 'y)))
-      (bar . ,(expr-call 'exp (expr-call '@ (expr-var 'x) (expr-const 2)))))
-    (mcimpl::sexpr->derived
-     '(:derived (foo (+ x y))
-		(bar (exp (@ x 2))))))
-
-  (assert-error 'error
-    (mcimpl::sexpr->derived '()))
-  (assert-error 'error
-    (mcimpl::sexpr->derived 1))
-  (assert-error 'error
-    (mcimpl::sexpr->derived '(huh (foo (+ x y)))))
-  (assert-error 'error
-    (mcimpl::sexpr->derived '((foo (+ x y)))))
-  (assert-error 'error
-    (mcimpl::sexpr->derived '(:derived ())))
-  (assert-error 'error
-    (mcimpl::sexpr->derived '(:derived a)))
-  (assert-error 'error
-    (mcimpl::sexpr->derived '(:derived (foo))))
-  (assert-error 'error
-    (mcimpl::sexpr->derived '(:derived ((+ x y)))))
-  (assert-error 'error
-    (mcimpl::sexpr->derived '(:derived (foo (+ x y) (* a b)))))
-)
-
 (define-test sexpr->updates-tests
   (assert-error 'error
     (mcimpl::sexpr->updates 12))
@@ -127,8 +95,6 @@
 	   (make-decl
 	    :var 'a
 	    :typ (make-vtype-scalar :stype 'integer)))
-     :derived
-     `((a . ,(expr-call '+ (expr-var 'x) (expr-var 'y))))
      :updates
      `((wupd .
 	,(make-relation-stochastic
@@ -149,7 +115,6 @@
     (sexpr->mcimpl
       '(:mcimpl
 	 (:parameters (c realp) (a integer))
-	 (:derived (a (+ x y)))
 	 (:updates
 	   wupd
 	   (~ w (dgamma a b))
@@ -162,166 +127,31 @@
   (assert-error 'error
     (sexpr->mcimpl nil))
   (assert-error 'error
-    (sexpr->mcimpl '(starts-wrong (:parameters) (:derived) (:updates))))
+    (sexpr->mcimpl '(starts-wrong (:parameters) (:updates))))
   (assert-error 'error
     (sexpr->mcimpl '(:mcimpl)))
   (assert-error 'error
     (sexpr->mcimpl '(:mcimpl (:parameters))))
-  (assert-error 'error
-    (sexpr->mcimpl '(:mcimpl (:parameters) (:derived))))
   (assert-equalp
-    (make-mcimpl :parameters '() :derived '() :updates '())
-    (sexpr->mcimpl '(:mcimpl (:parameters) (:derived) (:updates))))
+    (make-mcimpl :parameters '() :updates '())
+    (sexpr->mcimpl '(:mcimpl (:parameters) (:updates))))
 
   (assert-equal
     '()
     (params-names
-      (sexpr->mcimpl '(:mcimpl (:parameters) (:derived) (:updates)))))
+      (sexpr->mcimpl '(:mcimpl (:parameters) (:updates)))))
 
   (assert-equal
     '(a b)
     (params-names
       (sexpr->mcimpl '(:mcimpl
 		       (:parameters (a realp) (b integer))
-		       (:derived)
 		       (:updates)))))
-)
-
-(define-test subst-derived-tests
-  (assert-equalp
-    (sexpr->rel '(~ x (dgamma a b)))
-    (mcimpl::subst-derived '() (sexpr->rel '(~ x (dgamma a b)))))
-
-  (assert-equalp
-    (sexpr->rel '(:let (x (+ a b)) (~ w (dnorm x s))))
-    (mcimpl::subst-derived
-      (mcimpl::sexpr->derived '(:derived (x (+ a b))))
-      (sexpr->rel '(~ w (dnorm x s)))))
-
-  (assert-equalp
-    (sexpr->rel '(~ w (dnorm x s)))
-    (mcimpl::subst-derived
-      (mcimpl::sexpr->derived '(:derived (foo (+ a b))))
-      (sexpr->rel '(~ w (dnorm x s)))))
-
-; TODO: M-H :lets references derived var
-; TODO: M-H :proposal-distribution references derived var
-; TODO: M-H :log-acceptance-factor references derived var
-; TODO: M-H :recompute lists a derived var
-; TODO: combinations?
-; TODO: M-H :recompute lists a var that is not a derived var
-; TODO: derived var not referenced at all in M-H
-#|
-  (assert-equalp
-    (sexpr->rel
-      '(:metropolis-hastings
-	:lets ((
-    (mcimipl::subst-derived
-      (mcimpl::sexpr->derived
-        '(:derived (m m-val) (y y-val)))
-      (sexpr->rel
-        '(:metropolis-hastings
-	  :lets ((a (+ x y)))
-	  :proposal-distribution (~ z (dnorm m s))
-	  :log-acceptance-factor 1
-	  :recompute ()))))
-|#
-
-  (assert-equalp
-    (sexpr->rel
-      '(:let (nu (vec alpha beta gamma))
-       (:let (logb (@ nu j))
-       (:let (off2 (@ nu i))
-       (:let (off1 12)
-       (:let (b (exp logb))
-       (:let (offset (+ off1 off2))
-	 (:block
-	   (~ x (dnorm (+ mu offset) (* scale sigma)))
-	   (~ y (dgamma (exp x) (* b (exp x))))))))))))
-    (mcimpl::subst-derived
-      (mcimpl::sexpr->derived
-        '(:derived  (nu (vec alpha beta gamma)) ; indirectly referenced
-                    (foo2 (@ mumble j))
-		    (logb (@ nu j))           ; indirectly referenced
-		    (off2 (@ nu i))           ; indirectly referenced
-		    (off1 12)                 ; indirectly referenced
-		    (foo1 (* foo2 7))
-		    (b (exp logb))            ; directly referenced
-                    (offset (+ off1 off2)))) ; directly referenced
-      (sexpr->rel '(:block
-		     (~ x (dnorm (+ mu offset) (* scale sigma)))
-		     (~ y (dgamma (exp x) (* b (exp x))))))))
-)
-
-
-(define-test free-vars-in-rel-tests
-  (assert-equalp
-    '()
-    (mcimpl::free-vars-in-rel (make-relation-skip)))
-  (assert-equalp
-    '()
-    (mcimpl::free-vars-in-rel (sexpr->rel '(:block))))
-  (assert-equalp
-    '(x m s)
-    (mcimpl::free-vars-in-rel
-      (sexpr->rel '(~ x (dnorm m s)))))
-  (assert-equalp
-    '(x i m s)
-    (mcimpl::free-vars-in-rel
-      (sexpr->rel '(~ (@ x i) (dnorm m s)))))
-  (assert-equalp
-    '(x m s)
-    (mcimpl::free-vars-in-rel
-      (sexpr->rel '(~ (@ x :all) (dnorm m s)))))
-  (assert-equalp
-    '(x i lo hi m s)
-    (mcimpl::free-vars-in-rel
-      (sexpr->rel '(~ (@ x i (:range lo hi)) (dnorm m s)))))
-  (assert-equalp
-    '(x i y m foo s z a b)
-    (mcimpl::free-vars-in-rel
-      (sexpr->rel '(:if (= 1 (@ x i))
-			(~ y (dnorm (- m foo) (^2 s)))
-			(~ z (dgamma (^ a 2) (+ b 3)))))))
-  (assert-equalp
-    '(m n k y mu sigma)
-    (mcimpl::free-vars-in-rel
-      (sexpr->rel '(:for j ((+ m 1) (- n k))
-		     (~ (@ y j) (dnorm (@ mu j) sigma))))))
-  (assert-equalp
-    '(m j n k y mu sigma)
-    (mcimpl::free-vars-in-rel
-      (sexpr->rel '(:for j ((+ m j) (- n k))
-		     (~ (@ y j) (dnorm (@ mu j) sigma))))))
-  (assert-equalp
-    '(m n j y mu sigma)
-    (mcimpl::free-vars-in-rel
-      (sexpr->rel '(:for j ((+ m 1) (- n j))
-		     (~ (@ y j) (dnorm (@ mu j) sigma))))))
-  (assert-equalp
-    '(a b c y m k s)
-    (mcimpl::free-vars-in-rel
-      (sexpr->rel '(:let (x (+ a (/ b c))) (~ y (dnorm (+ m x) (* k s)))))))
-  (assert-equalp
-    '(a x c y m k s)
-    (mcimpl::free-vars-in-rel
-      (sexpr->rel '(:let (x (+ a (/ x c))) (~ y (dnorm (+ m x) (* k s)))))))
-
-  (assert-equalp
-    '(x i mu sigma a b)
-    (mcimpl::free-vars-in-rel
-      (sexpr->rel '(:metropolis-hastings
-		    :proposal-distribution (~ (@ x i) (dnorm mu sigma))
-		    :log-acceptance-factor (+ a (* 3 b))
-		    :recompute (ignore these)))))
 )
 
 ; TODO:
 ; Check that parameters reference only args
 ; Check that no parameter has name clash with other parameter, arg, or var.
-; Check that derived reference only args, vars, and preceding derived
-; Check that no derived has name clash with other parameter, arg, var, or
-; preceding derived.
 ; Check that no two updates have same label.
-; Check that updates only reference args, vars, parameters, or deriveds.
+; Check that updates only reference args, vars, or parameters.
 ; Check correct dimensionality for updates.

@@ -115,7 +115,7 @@
    :relation-loop-lo :relation-loop-hi :relation-loop-body
    :is-relation-let :make-relation-let
    :relation-let-var :relation-let-val :relation-let-body
-   :is-relation-mh :make-relation-mh
+   :is-relation-mh :make-relation-mh :relation-mh-lets
    :relation-mh-proposal-distribution :relation-mh-log-acceptance-factor
    :is-relation-skip :make-relation-skip
 
@@ -140,8 +140,8 @@
 
 (defpackage :mcimpl
   (:use :cl :model :expr :utils :symbols :adt :prove)
-  (:export :make-mcimpl :is-mcimpl :mcimpl-parameters :mcimpl-derived
-	   :mcimpl-updates :mcimpl->substituted-updates
+  (:export :make-mcimpl :is-mcimpl :mcimpl-parameters
+	   :mcimpl-updates
 	   :free-vars-in-rellhs
 	   :sexpr->mcimpl :read-mcimpl :params-names))
 
