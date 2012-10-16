@@ -121,11 +121,15 @@
 	     (t (error "Unimplemented case in compile::const->string: ~a."
 		       x))))))
 
-(defun variable->string (x)
+(defun default-variable->string (x)
   (let ((s (symbol-name x)))
     (unless (every #'identcharp s)
       (error "Illegal variable name: ~a." s))
     s))
+
+(defparameter *variable->string* #'default-variable->string)
+
+(defun variable->string (x) (funcall *variable->string* x))
 
 (defun identcharp (c) (or (alphanumericp c) (eql #\_ c)))
 
@@ -449,7 +453,7 @@
 
 (defun gen-decl (d)
   (match-adt1 (decl var typ) d
-    (fmt "public ~a ~a;" (type-string typ) (symbol-name var))))
+    (fmt "public ~a ~a;" (type-string typ) (variable->string var))))
 
 (defun type-string (typ)
   (adt-case vtype typ
@@ -495,7 +499,7 @@
   (dolist (d var-decls)
     (match-adt1 (decl var typ) d
       (when (is-vtype-array typ)
-	(fmt "~a = ~a;" (symbol-name var) (csharp-new-string typ))))))
+	(fmt "~a = ~a;" (variable->string var) (csharp-new-string typ))))))
 
 (defun csharp-new-string (typ)
   (adt-case vtype typ
@@ -517,7 +521,7 @@
   (bracket
     (dolist (d arg-decls)
       (match-adt1 (decl var typ) d
-	(let ((vname (symbol-name var))
+	(let ((vname (variable->string var))
 	      (infix (csharp-load-type-name typ))
 	      (dim-strings (type->dim-strings typ)))
 	  (fmt "~a = loader.Load~a(\"~a\"~{, ~a~});"
@@ -769,7 +773,9 @@
 	(fmt "}"))
        (fmt "}")))))
 
-(defun write-test-updates (write-test-update-fct class-name update-names)
+
+
+(defun write-test-updates (class-name update-names write-test-update-fct)
   (dolist (x '("System" "NUnit.Framework" "Estimation" "Common"))
     (fmt "Using ~a;" x))
   (fmt-blank-line)
@@ -785,32 +791,50 @@
       (dolist (update-name update-names)
 	(funcall write-test-update-fct update-name)))))
 
+(defun write-test-gibbs-update (class-name update-name)
+  (fmt "public static void TestUpdate_~a(~a x, double tol)"
+       update-name class-name)
+  (bracket
+   (fmt "x = x.Copy();")
+   (fmt "x.Draw();")
+   (fmt "~a x1 = x.Copy();" class-name)
+   (fmt "x1.Update_~a();" update-name)
+   (fmt "double ljd_diff = x1.LogJointDensity() - x.LogJointDensity();")
+   (fmt "double ldd_diff = LogDrawDensity_~a(x1) - LogDrawDensity_~a(x);"
+	update-name update-name)
+   (fmt "Assert.AreEqual(0.0, ldd_diff - ljd_diff, tol, \"~a\");"
+	update-name)))
+
+(defun write-log-draw-density-of-update
+       (class-name update-name rel model-vars
+	&optional (write-body-fct #'write-ljd-accum-rel))
+  (fmt "private static double LogDrawDensity_~a(~a x)"
+       update-name class-name)
+  (bracket
+   (fmt "double ldd = 0.0;")
+   (flet ((var2str (v)
+	    (let ((s (default-variable->string v)))
+	      (if (member v model-vars) (strcat "x." s) s))))
+     (funcall write-body-fct "ldd" rel nil #'var2str))
+   (fmt "return ldd;")))
+
+(defun write-test-mh-update (class-name update-name)
+  (fmt "public static void TestUpdate_~a(~a x, double tol)"
+       update-name class-name)
+  (bracket
+    (fmt "TestIsDAG_Update_~a(x);" update-name)
+    (fmt "TestOuterLetsAreInvariant_~a(x);" update-name)
+    (fmt "TestAcceptanceRatio_~a(x, tol);" update-name)))
+
 #|
       (dolist (update-name update-names)
-	(fmt "public static void TestUpdate_~a(~a x, double tol)"
-	     update-name class-name))
-	(bracket
-	  (fmt "x = x.Copy();")
-          (fmt "x.Draw();")
-	  (fmt "~a x1 = x.Copy();" class-name)
-	  (fmt "x1.Update_~a();" update-name)
-	  (fmt "double ljd_diff = x1.LogJointDensity() - x.LogJointDensity();")
-	  (fmt "double ldd_diff = LogDrawDensity_~a(x1) - LogDrawDensity_~a(x);"
-                update-name update-name)
-	  (fmt "Assert.AreEqual(0.0, ldd_diff - ljd_diff, tol, \"~a\");"
-	       update-name))
-	(fmt-blank-line)
-	(fmt "private static double LogDrawDensity_~a(~a x)"
-	     update-name class-name class-name)
-	(bracket
-          (funcall write-ldd-body update-name))
-	(fmt-blank-line)))))
 |#
-
+#|
 (defun write-log-draw-density-body (update-name updates)
   (fmt "double ldd = 0.0;")
   (write-ljd-accum-rel "ldd" (assoc-lookup update-name updates) nil)
   (fmt "return ldd;"))
+|#
 
 (defun write-csharp-log-joint-density (mdl)
   (let* ((excluded (vars-in-model mdl))
@@ -822,8 +846,11 @@
 	(write-ljd-accum-rel accum-var r t))
       (fmt "return ~a;" accum-var))))
 
-(defun write-ljd-accum-rel (accum rel &optional (let-needs-brackets nil))
-  (let ((*ljd-accum* accum))
+(defun write-ljd-accum-rel
+       (accum rel &optional (let-needs-brackets nil)
+	                    (var2str #'default-variable->string))
+  (let ((*ljd-accum* accum)
+	(*variable->string* var2str))
     (write-ljd-acc-rel rel let-needs-brackets)))
 
 (defparameter *ljd-accum* nil)
@@ -848,7 +875,7 @@
     ((main ()
        (dolist (x let-defs)
          (destructuring-bind (var . val) x
-           (fmt "var ~a = ~a;" (symbol-name var) (expr->string val))))
+           (fmt "var ~a = ~a;" (variable->string var) (expr->string val))))
        (write-ljd-acc-rel body)))
     (if needs-brackets (bracket (main)) (main))))
 
@@ -903,14 +930,23 @@
 (defun termination-test-string (var hi)
   (expr->string (expr-call '.<= (expr-var var) hi)))
 
-(defparameter *write-rel-draw-visitor* (lambda (rel) nil))
+(defun default-wrd-visitor (rel) nil)
 
-(defun write-rel-draw (rel &optional (let-needs-brackets t))
+(defparameter *write-rel-draw-visitor* #'default-wrd-visitor)
+
+(defun write-rel-draw (rel &optional (let-needs-brackets t)
+			             (visitor #'default-wrd-visitor)
+				     (var2str #'default-variable->string))
+  (let ((*write-rel-draw-visitor* visitor)
+	(*variable->string* var2str))
+    (write-rel-draw-main rel let-needs-brackets)))
+
+(defun write-rel-draw-main (rel &optional (let-needs-brackets t))
   (adt-case relation rel
     ((stochastic lhs rhs)
      (write-rel-draw-stoch lhs rhs))
     ((block members)
-     (mapc #'write-rel-draw members))
+     (mapc #'write-rel-draw-main members))
     ((if condition true-branch false-branch)
      (write-rel-draw-if condition true-branch false-branch))
     ((loop var lo hi body)
@@ -942,8 +978,8 @@
    ((main ()
       (dolist (x let-defs)
 	(destructuring-bind (var . val) x
-	  (fmt "var ~a = ~a;" (symbol-name var) (expr->string val))))
-      (write-rel-draw body nil)))
+	  (fmt "var ~a = ~a;" (variable->string var) (expr->string val))))
+      (write-rel-draw-main body nil)))
    (if needs-brackets
        (bracket
 	 (main))
@@ -975,12 +1011,12 @@
 (defun write-rel-draw-if (condition true-branch false-branch)
   (fmt "if (~a) {" (expr->string condition))
   (indent
-    (write-rel-draw true-branch nil))
+    (write-rel-draw-main true-branch nil))
   (fmt "}")
   (when (not (is-relation-skip false-branch))
     (fmt "else {")
     (indent
-      (write-rel-draw false-branch nil))
+      (write-rel-draw-main false-branch nil))
     (fmt "}")))
 
 (defun write-rel-draw-loop (var lo hi body)
@@ -990,7 +1026,7 @@
     (fmt "for (int ~a = ~a; ~a; ++~a) {"
 	 var-str lo-str term-str var-str)
     (indent
-      (write-rel-draw body nil))
+      (write-rel-draw-main body nil))
     (fmt "}")))
 
 (defun write-rel-draw-mh (lets prop-distr log-acc-factor let-needs-brackets)
@@ -1001,7 +1037,7 @@
 	   (fmt "double _laf0 = ~a;" (expr->string log-acc-factor))
 	   (write-mh-saves prop-distr)
 	   (fmt-blank-line)
-	   (write-rel-draw prop-distr t)
+	   (write-rel-draw-main prop-distr t)
 	   (fmt-blank-line)
 	   (dolist (d lets)
 	     (destructuring-bind (v . val) d

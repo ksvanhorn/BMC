@@ -415,7 +415,7 @@ else {
                       (~ w (dgamma a b))))))))))
 )
 
-(define-test compile-test-update-is-dag-tests
+(define-test compile-test-is-dag-update-tests
   ;; model-variables-assigned-in
   (assert-equalp
     '(x)
@@ -506,13 +506,42 @@ _assigned_X2[J - 1, K - 1] = true;
 "
       (ppstr
        (compile::write-assigned-test (sexpr->rellhs '(@ x2 j k)) #'dim-fct)))
+
+
 ) ; flet
 
+#|
+  (assert-equal
+"public static void TestIsDAG_Update_FRED(TheModel x)
+{
+  // ...
+}
+"
+    (let ((rel (sexpr->rel '(~ v (dgamma a b))))
+	  (test-rels ?)
+	  (model-vars '(v a))
+	  (write-body-fct (lambda (rel1 needs-brack)
+			    (assert-equalp rel1 rel)
+			    (assert-false needs-brack)
+			    (assert-equal "x.V" (funcall 
+			    (dolist (r test-rels)
+			      (assert-equal
+			        (compile::write-assigned-test r #'dim-fct)
+				(funcall *write-rel-draw-visitor* r)))
+			    (fmt "// ..."))))
+      (ppstr
+       (compile::write-update-is-dag "TheModel" 'fred write-body-fct))))
+|#
+
+#|
+  ; (write-rel-draw rel nil)
+  ; *write-rel-draw-visitor* calls write-assigned-test 
   ;*** HERE ***
   ;For each update, we need to write out a specific DAG test
   ;that begins by allocating all the required _assigned_* variables
   ;then does the draw for the update with the addtional write-assigned-tests
   ;included.
+|#
 #|
   ;; write-test-update-rel-is-dag
   (assert-equal
@@ -525,7 +554,6 @@ _assigned_X2[J - 1, K - 1] = true;
     (ppstr (compile::write-test-update-rel-is-dag
 	    (sexpr->rel '(~ |p| (ddirch |alpha_p|))))))
 |#
-
 #|
   ;; write-test-update-is-dag
   (assert-equalp
@@ -558,68 +586,79 @@ namespace Tests
     }
 }
 "
-    (ppstr (compile::write-test-updates
-	     (lambda (x) (fmt "// Implement TestUpdate_~a" x))
-	     "MyModel"
-	     '(alpha beta))))
-
-#|
-"
-        public static void TestUpdate_ALPHA(MyModel x, double tol)
-        {
-            x = x.Copy();
-            x.Draw();
-            MyModel x1 = x.Copy();
-            x1.Update_ALPHA();
-            double ljd_diff = x1.LogJointDensity() - x.LogJointDensity();
-            double ldd_diff = LogDrawDensity_ALPHA(x1) - LogDrawDensity_ALPHA(x);
-            Assert.AreEqual(0.0, ldd_diff - ljd_diff, tol, \"ALPHA\");
-        }
-
-        private static double LogDrawDensity_ALPHA(MyModel x)
-        {
-            // Implement ldd ALPHA
-        }
-
-        public static void TestUpdate_BETA(MyModel x, double tol)
-        {
-            x = x.Copy();
-            x.Draw();
-            MyModel x1 = x.Copy();
-            x1.Update_BETA();
-            double ljd_diff = x1.LogJointDensity() - x.LogJointDensity();
-            double ldd_diff = LogDrawDensity_BETA(x1) - LogDrawDensity_BETA(x);
-            Assert.AreEqual(0.0, ldd_diff - ljd_diff, tol, \"BETA\");
-        }
-
-        private static double LogDrawDensity_BETA(MyModel x)
-        {
-            // Implement ldd BETA
-        }
-"
-|#
+    (ppstr (compile::write-test-updates "MyModel" '(alpha beta)
+	     (lambda (x) (fmt "// Implement TestUpdate_~a" x)))))
 
   (assert-equal
-"double ldd = 0.0;
-var foo = x[i - 1];
-ldd += BMC.LogDensityNorm(y[i - 1], foo, s);
-ldd += BMC.LogDensityGamma(z[i - 1, j - 1], a, b);
-return ldd;
+"public static void TestUpdate_ALPHA(MyModel x, double tol)
+{
+    x = x.Copy();
+    x.Draw();
+    MyModel x1 = x.Copy();
+    x1.Update_ALPHA();
+    double ljd_diff = x1.LogJointDensity() - x.LogJointDensity();
+    double ldd_diff = LogDrawDensity_ALPHA(x1) - LogDrawDensity_ALPHA(x);
+    Assert.AreEqual(0.0, ldd_diff - ljd_diff, tol, \"ALPHA\");
+}
 "
-    (let ((alpha-rel
-	   (sexpr->rel '(~ x (dnorm m s))))
-	  (beta-rel
-	   (sexpr->rel '(:let (|foo| (@ |x| |i|))
-			(:block
-			  (~ (@ |y| |i|) (dnorm |foo| |s|))
-			  (~ (@ |z| |i| |j|) (dgamma |a| |b|))))))
-	  (gamma-rel
-	   (sexpr->rel '(~ p (ddirch alpha_p)))))
-      (ppstr (compile::write-log-draw-density-body
-	      'beta
-	      `((alpha . ,alpha-rel)
-		(beta . ,beta-rel)
-		(gamma . ,gamma-rel))))))
+    (ppstr (compile::write-test-gibbs-update "MyModel" 'alpha)))
+
+  (assert-equal
+"public static void TestUpdate_BETA(Mdl x, double tol)
+{
+    x = x.Copy();
+    x.Draw();
+    Mdl x1 = x.Copy();
+    x1.Update_BETA();
+    double ljd_diff = x1.LogJointDensity() - x.LogJointDensity();
+    double ldd_diff = LogDrawDensity_BETA(x1) - LogDrawDensity_BETA(x);
+    Assert.AreEqual(0.0, ldd_diff - ljd_diff, tol, \"BETA\");
+}
+"
+    (ppstr (compile::write-test-gibbs-update "Mdl" 'beta)))
+
+  (assert-equal
+"private static double LogDrawDensity_GAMMA(MyMuddle x)
+{
+    double ldd = 0.0;
+    // ...
+    return ldd;
+}
+"
+    (let* ((rel (sexpr->rel '(~ a (dnorm m s))))
+	   (model-vars '(m c))
+	   (write-body 	(lambda (acc rel1 needs-brackets var2str)
+			  (assert-equal "ldd" acc)
+			  (assert-equalp rel rel1)
+			  (assert-false needs-brackets)
+			  (assert-equal "x.M" (funcall var2str 'm))
+			  (assert-equal "x.C" (funcall var2str 'c))
+			  (assert-equal "NOT_MC" (funcall var2str 'not_mc))
+			  (fmt "// ..."))))  
+      (ppstr
+       (compile::write-log-draw-density-of-update
+	 "MyMuddle" 'gamma rel model-vars write-body))))
+
+  (assert-equal
+"public static void TestUpdate_ALPHA(MyModel x, double tol)
+{
+    TestIsDAG_Update_ALPHA(x);
+    TestOuterLetsAreInvariant_ALPHA(x);
+    TestAcceptanceRatio_ALPHA(x, tol);
+}
+"
+    (ppstr (compile::write-test-mh-update "MyModel" 'alpha)))
+
+  (assert-equal
+"public static void TestUpdate_BETA(Mdl x, double tol)
+{
+    TestIsDAG_Update_BETA(x);
+    TestOuterLetsAreInvariant_BETA(x);
+    TestAcceptanceRatio_BETA(x, tol);
+}
+"
+    (ppstr (compile::write-test-mh-update "Mdl" 'beta)))
+
 )
 
 (define-test compile-tests
@@ -789,18 +828,30 @@ public DMatrix b;
 		   (~ (@ y |i|) (dgamma b a)))))))))))
 )
 
+(defun rdvisitor1 (lhs)
+  (fmt "// 1: ~a" (compile::crellhs->string lhs)))
+(defun rd-var2str1 (v) (strcat "_" (symbol-name v)))
+
+(defun rdvisitor2 (lhs)
+  (fmt "// 2: ~a" (compile::crellhs->string lhs)))
+(defun rd-var2str2 (v) (strcat "." (symbol-name v)))
+
 (define-test rel-draw-tests
   (assert-equal
-    "BMC.DrawDirichlet(p, alpha_p);
+"BMC.DrawDirichlet(_p, _alpha_p);
+// 1: _p
 "
     (ppstr (compile::write-rel-draw
-	    (sexpr->rel '(~ |p| (ddirch |alpha_p|))))))
+	    (sexpr->rel '(~ |p| (ddirch |alpha_p|)))
+	    nil #'rdvisitor1 #'rd-var2str1)))
 
   (assert-equal
-    "x[i - 1] = BMC.DrawCat(p);
+".x[.i - 1] = BMC.DrawCat(.p);
+// 2: .x[.i - 1]
 "
     (ppstr (compile::write-rel-draw
-	     (sexpr->rel '(~ (@ |x| |i|) (dcat |p|))))))
+	     (sexpr->rel '(~ (@ |x| |i|) (dcat |p|)))
+	     nil #'rdvisitor2 #'rd-var2str2)))
 
   (assert-equal
     "Y[i - 1, j - 1] = BMC.DrawNorm(MU, SIGMA);
@@ -1286,4 +1337,3 @@ public void Update_BAZ()
 ; TODO: Extend loading of model arguments to allow use of defaults.
 ; TODO: Extend loading of model arguments so that some integer parameters
 ;   can be obtained from the dimensions of the data.
-

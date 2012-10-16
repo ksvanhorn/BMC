@@ -49,6 +49,23 @@ Computation of log proposal density
 - Need to fix TestUpdate_FOO(MyModel x, double tol) to include parameters
   for vars of any enclosing let's and loops used in the update.
 
+(write-rel-draw <rel> &optional <let-needs-brackets>)
+(write-ljd-accum-rel <accum-var-name> <rel> <let-needs-brackets> <var-name-pfx>)
+
+(write-test-updates <write-test-update-fct> <class-name> <update-names>)
+
+// For a Gibbs update:
+(write-test-gibbs-update <class-name> <update-name>)
+(write-log-draw-density-of-update <class-name> <update-name> <rel> <model-vars>)
+
+// For a M-H update:
+(write-test-mh-update <class-name> <update-name>)
+(write-assigned-test <lhs> <dim-fct>) ; plugs into write-rel-draw
+
+TestIsDAG_Update_ALPHA(x); (apply to Gibbs updates and proposal distr of M-H)
+TestOuterLetsAreInvariant_ALPHA(x); (apply to M-H updates)
+TestAcceptanceRatio_ALPHA(x, tol);
+
 
 NEXT: Implement code for doing unit test of M-H updates.
 General:
@@ -62,53 +79,22 @@ General:
   [inner layer: lets wrapped around a M-H rel.]
   [Generate test for inner layer: same code as impl itself,
    except that inner layer replaced by
-   - evaluate LogJointDensity()
+   + evaluate LogJointDensity()
    - lets
-   - evaluate proposal density
+   + evaluate proposal density
 
    - draw from proposal density
    - compute log acceptance ratio
 
-   - evaluate LogJointDensity()
-   - lets
-   - evaluate proposal density
+   + evaluate LogJointDensity()
+   + lets
+   + evaluate proposal density
 
    - Compare lar to (ljd1 + lpd1 - ljd0 - lpd0)]
 Additional test:
   [Test that M-H proposal distr is valid by checking that no value
    gets updated more than once.]
 
-Remaining problem: what about defined vars used in M-H update?
-- By definition, refers to value in initial state
-- case where used in :log-acceptance-factor
-
-(:metropolis-hastings
- :lets ((a adef) (b bdef)...)
- :proposal-distribution <pde>
- :log-acceptance-factor <lafe>)
-
-mu_ksi_a_S after (@ segment r) updated [unchanged]
-mu_ksi_b_S after (@ segment r) updated [unchanged]
-sigma_ksi_S after (@ segment r) updated [unchanged]
-mu_x_S in LAF (segment[r], ksi[r] udpate) [unchanged]
-msigma_x_S in LAF (segment[r], ksi[r] update) [unchanged]
-
-LAF: detS, T11, T12, S22, T22
-
-Proposal distribution: x -> x-new
-(:let (a adef)
-(:let (b bdef)
-(pd-density x-new ...)))
-
-Proposal distribution: x-new -> x
-(:let (a adef-new)
-(:let (b bdef-new)
-(pd-density x ...)))
-
-REDO:
-- No :derived section
-- No :recompute section
-  
 
 (:quant qand i (m n) (p i)) == (reduce-qand true (qvec i (m n) (p i)))
 
