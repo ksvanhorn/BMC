@@ -216,6 +216,23 @@
       '(:mcimpl
 	(:parameters (x realp) (y integerp) (z (realp n)))
 	(:updates)))))
+
+  (let* ((mdl
+	  (raw-sexpr->model
+	    '(:model
+	       (:args (n integerp)
+		      (m integerp0)
+		      (a (realp n)))
+	       (:reqs)
+	       (:vars (b (real m n))
+		      (c (integer n))
+		      (k integerp))
+	       (:invs)
+	       (:body))))
+	 (dim-fct (compile::model->dim-fct mdl)))
+    (assert-equal 2 (funcall dim-fct 'b))
+    (assert-equal 1 (funcall dim-fct 'c))
+    (assert-equal 0 (funcall dim-fct 'k)))
 )
 
 (defun cexpr->string (e) (compile::expr->string e))
@@ -415,6 +432,143 @@ else {
                       (~ w (dgamma a b))))))))))
 )
 
+(define-test compile-test-acceptance-ratio-tests
+  (let* ((rel 'rel-placeholder)
+	 (model-vars '(bing bang))
+	 (write-body (fn (rel1)
+		       (assert-eq rel rel1)
+		       (assert-equal "FOO" (cvar2str 'foo))
+		       (assert-equal "_x.BING" (cvar2str 'bing))
+		       (assert-equal "_x.BANG" (cvar2str 'bang))
+		       (fmt "// ..."))))
+    (assert-equal
+"private static void TestAcceptanceRatio_PHI(TheClass _x)
+{
+    // ...
+}
+"
+      (ppstr
+       (compile::write-test-acceptance-ratio
+	 "TheClass" 'phi rel model-vars write-body))))
+
+  (assert-equal
+"double _laf0 = SIGMA * (X - MU);
+var _save_X = BMC.Copy(X);
+double _ljd0 = _x.LogJointDensity();
+double _ldd0 = BMC.LogDensityNorm(X, MU, SIGMA);
+
+X = BMC.DrawNorm(MU, SIGMA);
+
+double _laf1 = SIGMA * (X - MU);
+double _ljd1 = _x.LogJointDensity();
+double _ldd1 = BMC.LogDensityNorm(X, MU, SIGMA);
+Assert.AreEqual(_ljd1 + _ldd1
+
+
+if (!BMC.Accept(_laf1 - _laf0)) {
+    X = _save_X;
+}
+"
+    (ppstr
+     (compile::write-test-acceptance-ratio-body
+      (sexpr->rel '(:metropolis-hastings
+		    :lets ()
+		    :proposal-distribution (~ x (dnorm mu sigma))
+		    :log-acceptance-factor (* sigma (- x mu)))))))
+)
+
+(defun cvar2str (s) (compile::variable->string s))
+
+(defmacro in-test-outer-lets-env (model-vars &rest body)
+  `(let ((compile::*variable->string* (compile::var2str-ext ,model-vars))
+	 (compile::*write-rel-draw-visitor #'compile::default-wrd-visitor))
+     ,@body))
+
+(define-test compile-test-outer-lets-tests
+  (let* ((rel 'rel-placeholder)
+	 (model-vars '(foo bar))
+	 (write-body (fn (rel1 rev-lets)
+		       (assert-eq rel rel1)
+		       (assert-eq '() rev-lets)
+		       (assert-equal "A" (cvar2str 'a))
+		       (assert-equal "_x.FOO" (cvar2str 'foo))
+		       (assert-equal "_x.BAR" (cvar2str 'bar))
+		       (assert-equal "B" (cvar2str 'b))
+		       (fmt "// ..."))))
+  (assert-equal
+"private static void TestOuterLetsAreInvariant_THETA(PGM _x)
+{
+    // ...
+}
+"
+    (ppstr
+     (compile::write-test-outer-lets "PGM" 'theta rel model-vars write-body))))
+
+  (assert-equal
+"_x.Z = BMC.DrawCat(Q);
+"
+    (ppstr
+      (in-test-outer-lets-env '(z u)
+        (compile::write-test-outer-lets-body
+          (sexpr->rel
+            '(:metropolis-hastings
+	      :lets ()
+	      :proposal-distribution (~ z (dcat q))
+	      :log-acceptance-factor %undef))
+	  `()))))
+
+  (assert-equal
+"var X = A + _x.Z;
+_x.Z = BMC.DrawCat(Q);
+_x.Y = BMC.DrawNorm(A, _x.B);
+Assert.IsTrue(BMC.Equal(A, _x.FOO - BAR), \"A should not change\");
+Assert.IsTrue(BMC.Equal(Q, BMC.Vec(_x.U, V)), \"Q should not change\");
+"
+    (ppstr
+      (in-test-outer-lets-env '(z u y b foo)
+        (compile::write-test-outer-lets-body
+          (sexpr->rel
+            '(:metropolis-hastings
+	      :lets ((x (+ a z)))
+	      :proposal-distribution (:block (~ z (dcat q)) (~ y (dnorm a b)))
+	      :log-acceptance-factor %undef))
+	  `((q . ,(sexpr->expr '(vec u v)))
+	    (a . ,(sexpr->expr '(- foo bar))))))))
+
+  (assert-equal
+"var A = U + V;
+var B = U * V;
+int _lo_R = LO;
+int _hi_R = _x.HI;
+for (int R = _lo_R; R <= _hi_R; ++R) {
+    var C = _x.P[R - 1];
+    var D = Math.Pow(B, A);
+    _x.W = BMC.DrawGamma(C * D, B);
+    Assert.IsTrue(BMC.Equal(V, BMC.Sqr(_x.VV)), \"V should not change\");
+    Assert.IsTrue(BMC.Equal(U, Math.Exp(_x.UU)), \"U should not change\");
+    Assert.IsTrue(BMC.Equal(A, U + V), \"A should not change\");
+    Assert.IsTrue(BMC.Equal(B, U * V), \"B should not change\");
+    Assert.IsTrue(BMC.Equal(_lo_R, LO), \"_lo_R should not change\");
+    Assert.IsTrue(BMC.Equal(_hi_R, _x.HI), \"_hi_R should not change\");
+    Assert.IsTrue(BMC.Equal(C, _x.P[R - 1]), \"C should not change\");
+}
+"
+    (ppstr
+      (in-test-outer-lets-env '(w uu vv p hi)
+        (compile::write-test-outer-lets-body
+	  (sexpr->rel
+	    '(:let (a (+ u v))
+	     (:let (b (* u v))
+             (:for r (lo hi)
+               (:let (c (@ p r))
+                 (:metropolis-hastings
+                   :lets ((d (^ b a)))
+		   :proposal-distribution (~ w (dgamma (* c d) b))
+		   :log-acceptance-factor %undef))))))
+	  `((u . ,(sexpr->expr '(exp uu)))
+	    (v . ,(sexpr->expr '(^2 vv))))))))
+)
+
 (define-test compile-test-is-dag-update-tests
   ;; model-variables-assigned-in
   (assert-equalp
@@ -464,105 +618,318 @@ else {
 		    :proposal-distribution (~ y (dnorm y0 s))
 		    :log-acceptance-factor (* (- y y0) s)))))
 
-  (flet ((dim-fct (var)
-	   (case var
-	     ('x0 0)
-	     ('x1 1)
-	     ('x2 2))))
-    (assert-equalp
+  ;; write-assigned-test
+  (let ((dim-fct
+	  (fn (var) (case var ('x0 0) ('x1 1) ('x2 2))))
+	(compile::*variable->string* (compile::var2str-ext '(x0 x1 x2))))
+
+    (assert-equal
 "Assert.IsFalse(_assigned_X0, \"X0 assigned\");
 _assigned_X0 = true;
 "
-      (ppstr (compile::write-assigned-test (sexpr->rellhs 'x0) #'dim-fct)))
+      (ppstr (compile::write-assigned-test (sexpr->rellhs 'x0) dim-fct)))
 
-    (assert-equalp
+    (assert-equal
 "for (int _idx = 0; _idx < _assigned_X1.Length; ++_idx) {
     Assert.IsFalse(_assigned_X1[_idx], \"X1[{0}] assigned\", _idx);
     _assigned_X1[_idx] = true;
 }
 "
-      (ppstr (compile::write-assigned-test (sexpr->rellhs 'x1) #'dim-fct)))
+      (ppstr (compile::write-assigned-test (sexpr->rellhs 'x1) dim-fct)))
 
-    (assert-equalp
-"for (int _idx1 = 0; _idx1 < _assigned_X2.NBRows(); ++_idx1) {
-    for (int _idx2 = 0; _idx2 < _assigned_X2.NBCols(); ++_idx2) {
-        Assert.IsFalse(_assigned_X2[_idx1, _idx2], \"X2[{0},{1}] assigned\", _idx1, _idx2);
+    (assert-equal
+"for (int _idx1 = 0; _idx1 < _assigned_X2.NBRows; ++_idx1) {
+    for (int _idx2 = 0; _idx2 < _assigned_X2.NBCols; ++_idx2) {
+        Assert.IsFalse(_assigned_X2[_idx1, _idx2], \"X2[{0}, {1}] assigned\", _idx1, _idx2);
         _assigned_X2[_idx1, _idx2] = true;
     }
 }
 "
-      (ppstr (compile::write-assigned-test (sexpr->rellhs 'x2) #'dim-fct)))
+      (ppstr (compile::write-assigned-test (sexpr->rellhs 'x2) dim-fct)))
 
-    (assert-equalp
+    (assert-equal
 "Assert.IsFalse(_assigned_X1[K - 1], \"X1[{0}] assigned\", K - 1);
 _assigned_X1[K - 1] = true;
 "
       (ppstr
-       (compile::write-assigned-test (sexpr->rellhs '(@ x1 k)) #'dim-fct)))
+       (compile::write-assigned-test (sexpr->rellhs '(@ x1 k)) dim-fct)))
 
-    (assert-equalp
+    (assert-equal
 "Assert.IsFalse(_assigned_X2[J - 1, K - 1], \"X2[{0}, {1}] assigned\", J - 1, K - 1);
 _assigned_X2[J - 1, K - 1] = true;
 "
       (ppstr
-       (compile::write-assigned-test (sexpr->rellhs '(@ x2 j k)) #'dim-fct)))
+       (compile::write-assigned-test (sexpr->rellhs '(@ x2 j k)) dim-fct))))
 
-
-) ; flet
-
-#|
+  ;; Outer part
   (assert-equal
-"public static void TestIsDAG_Update_FRED(TheModel x)
+"private static void TestIsDAG_Update_FOO(Mdl _x)
 {
-  // ...
+    bool _assigned_X = false;
+    bool[] _assigned_Y = new bool[_x.Y.Length];
+    BMatrix _assigned_Z = new BMatrix(_x.Z.NBRows, _x.Z.NBCols);
+    // ...
 }
 "
-    (let ((rel (sexpr->rel '(~ v (dgamma a b))))
-	  (test-rels ?)
-	  (model-vars '(v a))
-	  (write-body-fct (lambda (rel1 needs-brack)
-			    (assert-equalp rel1 rel)
-			    (assert-false needs-brack)
-			    (assert-equal "x.V" (funcall 
-			    (dolist (r test-rels)
-			      (assert-equal
-			        (compile::write-assigned-test r #'dim-fct)
-				(funcall *write-rel-draw-visitor* r)))
-			    (fmt "// ..."))))
+    (let* ((rel 'rel-stub)
+	   (model-vars 'model-vars-stub)
+	   (assigned-vars '(x y z))
+	   (dim-fct (fn (v) (case v ('a 0) ('x 0) ('y 1) ('z 2))))
+	   (write-body (fn (rel1 mv1 dimfct1)
+			 (assert-eq rel rel1)
+			 (assert-eq model-vars mv1)
+			 (assert-eq dim-fct dimfct1)
+			 (fmt "// ..."))))
       (ppstr
-       (compile::write-update-is-dag "TheModel" 'fred write-body-fct))))
-|#
+        (compile::write-test-is-dag-update
+	  "Mdl" 'foo rel model-vars assigned-vars dim-fct write-body))))
 
-#|
-  ; (write-rel-draw rel nil)
-  ; *write-rel-draw-visitor* calls write-assigned-test 
-  ;*** HERE ***
-  ;For each update, we need to write out a specific DAG test
-  ;that begins by allocating all the required _assigned_* variables
-  ;then does the draw for the update with the addtional write-assigned-tests
-  ;included.
-|#
-#|
-  ;; write-test-update-rel-is-dag
-  (assert-equal
-    "BMC.DrawDirichlet(p, alpha_p);
-    for (int _idx = 0; _idx < _assigned_p.Length; ++_idx) {
-        Assert.IsFalse(_assigned_p[_idx], \"p[{0}]\", _idx);
-        _assigned_p[_idx] = true;
-    }
+  ;; write-rel-draw-with-dag-test
+  (flet ((wrd-with-dag-test (se model-vars dims-assoc)
+           (ppstr
+	     (compile::write-rel-draw-with-dag-test
+	       (sexpr->rel se)
+	       model-vars
+	       (fn(v) (assoc-lookup v dims-assoc))))))
+
+    (assert-equal
+"for (int _idx = 0; _idx < _assigned_p.Length; ++_idx) {
+    Assert.IsFalse(_assigned_p[_idx], \"p[{0}] assigned\", _idx);
+    _assigned_p[_idx] = true;
+}
+BMC.DrawDirichlet(_x.p, _x.alpha_p);
 "
-    (ppstr (compile::write-test-update-rel-is-dag
-	    (sexpr->rel '(~ |p| (ddirch |alpha_p|))))))
-|#
-#|
-  ;; write-test-update-is-dag
-  (assert-equalp
-    ?
-    (ppstr
-      (compile::write-test-update-is-dag
-        'foo '(x) (sexpr->rel '(~ x (dnorm m s))))))
-|#
-)
+      (wrd-with-dag-test
+        '(~ |p| (ddirch |alpha_p|))
+	'(|p| |alpha_p|)
+	'((|p| . 1))))
+
+    (assert-equal
+"Assert.IsFalse(_assigned_x[i - 1], \"x[{0}] assigned\", i - 1);
+_assigned_x[i - 1] = true;
+_x.x[i - 1] = BMC.DrawCat(_x.p);
+"
+      (wrd-with-dag-test
+	'(~ (@ |x| |i|) (dcat |p|))
+	'(|p| |x|)
+	'((|x| . 1))))
+
+  (assert-equal
+"Assert.IsFalse(_assigned_Y[i - 1, j - 1], \"Y[{0}, {1}] assigned\", i - 1, j - 1);
+_assigned_Y[i - 1, j - 1] = true;
+_x.Y[i - 1, j - 1] = BMC.DrawNorm(_x.MU, SIGMA);
+"
+    (wrd-with-dag-test
+      '(~ (@ y |i| |j|) (dnorm mu sigma))
+      '(y mu)
+      '((y . 2))))
+
+  (assert-equal
+"Assert.IsFalse(_assigned_X, \"X assigned\");
+_assigned_X = true;
+_x.X = BMC.DrawGamma(_x.A * C, B / _x.D);
+"
+    (wrd-with-dag-test
+      '(~ x (dgamma (* a c) (/ b d)))
+      '(x a d)
+      '((x . 0))))
+
+   (assert-equal
+"for (int _idx = 0; _idx < _assigned_V.Length; ++_idx) {
+    Assert.IsFalse(_assigned_V[_idx], \"V[{0}] assigned\", _idx);
+    _assigned_V[_idx] = true;
+}
+BMC.DrawMVNorm(_x.V, MU, _x.SIGMA);
+"
+    (wrd-with-dag-test
+      '(~ v (dmvnorm mu sigma))
+      '(v sigma)
+      '((v . 1))))
+
+  (assert-equal
+"for (int _idx1 = 0; _idx1 < _assigned_Lambda.NBRows; ++_idx1) {
+    for (int _idx2 = 0; _idx2 < _assigned_Lambda.NBCols; ++_idx2) {
+        Assert.IsFalse(_assigned_Lambda[_idx1, _idx2], \"Lambda[{0}, {1}] assigned\", _idx1, _idx2);
+        _assigned_Lambda[_idx1, _idx2] = true;
+    }
+}
+BMC.DrawWishart(_x.Lambda, _x.nu + 3, V);
+"
+    (wrd-with-dag-test
+      '(~ |Lambda| (dwishart (+ |nu| 3) V))
+      '(|Lambda| |nu|)
+      '((|Lambda| . 2))))
+
+  (assert-equal
+"Assert.IsFalse(_assigned_v[j - 1], \"v[{0}] assigned\", j - 1);
+_assigned_v[j - 1] = true;
+_x.v[j - 1] = BMC.DrawInterval(_x.u, c);
+"
+    (wrd-with-dag-test
+      '(~ (@ |v| |j|) (dinterval |u| |c|))
+      '(|v| |u|)
+      '((|v| . 1))))
+
+  (assert-equal
+"var sigma = _x.alpha / Math.Sqrt(lambda);
+Assert.IsFalse(_assigned_y, \"y assigned\");
+_assigned_y = true;
+_x.y = BMC.DrawNorm(0, sigma);
+"
+    (wrd-with-dag-test
+      '(:let (|sigma| (/ |alpha| (^1/2 |lambda|)))
+	     (~ |y| (dnorm 0 |sigma|)))
+      '(|y| |alpha|)
+      '((|y| . 0))))
+
+  (assert-equal
+"{
+    var PVEC = BMC.ArrPlus(_x.FOO, BAR);
+    Assert.IsFalse(_assigned_Y, \"Y assigned\");
+    _assigned_Y = true;
+    _x.Y = BMC.DrawCat(PVEC);
+}
+Assert.IsFalse(_assigned_Z, \"Z assigned\");
+_assigned_Z = true;
+_x.Z = BMC.DrawGamma(A, _x.B);
+"
+    (wrd-with-dag-test
+      '(:block
+	 (:let (pvec (@+ foo bar))
+	   (~ y (dcat pvec)))
+	 (~ z (dgamma a b)))
+      '(y z foo b)
+      '((z . 0) (y . 0))))
+
+  (assert-equal
+"if (_x.V[I - 1] < 4) {
+    Assert.IsFalse(_assigned_Z[I - 1], \"Z[{0}] assigned\", I - 1);
+    _assigned_Z[I - 1] = true;
+    _x.Z[I - 1] = BMC.DrawNorm(_x.M, S);
+}
+else {
+    Assert.IsFalse(_assigned_W[I + _x.K - 1], \"W[{0}] assigned\", I + _x.K - 1);
+    _assigned_W[I + _x.K - 1] = true;
+    _x.W[I + _x.K - 1] = BMC.DrawCat(_x.Q);
+}
+"
+    (wrd-with-dag-test
+      '(:if (< (@ v i) 4)
+	 (~ (@ z i) (dnorm m s))
+	 (~ (@ w (+ i k)) (dcat q)))
+      '(z w v m q k)
+      '((w . 1) (z . 1))))
+
+  (assert-equal
+"for (int i = M - 1; i <= _x.N + 2; ++i) {
+    Assert.IsFalse(_assigned_Z[i - 1], \"Z[{0}] assigned\", i - 1);
+    _assigned_Z[i - 1] = true;
+    _x.Z[i - 1] = BMC.DrawNorm(0, Math.Sqrt(_x.Y[i - 1]));
+}
+"
+    (wrd-with-dag-test
+      '(:for |i| ((- m 1) (+ n 2))
+	 (~ (@ z |i|) (dnorm 0 (^1/2 (@ y |i|)))))
+      '(z n y)
+      '((z . 1))))
+
+  (assert-equal
+"if (_x.V < SOME_THRESH) {
+    Assert.IsFalse(_assigned_A, \"A assigned\");
+    _assigned_A = true;
+    _x.A = BMC.DrawGamma(M, _x.S);
+}
+"
+    (wrd-with-dag-test
+      '(:if (< v some_thresh) (~ a (dgamma m s)))
+      '(a s v)
+      '((a . 0))))
+
+  (assert-equal
+"double _laf0 = _x.SIGMA * (_x.U - MU);
+var _save_U = BMC.Copy(_x.U);
+
+Assert.IsFalse(_assigned_U, \"U assigned\");
+_assigned_U = true;
+_x.U = BMC.DrawNorm(MU, _x.SIGMA);
+
+double _laf1 = _x.SIGMA * (_x.U - MU);
+if (!BMC.Accept(_laf1 - _laf0)) {
+    _x.U = _save_U;
+}
+"
+    (wrd-with-dag-test
+     '(:metropolis-hastings
+        :lets ()
+        :proposal-distribution (~ u (dnorm mu sigma))
+        :log-acceptance-factor (* sigma (- u mu)))
+     '(u sigma)
+     '((u . 0))))
+
+  (assert-equal
+"var MU = 2 * _x.M;
+double _laf0 = _x.SIGMA * (_x.Z - MU);
+var _save_Z = BMC.Copy(_x.Z);
+
+Assert.IsFalse(_assigned_Z, \"Z assigned\");
+_assigned_Z = true;
+_x.Z = BMC.DrawNorm(MU, _x.SIGMA);
+
+MU = 2 * _x.M;
+double _laf1 = _x.SIGMA * (_x.Z - MU);
+if (!BMC.Accept(_laf1 - _laf0)) {
+    _x.Z = _save_Z;
+}
+"
+   (wrd-with-dag-test
+     '(:metropolis-hastings
+        :lets ((mu (* 2 m)))
+	:proposal-distribution (~ z (dnorm mu sigma))
+	:log-acceptance-factor (* sigma (- z mu)))
+     '(z m sigma)
+     '((z . 0))))
+
+  (assert-equal
+"for (int I = _x.M; I <= N; ++I) {
+    var MU = BMC.Dot(_x.Y, _x.GAMMA);
+    var SIGMA = Math.Exp(U * _x.V[I - 1]);
+    var F = _x.Z[I - 1];
+    var SIGMA2 = F * F;
+    double _laf0 = _x.Z[I - 1] + SIGMA2;
+    var _save_Z_lbI_rb = BMC.Copy(_x.Z[I - 1]);
+    var _save_W = BMC.Copy(_x.W);
+
+    Assert.IsFalse(_assigned_Z[I - 1], \"Z[{0}] assigned\", I - 1);
+    _assigned_Z[I - 1] = true;
+    _x.Z[I - 1] = BMC.DrawNormTruncated(MU, SIGMA, _x.A, _x.B);
+    Assert.IsFalse(_assigned_W, \"W assigned\");
+    _assigned_W = true;
+    _x.W = BMC.DrawNorm(_x.Z[I - 1], 1);
+
+    F = _x.Z[I - 1];
+    SIGMA2 = F * F;
+    double _laf1 = _x.Z[I - 1] + SIGMA2;
+    if (!BMC.Accept(_laf1 - _laf0)) {
+        _x.Z[I - 1] = _save_Z_lbI_rb;
+        _x.W = _save_W;
+    }
+}
+"
+    (wrd-with-dag-test
+      '(:for i (m n)
+	 (:let (mu (dot y gamma))
+	   (:let (sigma (exp (* u (@ v i))))
+	     (:metropolis-hastings
+	       :lets ((f (@ z i)) (sigma2 (* f f)))
+	       :proposal-distribution
+	         (:block
+		    (~ (@ z i) (dnorm-trunc mu sigma a b))
+		    (~ w (dnorm (@ z i) 1)))
+	       :log-acceptance-factor (+ (@ z i) sigma2)))))
+      '(z m y gamma v a b w)
+      '((z . 1) (w . 0))))
+
+))
 
 (define-test compile-test-updates-tests
   (assert-equal
@@ -577,6 +944,9 @@ namespace Tests
     {
         public static void TestAllUpdates(MyModel x, double tol)
         {
+            TestIsDAG_Update_ALPHA(x);
+            TestIsDAG_Update_BETA(x);
+
             TestUpdate_ALPHA(x, tol);
             TestUpdate_BETA(x, tol);
         }
@@ -587,7 +957,7 @@ namespace Tests
 }
 "
     (ppstr (compile::write-test-updates "MyModel" '(alpha beta)
-	     (lambda (x) (fmt "// Implement TestUpdate_~a" x)))))
+	     (fn (x) (fmt "// Implement TestUpdate_~a" x)))))
 
   (assert-equal
 "public static void TestUpdate_ALPHA(MyModel x, double tol)
@@ -618,23 +988,19 @@ namespace Tests
     (ppstr (compile::write-test-gibbs-update "Mdl" 'beta)))
 
   (assert-equal
-"private static double LogDrawDensity_GAMMA(MyMuddle x)
+"private static double LogDrawDensity_GAMMA(MyMuddle _x)
 {
-    double ldd = 0.0;
+    double _ldd = 0.0;
     // ...
-    return ldd;
+    return _ldd;
 }
 "
     (let* ((rel (sexpr->rel '(~ a (dnorm m s))))
 	   (model-vars '(m c))
-	   (write-body 	(lambda (acc rel1 needs-brackets var2str)
-			  (assert-equal "ldd" acc)
+	   (write-body 	(fn (rel1 mv1)
 			  (assert-equalp rel rel1)
-			  (assert-false needs-brackets)
-			  (assert-equal "x.M" (funcall var2str 'm))
-			  (assert-equal "x.C" (funcall var2str 'c))
-			  (assert-equal "NOT_MC" (funcall var2str 'not_mc))
-			  (fmt "// ..."))))  
+			  (assert-equalp model-vars mv1)
+			  (fmt "// ..."))))
       (ppstr
        (compile::write-log-draw-density-of-update
 	 "MyMuddle" 'gamma rel model-vars write-body))))
@@ -642,7 +1008,6 @@ namespace Tests
   (assert-equal
 "public static void TestUpdate_ALPHA(MyModel x, double tol)
 {
-    TestIsDAG_Update_ALPHA(x);
     TestOuterLetsAreInvariant_ALPHA(x);
     TestAcceptanceRatio_ALPHA(x, tol);
 }
@@ -652,13 +1017,151 @@ namespace Tests
   (assert-equal
 "public static void TestUpdate_BETA(Mdl x, double tol)
 {
-    TestIsDAG_Update_BETA(x);
     TestOuterLetsAreInvariant_BETA(x);
     TestAcceptanceRatio_BETA(x, tol);
 }
 "
     (ppstr (compile::write-test-mh-update "Mdl" 'beta)))
 
+  (let ((rel (sexpr->rel
+	       '(:let (foo (+ a b))
+		(:for k (em enn)
+		  (:if (= (@ bar k) baz)
+		    (:block
+		      (~ (@ x k) (dnorm m s))
+		      (~ (@ z k) (dgamma (exp x) 1)))))))))
+    (assert-equal 't (compile::is-gibbs-update rel))
+    (assert-equal nil (compile::is-mh-update rel)))
+
+  (let ((rel (sexpr->rel
+	       '(:for j (lo hi)
+		  (:let (bar (@ z j))
+		    (:if (< (@ m j) thresh)
+		      (:metropolis-hastings
+		       :lets ((baz (@ foo j j)))
+		       :proposal-distribution (~ (@ x j) (dnorm (@ x j) sigma))
+		       :log-acceptance-factor (* baz (exp (@ x j))))))))))
+    (assert-equal nil (compile::is-gibbs-update rel))
+    (assert-equal 't (compile::is-mh-update rel)))
+
+  (let ((rel (sexpr->rel
+	       '(:block
+		  (~ x (dnorm m s))
+		  (:metropolis-hastings
+		   :lets ()
+		   :proposal-distribution (~ y (dgamma a b))
+		   :log-acceptance-factor (log y))))))
+    (assert-equal nil (compile::is-gibbs-update rel))
+    (assert-equal nil (compile::is-mh-update rel)))
+
+  (let ((rel (sexpr->rel
+	       '(:metropolis-hastings
+		 :lets ()
+		 :proposal-distribution
+		   (:metropolis-hastings
+		    :lets ()
+		    :proposal-distribution (~ y (dgamma a b))
+		    :log-acceptance-factor (* u v))
+		 :log-acceptance-factor (log y)))))
+    (assert-equal nil (compile::is-gibbs-update rel))
+    (assert-equal nil (compile::is-mh-update rel)))
+)
+
+(define-test write-body-ldd-of-update-tests
+  (assert-equal
+    "_ldd += BMC.LogDensityDirichlet(_x.p, _x.alpha_p);
+"
+    (ppstr (compile::write-body-ldd-of-update
+	     (sexpr->rel '(~ |p| (ddirch |alpha_p|)))
+	     '(|p| |alpha_p|))))
+
+  (assert-equal
+    "_ldd += BMC.LogDensityCat(_x.x[i - 1], _x.p);
+"
+    (ppstr (compile::write-body-ldd-of-update
+	     (sexpr->rel '(~ (@ |x| |i|) (dcat |p|)))
+	     '(|x| |p|))))
+
+  (assert-equal
+    "_ldd += BMC.LogDensityNorm(_x.x[i - 1], MU, SIGMA);
+"
+    (ppstr (compile::write-body-ldd-of-update
+	     (sexpr->rel '(~ (@ |x| |i|) (dnorm mu sigma)))
+	     '(|x|))))
+
+  (assert-equal
+    "_ldd += BMC.LogDensityGamma(_x.x[i - 1], _x.A * C, _x.B / D);
+"
+    (ppstr (compile::write-body-ldd-of-update
+	     (sexpr->rel '(~ (@ |x| |i|) (dgamma (* a c) (/ b d))))
+	     '(|x| a b))))
+
+  (assert-equal
+    "_ldd += BMC.LogDensityMVNorm(_x.x, MU, _x.SIGMA);
+"
+    (ppstr (compile::write-body-ldd-of-update
+	     (sexpr->rel '(~ |x| (dmvnorm mu sigma)))
+	     '(|x| sigma))))
+
+  (assert-equal
+    "_ldd += BMC.LogDensityWishart(_x.Lambda, _x.nu + 3, V);
+"
+    (ppstr (compile::write-body-ldd-of-update
+	     (sexpr->rel '(~ |Lambda| (dwishart (+ |nu| 3) V)))
+	     '(|Lambda| |nu|))))
+
+  (assert-equal
+    "_ldd += BMC.LogDensityInterval(_x.v, _x.y, c);
+"
+    (ppstr (compile::write-body-ldd-of-update
+	      (sexpr->rel '(~ |v| (dinterval |y| |c|)))
+	      '(|v| |y|))))
+
+  (assert-equal
+    (strcat-lines
+      "var sigma = 1 / Math.Sqrt(lambda);"
+      "_ldd += BMC.LogDensityNorm(_x.Z, 0, sigma);")
+    (ppstr (compile::write-body-ldd-of-update
+	    (sexpr->rel '(:let (|sigma| (/ 1 (^1/2 |lambda|)))
+			   (~ z (dnorm 0 |sigma|))))
+	    '(z))))
+
+  (assert-equal
+    (strcat-lines "_ldd += BMC.LogDensityCat(_x.Y, P);"
+		  "_ldd += BMC.LogDensityNorm(_x.X, 0, _x.SIGMA[_x.Y - 1]);")
+    (ppstr (compile::write-body-ldd-of-update
+	     (sexpr->rel '(:block
+			    (~ y (dcat p))
+			    (~ x (dnorm 0 (@ sigma y)))))
+	     '(y x sigma))))
+
+  (assert-equal
+    (strcat-lines
+	    "if (V[I - 1] < 4) {"
+	    "    _ldd += BMC.LogDensityNorm(_x.Z[I - 1], _x.M, S);"
+            "}"
+	    "else {"
+	    "    _ldd += BMC.LogDensityCat(_x.W[I - 1], P);"
+	    "}")
+    (ppstr (compile::write-body-ldd-of-update
+	     (sexpr->rel '(:if (< (@ v i) 4)
+			    (~ (@ z i) (dnorm m s))
+			    (~ (@ w i) (dcat p))))
+	     '(z m w))))
+
+  (assert-equal
+    (strcat-lines
+      "for (int i = M - _x.K; i <= _x.N + A; ++i) {"
+      "    _ldd += BMC.LogDensityGamma(_x.W[i - 1], Math.Sqrt(Y[i - 1]), 1);"
+      "}")
+    (ppstr (compile::write-body-ldd-of-update
+	     (sexpr->rel '(:for |i| ((- m k) (+ n a))
+                            (~ (@ w |i|) (dgamma (^1/2 (@ y |i|)) 1))))
+	     '(k n w))))
+
+  (assert-equal
+    ""
+    (ppstr (compile::write-body-ldd-of-update (make-relation-skip) '())))
 )
 
 (define-test compile-tests
@@ -676,7 +1179,7 @@ namespace Foo
 }
 "
     (ppstr (compile::write-csharp-class
-	     "Foo" "Bar" (lambda () (fmt "<class body>")))))
+	     "Foo" "Bar" (fn () (fmt "<class body>")))))
 
   (let ((decls '((|b| boolean)
 		 (|ia| integer) (|ib| integerp0) (|ic| integerp)
@@ -828,30 +1331,20 @@ public DMatrix b;
 		   (~ (@ y |i|) (dgamma b a)))))))))))
 )
 
-(defun rdvisitor1 (lhs)
-  (fmt "// 1: ~a" (compile::crellhs->string lhs)))
-(defun rd-var2str1 (v) (strcat "_" (symbol-name v)))
-
-(defun rdvisitor2 (lhs)
-  (fmt "// 2: ~a" (compile::crellhs->string lhs)))
-(defun rd-var2str2 (v) (strcat "." (symbol-name v)))
-
 (define-test rel-draw-tests
   (assert-equal
-"BMC.DrawDirichlet(_p, _alpha_p);
-// 1: _p
+"BMC.DrawDirichlet(p, alpha_p);
 "
     (ppstr (compile::write-rel-draw
 	    (sexpr->rel '(~ |p| (ddirch |alpha_p|)))
-	    nil #'rdvisitor1 #'rd-var2str1)))
+	    nil)))
 
   (assert-equal
-".x[.i - 1] = BMC.DrawCat(.p);
-// 2: .x[.i - 1]
+"x[i - 1] = BMC.DrawCat(p);
 "
     (ppstr (compile::write-rel-draw
 	     (sexpr->rel '(~ (@ |x| |i|) (dcat |p|)))
-	     nil #'rdvisitor2 #'rd-var2str2)))
+	     nil)))
 
   (assert-equal
     "Y[i - 1, j - 1] = BMC.DrawNorm(MU, SIGMA);
@@ -1095,7 +1588,7 @@ var _save_X = BMC.Copy(X);
 X = BMC.DrawNorm(MU, SIGMA);
 
 double _laf1 = SIGMA * (X - MU);
-if (!Accept(_laf1 - _laf0)) {
+if (!BMC.Accept(_laf1 - _laf0)) {
     X = _save_X;
 }
 "
@@ -1116,7 +1609,7 @@ X = BMC.DrawNorm(MU, SIGMA);
 
 MU = 2 * M;
 double _laf1 = SIGMA * (X - MU);
-if (!Accept(_laf1 - _laf0)) {
+if (!BMC.Accept(_laf1 - _laf0)) {
     X = _save_X;
 }
 "
@@ -1142,7 +1635,7 @@ if (!Accept(_laf1 - _laf0)) {
     F = Z[I - 1];
     SIGMA2 = F * F;
     double _laf1 = Z[I - 1] + SIGMA2;
-    if (!Accept(_laf1 - _laf0)) {
+    if (!BMC.Accept(_laf1 - _laf0)) {
         Z[I - 1] = _save_Z_lbI_rb;
     }
 }
@@ -1166,7 +1659,7 @@ if (!Accept(_laf1 - _laf0)) {
       "void Draw() {"
       "    <body>"
       "}")
-    (ppstr (compile::write-prior-draw (lambda () (fmt "<body>")))))
+    (ppstr (compile::write-prior-draw (fn () (fmt "<body>")))))
 )
 
 (define-test dag-check-tests

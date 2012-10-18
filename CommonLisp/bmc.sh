@@ -35,12 +35,8 @@
       (compile-to-csharp csharp-namespace class-name mdl impl)))
   (with-open-file (ostrm (strcat ofname-base "-tests.cs") :direction :output)
     (let ((*indent-amount* 4)
-	  (*fmt-ostream* ostrm)
-	  (updates (mcimpl-updates impl)))
-      (write-test-updates
-        (lambda (x) (write-log-draw-density-body x updates))
-	class-name
-	(mapcar #'car updates))))))
+	  (*fmt-ostream* ostrm))
+      (write-test-file class-name mdl impl))))
 
   ; TODO: rework unit tests
   ; TODO: validation of initial Markov chain state

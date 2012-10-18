@@ -418,8 +418,6 @@
   (fmt-blank-line)
   (write-undefine-all-vars (model-vars mdl))
   (fmt-blank-line)
-  (write-csharp-accept-method)
-  (fmt-blank-line)
   (write-csharp-updates impl)
   (fmt-blank-line)
   ; ... more ...
@@ -728,7 +726,7 @@
 
 (defun write-assigned-test-rellhs-array-elt (var indices dim-fct)
   (let ((n (funcall dim-fct var))
-	(vstr (variable->string var))
+	(vstr (default-variable->string var))
 	(idxstr-list (mapcar #'index-expr->string indices)))
     (unless (= n (length indices))
       (error "Wrong number of indices in LHS of update: ~a."
@@ -749,7 +747,7 @@
        (error "Unimplemented case in write-assigned-test-rellhs-array-elt")))))
 
 (defun write-assigned-test-rellhs-simple (var dim-fct)
-  (let ((vstr (variable->string var)))
+  (let ((vstr (default-variable->string var)))
     (case (funcall dim-fct var)
       (0
        (fmt "Assert.IsFalse(_assigned_~a, \"~a assigned\");" vstr vstr)
@@ -762,18 +760,21 @@
 	(fmt "_assigned_~a[_idx] = true;" vstr))
        (fmt "}"))
       (2
-       (fmt "for (int _idx1 = 0; _idx1 < _assigned_~a.NBRows(); ++_idx1) {"
+       (fmt "for (int _idx1 = 0; _idx1 < _assigned_~a.NBRows; ++_idx1) {"
 	    vstr)
        (indent
-	(fmt "for (int _idx2 = 0; _idx2 < _assigned_~a.NBCols(); ++_idx2) {"
+	(fmt "for (int _idx2 = 0; _idx2 < _assigned_~a.NBCols; ++_idx2) {"
 	     vstr)
 	(indent
-	 (fmt "Assert.IsFalse(_assigned_~a[_idx1, _idx2], \"~a[{0},{1}] assigned\", _idx1, _idx2);" vstr vstr)
+	 (fmt "Assert.IsFalse(_assigned_~a[_idx1, _idx2], \"~a[{0}, {1}] assigned\", _idx1, _idx2);" vstr vstr)
 	 (fmt "_assigned_~a[_idx1, _idx2] = true;" vstr))
 	(fmt "}"))
        (fmt "}")))))
 
-
+(defun write-test-file (class-name mdl impl)
+  (let ((update-names (mapcar #'car (mcimpl-updates impl)))
+	(wtu-fct (make-write-test-update-fct class-name mdl impl)))
+    (write-test-updates class-name update-names wtu-fct)))
 
 (defun write-test-updates (class-name update-names write-test-update-fct)
   (dolist (x '("System" "NUnit.Framework" "Estimation" "Common"))
@@ -786,10 +787,83 @@
       (fmt "public static void TestAllUpdates(~a x, double tol)" class-name)
       (bracket
         (dolist (update-name update-names)
+          (fmt "TestIsDAG_Update_~a(x);" update-name))
+	(fmt-blank-line)
+        (dolist (update-name update-names)
           (fmt "TestUpdate_~a(x, tol);" update-name)))
       (fmt-blank-line)
       (dolist (update-name update-names)
 	(funcall write-test-update-fct update-name)))))
+
+(defun model->dim-fct (mdl)
+  (flet ((var-dim (d)
+	   (let ((n (adt-case vtype (decl-typ d)
+		      ((scalar stype) 0)
+		      ((array elem-type dims) (length dims)))))
+	     (cons (decl-var d) n))))
+    (let ((dim-lookup (mapcar #'var-dim (model-vars mdl))))
+      (lambda (v) (assoc-lookup v dim-lookup)))))
+
+(defun make-write-test-update-fct (class-name mdl impl)
+  (let ((model-vars (args-vars-names mdl))
+	(dim-fct (model->dim-fct mdl))
+	(updates-assoc (mcimpl-updates impl)))
+    (fn (upd-name)
+      (let ((rel (assoc-lookup upd-name updates-assoc)))
+	(write-test-update class-name upd-name rel model-vars dim-fct)))))
+
+(defun write-test-update (class-name update-name rel model-vars dim-fct)
+  (let ((assigned-vars (model-variables-assigned-in rel)))
+    (write-test-is-dag-update
+      class-name update-name rel model-vars assigned-vars dim-fct)
+    (fmt-blank-line)
+    (cond
+      ((is-gibbs-update rel)
+       (write-test-gibbs-update class-name update-name))
+      ((is-mh-update rel)
+       (write-test-mh-update class-name update-name)
+       (fmt-blank-line)
+       (write-test-outer-lets class-name update-name rel model-vars)
+       (fmt-blank-line)
+       (write-test-acceptance-ratio class-name update-name rel model-vars))
+      (t (error (strcat "Invalid update (~a) -- "
+			"must be either Gibbs or Metropolis-Hastings"))))))
+
+(defun is-gibbs-update (rel)
+  (adt-case relation rel
+    ((stochastic lhs rhs)
+     t)
+    ((block members)
+     (every #'is-gibbs-update members))
+    ((if condition true-branch false-branch)
+     (and (is-gibbs-update true-branch)
+	  (is-gibbs-update false-branch)))
+    ((loop var lo hi body)
+     (is-gibbs-update body))
+    ((let var val body)
+     (is-gibbs-update body))
+    ((skip)
+     t)
+    ((mh lets proposal-distribution log-acceptance-factor)
+     nil)))
+
+(defun is-mh-update (rel)
+  (adt-case relation rel
+    ((stochastic lhs rhs)
+     nil)
+    ((block members)
+     nil)
+    ((if condition true-branch false-branch)
+     (and (is-mh-update true-branch)
+	  (is-mh-update false-branch)))
+    ((loop var lo hi body)
+     (is-mh-update body))
+    ((let var val body)
+     (is-mh-update body))
+    ((skip)
+     t)
+    ((mh lets proposal-distribution log-acceptance-factor)
+     (is-gibbs-update proposal-distribution))))
 
 (defun write-test-gibbs-update (class-name update-name)
   (fmt "public static void TestUpdate_~a(~a x, double tol)"
@@ -805,36 +879,108 @@
    (fmt "Assert.AreEqual(0.0, ldd_diff - ljd_diff, tol, \"~a\");"
 	update-name)))
 
+(defun var2str-ext (model-vars)
+  (lambda (v)
+    (let ((s (default-variable->string v)))
+      (if (member v model-vars) (strcat "_x." s) s))))
+
+(defun write-body-ldd-of-update (rel model-vars)
+  (write-ljd-accum-rel "_ldd" rel nil (var2str-ext model-vars)))
+
 (defun write-log-draw-density-of-update
-       (class-name update-name rel model-vars
-	&optional (write-body-fct #'write-ljd-accum-rel))
-  (fmt "private static double LogDrawDensity_~a(~a x)"
+       (class-name update-name rel model-vars &optional
+	(write-body #'write-body-ldd-of-update))
+  (fmt "private static double LogDrawDensity_~a(~a _x)" update-name class-name)
+  (bracket
+   (fmt "double _ldd = 0.0;")
+   (funcall write-body rel model-vars)
+   (fmt "return _ldd;")))
+
+(defun write-test-is-dag-update
+       (class-name update-name rel model-vars assigned-vars dim-fct &optional
+        (write-body #'write-rel-draw-with-dag-test))
+  (fmt "private static void TestIsDAG_Update_~a(~a _x)" update-name class-name)
+  (bracket
+    (dolist (v assigned-vars)
+      (let ((vstr (variable->string v)))
+	(case (funcall dim-fct v)
+	  (0 (fmt "bool _assigned_~a = false;" vstr))
+	  (1 (fmt "bool[] _assigned_~a = new bool[_x.~a.Length];" vstr vstr))
+	  (2 (fmt "BMatrix _assigned_~a = new BMatrix(_x.~a.NBRows, _x.~a.NBCols);"
+		  vstr vstr vstr)))))
+    (funcall write-body rel model-vars dim-fct)))
+
+(defun write-rel-draw-with-dag-test (rel model-vars dim-fct)
+  (let ((visitor (lambda (lhs) (write-assigned-test lhs dim-fct))))
+    (write-rel-draw rel nil visitor (var2str-ext model-vars))))
+
+(defun write-test-outer-lets
+       (class-name update-name rel model-vars &optional
+	(write-body #'write-test-outer-lets-body))
+  (fmt "private static void TestOuterLetsAreInvariant_~a(~a _x)"
        update-name class-name)
   (bracket
-   (fmt "double ldd = 0.0;")
-   (flet ((var2str (v)
-	    (let ((s (default-variable->string v)))
-	      (if (member v model-vars) (strcat "x." s) s))))
-     (funcall write-body-fct "ldd" rel nil #'var2str))
-   (fmt "return ldd;")))
+    (let ((*variable->string* (var2str-ext model-vars))
+	  (*write-rel-draw-visitor* #'default-wrd-visitor))
+      (funcall write-body rel '()))))
+
+(defun write-test-outer-lets-body (rel rev-outer-lets)
+  (adt-case relation rel
+    ((mh lets proposal-distribution log-acceptance-factor)
+     (write-test-outer-lets-mh lets proposal-distribution rev-outer-lets))
+    ((loop var lo hi body)
+     (write-test-outer-lets-loop var lo hi body rev-outer-lets))
+    ((let var val body)
+     (write-test-outer-lets-let var val body rev-outer-lets))
+    (otherwise (error "Invalid relation in write-test-outer-lets-body"))))
+
+(defun write-test-outer-lets-let (var val body rev-outer-lets)
+  (fmt "var ~a = ~a;" (variable->string var) (expr->string val))
+  (write-test-outer-lets-body body (cons (cons var val) rev-outer-lets)))
+
+(defun write-test-outer-lets-loop (var lo hi body rev-outer-lets)
+  (let ((vstr (variable->string var)))
+    (fmt "int _lo_~a = ~a;" vstr (expr->string lo))
+    (fmt "int _hi_~a = ~a;" vstr (expr->string hi))
+    (fmt "for (int ~a = _lo_~a; ~a <= _hi_~a; ++~a) {"
+	 vstr vstr vstr vstr vstr)
+    (indent
+     (let* ((lo-def (cons (intern (strcat "_lo_" vstr)) lo))
+	    (hi-def (cons (intern (strcat "_hi_" vstr)) hi))
+	    (new-lets (list* hi-def lo-def rev-outer-lets)))
+	   (write-test-outer-lets-body body new-lets)))
+    (fmt "}")))
+
+(defun write-test-outer-lets-mh (lets prop-distr rev-outer-lets)
+  (dolist (d lets)
+    (destructuring-bind (var . val) d
+      (fmt "var ~a = ~a;" (variable->string var) (expr->string val))))
+  (write-rel-draw-main prop-distr nil)
+  (dolist (d (reverse rev-outer-lets))
+    (destructuring-bind (var . val) d
+      (let ((varstr (variable->string var))
+	    (valstr (expr->string val)))
+	(fmt "Assert.IsTrue(BMC.Equal(~a, ~a), \"~a should not change\");"
+	     varstr valstr varstr)))))
+
+(defun write-test-acceptance-ratio
+       (class-name upd-name rel model-vars &optional
+	(write-body #'write-test-acceptance-ratio-body))
+  (fmt "private static void TestAcceptanceRatio_~a(~a _x)" upd-name class-name)
+  (bracket
+    (let ((*variable->string* (var2str-ext model-vars))
+	  (*write-rel-draw-visitor* #'default-wrd-visitor))
+      (funcall write-body rel))))
+
+(defun write-test-acceptance-ratio-body (rel)
+)
 
 (defun write-test-mh-update (class-name update-name)
   (fmt "public static void TestUpdate_~a(~a x, double tol)"
        update-name class-name)
   (bracket
-    (fmt "TestIsDAG_Update_~a(x);" update-name)
     (fmt "TestOuterLetsAreInvariant_~a(x);" update-name)
     (fmt "TestAcceptanceRatio_~a(x, tol);" update-name)))
-
-#|
-      (dolist (update-name update-names)
-|#
-#|
-(defun write-log-draw-density-body (update-name updates)
-  (fmt "double ldd = 0.0;")
-  (write-ljd-accum-rel "ldd" (assoc-lookup update-name updates) nil)
-  (fmt "return ldd;"))
-|#
 
 (defun write-csharp-log-joint-density (mdl)
   (let* ((excluded (vars-in-model mdl))
@@ -986,6 +1132,7 @@
      (main))))
 
 (defun write-rel-draw-stoch (lhs rhs)
+  (funcall *write-rel-draw-visitor* lhs)
   (match-adt1 (distribution name args) rhs
     (if (is-scalar-distr name)
       (fmt "~a = ~a(~{~a~^, ~});"
@@ -995,8 +1142,7 @@
       (fmt "~a(~a~{, ~a~});"
 	   (csharp-distr-draw-name name)
 	   (crellhs->string lhs)
-	   (mapcar #'expr->string args)))
-    (funcall *write-rel-draw-visitor* lhs)))
+	   (mapcar #'expr->string args)))))
 
 (defun is-scalar-distr (symbol)
   (member symbol +scalar-distributions+))
@@ -1043,7 +1189,7 @@
 	     (destructuring-bind (v . val) d
 	       (fmt "~a = ~a;" (variable->string v) (expr->string val))))
 	   (fmt "double _laf1 = ~a;" (expr->string log-acc-factor))
-	   (fmt "if (!Accept(_laf1 - _laf0)) {")
+	   (fmt "if (!BMC.Accept(_laf1 - _laf0)) {")
 	   (indent
 	     (write-mh-restores prop-distr))
 	   (fmt "}")))
@@ -1133,14 +1279,6 @@
 		   (indent (f (rest iv-list) (rest dim-list)))
 		   (fmt "}")))))
       (f idx-vars dims))))
-
-(defun write-csharp-accept-method ()
-  (fmt "public static bool Accept(double log_acceptance_ratio)")
-  (bracket
-   (fmt "if (Double.IsNaN(log_acceptance_ratio))")
-   (indent
-    (fmt "throw new Exception(\"Log of acceptance ratio is NaN\");"))
-   (fmt "return (log_acceptance_ratio >= 0 || BMC.DrawUniform(0.0, 1.0) < Math.Exp(log_acceptance_ratio));")))
 
 (defparameter *stoch-vars* nil)
 

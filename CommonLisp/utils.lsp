@@ -1,5 +1,8 @@
 (in-package :utils)
 
+(defmacro fn (params &rest body)
+  `(lambda ,params ,@body))
+
 (defun starts-with (symbol sexpr)
   (and (consp sexpr) (eq symbol (car sexpr))))
 

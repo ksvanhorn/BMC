@@ -61,7 +61,7 @@
   (:use :cl)
   (:export :starts-with :assoc-lookup :zip :strcat :strcat-lines
 	   :read-file :int-range :is-list-of-length
-	   :list->pair-list
+	   :list->pair-list :fn
 	   :append-mapcar :fdebug :compound-symbol
 	   :n-symbols-not-in :symbol-not-in
 	   :indent :fmt :fmt-blank-line
@@ -87,7 +87,7 @@
 (defpackage :model
   (:use :cl :symbols :adt :utils :expr)
   (:export
-   :read-model :sexpr->model
+   :read-model :sexpr->model :raw-sexpr->model
    :sexpr->vtype :sexpr->decl :sexpr->decls :sexpr->distr
    :sexpr->rellhs :sexpr->rel
    :vtype->string :distr->string :rellhs->expr :rellhs->string

@@ -52,15 +52,39 @@ Computation of log proposal density
 (write-rel-draw <rel> &optional <let-needs-brackets>)
 (write-ljd-accum-rel <accum-var-name> <rel> <let-needs-brackets> <var-name-pfx>)
 
-(write-test-updates <write-test-update-fct> <class-name> <update-names>)
+// Overall
+(write-test-updates <class-name> <update-names>
+  &optional <write-test-update-fct> )
+(write-test-is-dag-update <class-name> <update-name> <rel> <model-vars>
+  <assigned-vars> <dim-fct> &optional <write-body>)
+- (write-rel-draw-with-dag-test <rel> <model-vars> <dim-fct>)
+  - (write-assigned-test <rel> <dim-fct>)
+- (args-vars-names <mdl>)
+- (model-variables-assigned-in <rel>)
+- (model->dim-fct <mdl>)
 
 // For a Gibbs update:
 (write-test-gibbs-update <class-name> <update-name>)
-(write-log-draw-density-of-update <class-name> <update-name> <rel> <model-vars>)
+(write-log-draw-density-of-update <class-name> <update-name> <rel> <model-vars>
+ &optional write-body)
+(write-body-ldd-of-update <rel> <model-vars>)
+// Also needs DAG test?
 
 // For a M-H update:
 (write-test-mh-update <class-name> <update-name>)
-(write-assigned-test <lhs> <dim-fct>) ; plugs into write-rel-draw
+
+[write-test-file: (UNTESTED... but it's just "glue") 
+- calls make-write-test-update-fct 
+- calls write-test-updates]
+[make-write-test-update-fct (UNTESTED... but it's mostly "glue")
+- calls write-test-update]
+[write-test-update (UNTESTED ... mostly "glue", sequencing)
+- calls write-test-is-dag-update
+- calls is-gibbs-update
+- calls is-mh-update
+- calls write-test-gibbs-update
+- calls write-test-outer-lets-invariant
+- calls write-test-acceptance-ratio (TODO)]
 
 TestIsDAG_Update_ALPHA(x); (apply to Gibbs updates and proposal distr of M-H)
 TestOuterLetsAreInvariant_ALPHA(x); (apply to M-H updates)
@@ -94,6 +118,10 @@ General:
 Additional test:
   [Test that M-H proposal distr is valid by checking that no value
    gets updated more than once.]
+
+Take a closer look at test for Gibbs updates -- I'm not sure that it's correct,
+in that it doesn't deal with the case where the draw depends on the variable
+or variables being updated.
 
 
 (:quant qand i (m n) (p i)) == (reduce-qand true (qvec i (m n) (p i)))

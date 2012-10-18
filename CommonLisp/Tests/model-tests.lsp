@@ -418,7 +418,7 @@ model {
   (assert-equal
     '(c n e m k chi z)
     (model::used-before-declared
-      (model::raw-sexpr->model
+      (raw-sexpr->model
         '(:model
 	  (:args (a (integer (+ c 2)))
 		 (b (real n))
@@ -439,7 +439,7 @@ model {
   (assert-equal
     '(n m)
     (model::vars-used-in-dims
-      (model::raw-sexpr->model
+      (raw-sexpr->model
         '(:model
 	   (:args)
 	   (:reqs)
@@ -470,7 +470,7 @@ model {
 	  (cons 'z '())
 	  (cons 'w (sexpr->exprs '(3 n))))
     (args-vars-dims
-      (model::raw-sexpr->model
+      (raw-sexpr->model
         '(:model
 	   (:args (x (integer  5))
 		  (n integerp))
@@ -484,7 +484,7 @@ model {
   (assert-equalp
     '(a b c d)
     (args-vars-names
-      (model::raw-sexpr->model
+      (raw-sexpr->model
         '(:body (:args (a integerp) (b (real 3 a)))
 		(:reqs)
 		(:vars (c realp0) (d (realp a (* a a))))))))
