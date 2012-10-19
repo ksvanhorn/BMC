@@ -3,6 +3,14 @@
 (defmacro fn (params &rest body)
   `(lambda ,params ,@body))
 
+(defmacro dolist-inter ((var lst) action between)
+  (let ((past-first (gensym)))
+    `(let ((,past-first nil))
+       (dolist (,var ,lst)
+	 (when ,past-first ,between)
+	 (setf ,past-first t)
+	 ,action))))
+
 (defun starts-with (symbol sexpr)
   (and (consp sexpr) (eq symbol (car sexpr))))
 

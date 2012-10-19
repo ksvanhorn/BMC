@@ -14,7 +14,7 @@
   (if condition true-branch false-branch)
   (loop var lo hi body)
   (let var val body)
-  (mh lets proposal-distribution log-acceptance-factor)
+  (mh lets proposal-distribution log-acceptance-ratio)
     ; Metropolis-Hastings
   (skip))
 
@@ -92,19 +92,31 @@
 	((starts-with :if x) (sexpr->if-rel (cdr x)))
 	((starts-with :for x) (sexpr->loop-rel (cdr x)))
 	((starts-with :let x) (sexpr->let-rel (cdr x)))
+	((starts-with :gibbs x) (sexpr->gibbs-rel (cdr x)))
 	((starts-with :metropolis-hastings x) (sexpr->mh-rel (cdr x)))
 	(t (error "Invalid relation: ~W." x))))
+
+(defun sexpr->gibbs-rel (x)
+  (check-gibbs-rel x)
+  (sexpr->mh-rel `(:lets ()
+		   :proposal-distribution ,(first x)
+		   :log-acceptance-ratio 0)))
+
+(defun check-gibbs-rel (x)
+  (destructuring-bind (rel) x
+    (unless (is-pure-rel (sexpr->rel rel))
+      (error "Invalid Gibbs update: ~a." (cons :gibbs x)))))
 
 (defun sexpr->mh-rel (x)
   (check-mh-rel x)
   (destructuring-bind
     (keyword-lets sexpr-lets
      keyword-pd sexpr-pd
-     keyword-laf sexpr-laf) x
+     keyword-lar sexpr-lar) x
     (make-relation-mh
       :lets (sexpr->lets sexpr-lets)
       :proposal-distribution (sexpr->rel sexpr-pd)
-      :log-acceptance-factor (sexpr->expr sexpr-laf))))
+      :log-acceptance-ratio (sexpr->expr sexpr-lar))))
 
 (defun sexpr->lets (se)
   (mapcar (lambda (x) (cons (first x) (sexpr->expr (second x)))) se))
@@ -117,7 +129,7 @@
 		      (every (lambda (d) (= 2 (length d))) lets)
 		      (every (lambda (d) (symbolp (first d))) lets)))
 	       (eq :proposal-distribution (nth 2 x))
-	       (eq :log-acceptance-factor (nth 4 x)))
+	       (eq :log-acceptance-ratio (nth 4 x)))
     (error "Invalid Metropolis-Hastings update: ~W."
 	   (cons :metropolis-hastings x))))
 
@@ -256,6 +268,42 @@
        (cons var '()))
       ((array elem-type dims)
        (cons var dims)))))
+
+(defun is-update (rel)
+  (adt-case relation rel
+    ((stochastic lhs rhs)
+     nil)
+    ((block members)
+     nil)
+    ((if condition true-branch false-branch)
+     (and (is-update true-branch)
+	  (is-update false-branch)))
+    ((loop var lo hi body)
+     (is-update body))
+    ((let var val body)
+     (is-update body))
+    ((skip)
+     t)
+    ((mh lets proposal-distribution log-acceptance-ratio)
+     (is-pure-rel proposal-distribution))))
+
+(defun is-pure-rel (rel)
+  (adt-case relation rel
+    ((stochastic lhs rhs)
+     t)
+    ((block members)
+     (every #'is-pure-rel members))
+    ((if condition true-branch false-branch)
+     (and (is-pure-rel true-branch)
+	  (is-pure-rel false-branch)))
+    ((loop var lo hi body)
+     (is-pure-rel body))
+    ((let var val body)
+     (is-pure-rel body))
+    ((skip)
+     t)
+    ((mh lets proposal-distribution log-acceptance-ratio)
+     nil)))
 
 ;;; Model checks.
 ;;; TODO: fuller check of model structure?

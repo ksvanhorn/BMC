@@ -61,7 +61,7 @@
   (:use :cl)
   (:export :starts-with :assoc-lookup :zip :strcat :strcat-lines
 	   :read-file :int-range :is-list-of-length
-	   :list->pair-list :fn
+	   :list->pair-list :fn :dolist-inter
 	   :append-mapcar :fdebug :compound-symbol
 	   :n-symbols-not-in :symbol-not-in
 	   :indent :fmt :fmt-blank-line
@@ -93,6 +93,7 @@
    :vtype->string :distr->string :rellhs->expr :rellhs->string
    :pp-decl :pp-rel :pp-model
    :args-vars-names
+   :is-update :is-pure-rel
 
    :is-model :make-model :model-args :model-reqs :model-vars :model-body
 
@@ -116,7 +117,7 @@
    :is-relation-let :make-relation-let
    :relation-let-var :relation-let-val :relation-let-body
    :is-relation-mh :make-relation-mh :relation-mh-lets
-   :relation-mh-proposal-distribution :relation-mh-log-acceptance-factor
+   :relation-mh-proposal-distribution :relation-mh-log-acceptance-ratio
    :is-relation-skip :make-relation-skip
 
    :is-rellhs

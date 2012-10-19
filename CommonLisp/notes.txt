@@ -79,16 +79,27 @@ Computation of log proposal density
 [make-write-test-update-fct (UNTESTED... but it's mostly "glue")
 - calls write-test-update]
 [write-test-update (UNTESTED ... mostly "glue", sequencing)
+- calls write-test-update-main
 - calls write-test-is-dag-update
-- calls is-gibbs-update
-- calls is-mh-update
-- calls write-test-gibbs-update
-- calls write-test-outer-lets-invariant
+- calls write-test-outer-invariance
 - calls write-test-acceptance-ratio (TODO)]
+[write-test-update-main]
+[write-test-is-dag-update
+- calls write-rel-draw-with-dag-test]
+[write-test-outer-invariance
+- calls write-test-outer-invariance-body]
+[write-test-acceptance-ratio...
+
 
 TestIsDAG_Update_ALPHA(x); (apply to Gibbs updates and proposal distr of M-H)
+-- write-test-is-dag-update
 TestOuterLetsAreInvariant_ALPHA(x); (apply to M-H updates)
+-- write-test-outer-lets
 TestAcceptanceRatio_ALPHA(x, tol);
+-- write-test-acceptance-ratio
+
+*** DELETE write-test-gibbs-update (compile.lsp) ***
+*** REMOVE unnecessary arguments in adt-case clauses ***
 
 
 NEXT: Implement code for doing unit test of M-H updates.
