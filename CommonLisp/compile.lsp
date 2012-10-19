@@ -824,11 +824,7 @@
     (error "Invalid update: ~a." rel))
   (write-test-update-main class-name update-name)
   (fmt-blank-line)
-  (let ((assigned-vars (model-variables-assigned-in rel)))
-    (write-test-is-dag-update
-      class-name update-name rel is-class-var assigned-vars dim-fct))
-  (fmt-blank-line)
-  (write-test-outer-invariance class-name update-name rel is-class-var)
+  (write-test-is-valid-update class-name update-name rel is-class-var dim-fct)
   (fmt-blank-line)
   (write-test-acceptance-ratio class-name update-name rel is-class-var))
 
@@ -843,6 +839,68 @@
   (lambda (v)
     (let ((s (default-variable->string v)))
       (if (member v class-vars) (strcat "_x." s) s))))
+
+(defun var2str-cv (pfx is-class-var)
+  (lambda (v)
+    (let ((s (default-variable->string v)))
+      (if (funcall is-class-var v) (strcat pfx s) s))))
+
+(defun write-test-is-valid-update
+       (class-name update-name rel is-class-var dim-fct
+	&optional (write-body #'write-test-is-valid-update-body))
+  (fmt "private static void TestIsValidUpdate_~a(~a _x)" update-name class-name)
+  (bracket
+    (fmt "_x = _x.Copy();")
+    (funcall write-body rel is-class-var dim-fct)))
+
+(defun write-test-is-valid-update-body
+       (rel is-class-var dim-fct &optional
+	(write-mh #'write-test-is-valid-update-mh))
+  (let ((ifcnt 0))
+  (labels
+    ((write-tivu-body (rel rev-outer-lets)
+       (adt-case relation rel
+	 ((let var val body)
+	  (fmt "var ~a = ~a;" (variable->string var) (expr->string val))
+	  (write-tivu-body body (cons (cons var val) rev-outer-lets)))
+	 ((loop var lo hi body)
+	  (let* ((var-str (variable->string var))
+		 (lo-var-str (strcat "_lo_" var-str))
+		 (hi-var-str (strcat "_hi_" var-str))
+		 (lo-var (intern lo-var-str))
+		 (hi-var (intern hi-var-str)))
+	    (fmt "var ~a = ~a;" lo-var-str (expr->string lo))
+	    (fmt "var ~a = ~a;" hi-var-str (expr->string hi))
+	    (fmt "for (int ~a = ~a; ~a <= ~a; ++~a) {"
+		 var-str lo-var-str var-str hi-var-str var-str)
+	    (indent
+	      (write-tivu-body 
+	        body
+		`((,hi-var . ,hi) (,lo-var . ,lo) ,@rev-outer-lets)))
+	    (fmt "}")))
+	 ((if condition true-branch false-branch)
+	  (incf ifcnt)
+	  (let* ((ifcnt-str (format nil "_if_~d" ifcnt))
+		 (ifcnt-sym (intern ifcnt-str))
+		 (rol (cons (cons ifcnt-sym condition) rev-outer-lets)))
+	    (fmt "var ~a = ~a;" ifcnt-str (expr->string condition))
+	    (fmt "if (~a) {" ifcnt-str)
+	    (indent (write-tivu-body true-branch rol))
+	    (fmt "}")
+	    (when (not (is-relation-skip false-branch))
+	      (fmt "else {")
+	      (indent (write-tivu-body false-branch rol))
+	      (fmt "}"))))
+	 ((mh)
+	  (funcall write-mh
+	    (reverse rev-outer-lets) rel is-class-var dim-fct))
+	 (otherwise
+	  (error "Unimplemented case in write-test-is-valid-update-body")))))
+    (let ((*variable->string* (var2str-cv "_x." is-class-var)))
+      (write-tivu-body rel '())))))
+
+(defun write-test-is-valid-update-mh (outer-lets rel is-class-var dim-fct)
+)
 
 (defun write-body-ldd-of-update (rel class-vars)
   (write-ljd-accum-rel "_ldd" rel nil (var2str-ext class-vars)))

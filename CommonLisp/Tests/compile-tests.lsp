@@ -677,84 +677,178 @@ _assigned_X2[J - 1, K - 1] = true;
 }
 "
     (let* ((rel 'rel-stub)
-	   (class-vars 'class-vars-stub)
-	   (dim-fct (fn (v) (case v ('a 0) ('x 0) ('y 1) ('z 2))))
-	   (write-body (fn (rel1 cv1 dimfct1)
+	   (is-class-var-stub (fn (v) nil))
+	   (dim-fct-stub (fn (v) 0))
+	   (write-body (fn (rel1 icv1 dimfct1)
 			 (assert-eq rel rel1)
-			 (assert-eq class-vars cv1)
-			 (assert-eq dim-fct dimfct1)
+			 (assert-eq is-class-var-stub icv1)
+			 (assert-eq dim-fct-stub dimfct1)
 			 (fmt "// ..."))))
       (ppstr
         (compile::write-test-is-valid-update
-	  "Mdl" 'foo rel class-vars dim-fct write-body))))
+	  "Mdl" 'foo rel is-class-var-stub dim-fct-stub write-body))))
 
+  ;; Middle part (write-test-is-valid-update-body)
   (macrolet
-      ((write-tivu-body-test
-	   (&key upd outer-lets class-vars not-class-vars lines)
-	 (let ((v (gensym))
-	       (dim-fct (gensym))
-	       (write-mh (gensym))
-	       (update (sexpr->rel upd))
-	       (expected
-		(apply #'strcat-lines lines))
-	       (is-class-var
-		`(fn (,v) (member ,v ,class-vars))))
-	   `(let ((MH1 (sexpr->rel
-			'(:metropolis-hastings
-			  :lets ()
-			  :proposal-distribution (~ foo (dnorm 0 1))
-			  :log-acceptance-ratio %undef)))
-		  (,dim-fct (fn (,v) 0))
-		  (,write-mh
-		   (fn (ol1 mh1 icv df1)
-		     (assert-equal ,outer-lets ol1)
-		     (assert-equal :mh mh1)
-		     (assert-eq ,dim-fct df1)
-		     (dolist (,v ,class-vars)
-		       (assert-true (funcall icv ,v)))
-		     (dolist (,v ,not-class-vars)
-		       (assert-false (funcall icv ,v)))
-		     (fmt "// M-H ..."))))
+      ((write-tivu-body-test (&key upd class-vars not-class-vars lines)
+	 (let* ((v (gensym))
+		(dim-fct (gensym))
+		(write-mh (gensym))
+		(expected (gensym))
+		(MH (mapcar (fn (n)
+			      `(:metropolis-hastings :lets ()
+			        :proposal-distribution (~ x (dnorm 0 ,n))
+				:log-acceptance-ratio %undef))
+			    '(0 1 2 3 4 5)))
+		(MHrels (mapcar #'sexpr->rel MH))
+		(is-class-var
+		 `(fn (,v) (member ,v ,class-vars))))
+	   `(let* ((,expected (apply #'strcat-lines ,lines))
+		   (MH ',MH)
+		   (update (sexpr->rel ,upd))
+		   (,dim-fct (fn (,v) 0))
+		   (,write-mh
+		    (fn (outer-lets mh is-cv df)
+		      (assert-eq ,dim-fct df)
+		      (dolist (,v ,class-vars)
+			(assert-true (funcall is-cv ,v)))
+		      (dolist (,v ,not-class-vars)
+			(assert-false (funcall is-cv ,v)))
+		      (fmt "// M-H: ~a" (position mh ',MHrels :test #'equalp))
+		      (dolist (x outer-lets)
+			(destructuring-bind (var . expr) x
+			  (fmt "// ~a = ~a" var (cexpr->string expr)))))))
 	      (assert-equal
 	       ,expected
 	       (ppstr
 		(compile::write-test-is-valid-update-body
-		  ,update ,is-class-var ,dim-fct ,write-mh)))))))
+		  update ,is-class-var ,dim-fct ,write-mh)))))))
 
     (write-tivu-body-test
-     :upd 'MH1
-     :outer-lets '()
+     :upd (elt MH 0)
      :class-vars '()
      :not-class-vars '(a b c foo)
-     :lines '("// M-H ..."))
+     :lines '("// M-H: 0"))
 
     (write-tivu-body-test
-     :upd '(:let (a (+ u v))
+     :upd `(:let (a (+ u v))
 	     (:for r (lo (- hi 1))
-	       MH1))
-    :outer-lets '((a (+ u v)) (|_lo_R| lo) (|_hi_R| (- hi 1)))
+	       ,(elt MH 1)))
     :class-vars '(u hi)
     :not-class-vars '(a r lo v foo)
-    :lines ("var A = _x.U + V;"
-	    "var _lo_R = LO;"
-	    "var _hi_R = _x.HI - 1;"
-	    "for (int R = _lo_R; R <= _hi_R; ++R) {"
-	    "    // M-H ..."
-	    "}"))
+    :lines '("var A = _x.U + V;"
+	     "var _lo_R = LO;"
+	     "var _hi_R = _x.HI - 1;"
+	     "for (int R = _lo_R; R <= _hi_R; ++R) {"
+	     "    // M-H: 1"
+	     "    // A = _x.U + V"
+	     "    // _lo_R = LO"
+	     "    // _hi_R = _x.HI - 1"
+	     "}"))
 
-***  HERE: How to handle if-then-else? ***
-#|
     (write-tivu-body-test
-     :upd '(:for s ((+ m 1) (- n 2))
-	     (:if (< (@ y s) thresh)
-	       (
-	     
-     :outer-lets
-     :class-vars
-     :not-class-vars
-     :lines
-|#	  
+     :upd `(:if (= 1 (@ seg r)) ,(elt MH 2))
+     :class-vars '(seg)
+     :not-class-vars '(r |_if_1|)
+     :lines '("var _if_1 = 1 == _x.SEG[R - 1];"
+	      "if (_if_1) {"
+	      "    // M-H: 2"
+	      "    // _if_1 = 1 == _x.SEG[R - 1]"
+              "}"))
 
+    (write-tivu-body-test
+     :upd `(:if test_a (:if test_b (:if test_c ,(elt MH 1) ,(elt MH 5))
+                                   ,(elt MH 4))
+		       (:if test_d ,(elt MH 3)))
+     :class-vars '(test_c test_a)
+     :not-class-vars '(test_b test_d)
+     :lines '("var _if_1 = _x.TEST_A;"
+	      "if (_if_1) {"
+              "    var _if_2 = TEST_B;"
+              "    if (_if_2) {"
+              "        var _if_3 = _x.TEST_C;"
+              "        if (_if_3) {"
+              "            // M-H: 1"
+	      "            // _if_1 = _x.TEST_A"
+              "            // _if_2 = TEST_B"
+              "            // _if_3 = _x.TEST_C"
+              "        }"
+              "        else {"
+              "            // M-H: 5"
+	      "            // _if_1 = _x.TEST_A"
+              "            // _if_2 = TEST_B"
+              "            // _if_3 = _x.TEST_C"
+              "        }"
+              "    }"
+              "    else {"
+              "        // M-H: 4"
+	      "        // _if_1 = _x.TEST_A"
+              "        // _if_2 = TEST_B"
+              "    }"
+	      "}"
+              "else {"
+              "    var _if_4 = TEST_D;"
+	      "    if (_if_4) {"
+	      "        // M-H: 3"
+	      "        // _if_1 = _x.TEST_A"
+              "        // _if_4 = TEST_D"
+              "    }"
+              "}"))
+
+    (write-tivu-body-test
+     :upd `(:for s ((+ m 1) (- n 2))
+	     (:if (< (@ y s) thresh)
+	       (:let (b 28) ,(elt MH 3))
+	       (:let (a 37) ,(elt MH 4))))
+     :class-vars '(y m)
+     :not-class-vars '(s n a b thresh |_lo_S| |_hi_S| |_if_1|)
+     :lines '("var _lo_S = _x.M + 1;"
+	      "var _hi_S = N - 2;"
+	      "for (int S = _lo_S; S <= _hi_S; ++S) {"
+	      "    var _if_1 = _x.Y[S - 1] < THRESH;"
+	      "    if (_if_1) {"
+	      "        var B = 28;"
+	      "        // M-H: 3"
+	      "        // _lo_S = _x.M + 1"
+	      "        // _hi_S = N - 2"
+	      "        // _if_1 = _x.Y[S - 1] < THRESH"
+	      "        // B = 28"
+	      "    }"
+	      "    else {"
+	      "        var A = 37;"
+	      "        // M-H: 4"
+	      "        // _lo_S = _x.M + 1"
+	      "        // _hi_S = N - 2"
+	      "        // _if_1 = _x.Y[S - 1] < THRESH"
+	      "        // A = 37"
+	      "    }"
+              "}")))
+
+  (flet ((write-tivu-body-error (upd)
+           (assert-error 'error
+	     (write-test-is-valid-update-body
+	      (sexpr->rel upd)
+	      (fn (v) nil)
+	      (fn (v) 0)
+	      (fn (ol rel icv df) nil)))))
+
+    (write-tivu-body-error '(~ y (dgamma a b)))
+
+    (write-tivu-body-error
+      '(:block 
+	 (~ y (dgamma a b))
+	 (~ z (dnorm mu s))))
+
+    (write-tivu-body-error
+      '(:block
+	 (:metropolis-hastings
+	  :lets ()
+	  :proposal-distribution (~ y (dgamma a b))
+	  :log-acceptance-ratio 0)
+	 (:metropolis-hastings
+	  :lets ()
+	  :proposal-distribution (~ z (dnorm mu s))
+	  :log-acceptance-ratio 0))))
 
 #|
     bool _assigned_X = false;
@@ -762,75 +856,28 @@ _assigned_X2[J - 1, K - 1] = true;
     BMatrix _assigned_Z = new BMatrix(_x.Z.NBRows, _x.Z.NBCols);
 |#
 
-#|
-            '(:metropolis-hastings
-	      :lets ()
-	      :proposal-distribution (~ z (dcat q))
-	      :log-acceptance-ratio %undef))
-            '(:metropolis-hastings
-	      :lets ((x (+ a z)))
-	      :proposal-distribution (:block (~ z (dcat q)) (~ y (dnorm a b)))
-	      :log-acceptance-ratio %undef))
+  ;; Inner part (write-test-is-valid-update-mh)
+  (flet ((write-tivu-mh-test (expected outer-lets-se rel-se class-vars dims)
+	   (let ((outer-lets (sexpr->named-expr-list outer-lets-se))
+		 (rel (sexpr->rel rel-se))
+		 (is-class-var (fn (v) (member v class-vars)))
+		 (dim-fct (fn (v) (assoc-lookup v dims))))
+	     (assert-equal
+	       expected
+	       (ppstr
+		 (compile::write-test-is-valid-update-mh
+		   outer-lets rel is-class-var dim-fct))))))
 
-	    '(:let (a (+ u v))
-	     (:let (b (* u v))
-             (:for r (lo hi)
-               (:let (c (@ p r))
-                 (:metropolis-hastings
-                   :lets ((d (^ b a)))
-		   :proposal-distribution (~ w (dgamma (* c d) b))
-		   :log-acceptance-ratio %undef))))))
+    (write-tivu-mh-test
+"for (int _idx = 0; _idx < _assigned_p.Length; ++_idx) {
+    Assert.IsFalse(_assigned_p[_idx], \"p[{0}] assigned\", _idx);
+    _assigned_p[_idx] = true;
+}
+BMC.DrawDirichlet(_x.p, _x.alpha_p);
+"
+      '() '(~ |p| (ddirch |alpha_p|)) '(|p| |alpha_p|) '((|p| . 1)))
 
-        '(~ |p| (ddirch |alpha_p|))
-	'(~ (@ |x| |i|) (dcat |p|))
-      '(~ (@ y |i| |j|) (dnorm mu sigma))
-      '(~ x (dgamma (* a c) (/ b d)))
-      '(~ v (dmvnorm mu sigma))
-      '(~ |Lambda| (dwishart (+ |nu| 3) V))
-      '(~ (@ |v| |j|) (dinterval |u| |c|))
-      '(:let (|sigma| (/ |alpha| (^1/2 |lambda|)))
-	     (~ |y| (dnorm 0 |sigma|)))
-
-     '(:block
-	 (:let (pvec (@+ foo bar))
-	   (~ y (dcat pvec)))
-	 (~ z (dgamma a b)))
-       '(:if (< (@ v i) 4)
-	 (~ (@ z i) (dnorm m s))
-	 (~ (@ w (+ i k)) (dcat q)))
-      '(:for |i| ((- m 1) (+ n 2))
-	 (~ (@ z |i|) (dnorm 0 (^1/2 (@ y |i|)))))
-      '(:if (< v some_thresh) (~ a (dgamma m s)))
-
-    '(:metropolis-hastings
-        :lets ()
-        :proposal-distribution (~ u (dnorm mu sigma))
-        :log-acceptance-ratio (* sigma (- u mu)))
-      '(:metropolis-hastings
-        :lets ((mu (* 2 m)))
-	:proposal-distribution (~ z (dnorm mu sigma))
-	:log-acceptance-ratio (* sigma (- z mu)))
-      '(:for i (m n)
-	 (:let (mu (dot y gamma))
-	   (:let (sigma (exp (* u (@ v i))))
-	     (:metropolis-hastings
-	       :lets ((f (@ z i)) (sigma2 (* f f)))
-	       :proposal-distribution
-	         (:block
-		    (~ (@ z i) (dnorm-trunc mu sigma a b))
-		    (~ w (dnorm (@ z i) 1)))
-	       :log-acceptance-ratio (+ (@ z i) sigma2)))))
-
-|#
-
-  ;; Inner part (write-test-is-valid-update-body)
-  (flet ((write-test (rel-se class-vars dims-assoc invs-se)
-           (ppstr
-	     (compile::write-test-is-valid-update-body
-	       (sexpr->rel rel-se)
-	       class-vars
-	       (fn(v) (assoc-lookup v dims-assoc))
-	       (sexpr->named-expr-list invs-se)))))
+)
 
     (assert-equal
 "for (int _idx = 0; _idx < _assigned_p.Length; ++_idx) {
