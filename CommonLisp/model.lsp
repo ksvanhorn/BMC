@@ -100,7 +100,7 @@
   (check-gibbs-rel x)
   (sexpr->mh-rel `(:lets ()
 		   :proposal-distribution ,(first x)
-		   :log-acceptance-ratio 0)))
+		   :log-acceptance-ratio 0.0)))
 
 (defun check-gibbs-rel (x)
   (destructuring-bind (rel) x

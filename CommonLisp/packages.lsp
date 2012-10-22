@@ -49,6 +49,10 @@
     ;; densities
     :ddirch-density :dcat-density :dinterval-density
     :dnorm-density :dmvnorm-density :dgamma-density :dwishart-density
+    ;; log densities
+    :ddirch-log-density :dcat-log-density :dinterval-log-density
+    :dnorm-log-density :dmvnorm-log-density :dgamma-log-density
+    :dwishart-log-density
 
     ;; model symbols
     :~
@@ -153,5 +157,5 @@
 (defpackage :compile
   (:use :cl :mcimpl :model :expr :utils :adt :symbols)
   (:shadow :expr->string)
-  (:export :compile-to-csharp :write-test-updates :write-log-draw-density-body))
+  (:export :compile-to-csharp :write-test-file :write-test-updates))
 

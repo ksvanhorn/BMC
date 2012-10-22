@@ -30,7 +30,10 @@
     @+ @- @* @/ $*
     diag_mat o* o^2 cons cons-col cons-row
     ddirch-density dcat-density dinterval-density
-    dnorm-density dmvnorm-density dgamma-density dwishart-density))
+    dnorm-density dmvnorm-density dgamma-density dwishart-density
+    ddirch-log-density dcat-log-density dinterval-log-density
+    dnorm-log-density dmvnorm-log-density dgamma-log-density
+    dwishart-log-density))
 
 (defun is-scalar-type-symbol (x)
   (member x +scalar-type-symbols+))

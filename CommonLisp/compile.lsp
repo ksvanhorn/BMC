@@ -82,6 +82,11 @@
      (indent ,@body)
      (fmt "}")))
 
+(defmacro bracket-if (test &rest body)
+  (let ((main (gensym)))
+    `(flet ((,main () ,@body))
+       (if ,test (bracket (,main)) (,main)))))
+
 (defun write-csharp-class (csharp-name-space class-name write-body)
   (fmt "using System;")
   (fmt "using Common;")
@@ -425,7 +430,7 @@
   (fmt-blank-line)
   (write-undefine-all-vars (model-vars mdl))
   (fmt-blank-line)
-  (write-csharp-updates impl)
+  (write-csharp-updates (mcimpl-updates impl))
   (fmt-blank-line)
   ; ... more ...
 )
@@ -826,7 +831,7 @@
   (fmt-blank-line)
   (write-test-is-valid-update class-name update-name rel is-class-var dim-fct)
   (fmt-blank-line)
-  (write-test-acceptance-ratio class-name update-name rel is-class-var))
+  (write-test-acceptance-ratio class-name update-name rel is-class-var dim-fct))
 
 (defun write-test-update-main (class-name update-name)
   (fmt "public static void TestUpdate_~a(~a x, double tol)"
@@ -895,12 +900,74 @@
 	  (funcall write-mh
 	    (reverse rev-outer-lets) rel is-class-var dim-fct))
 	 (otherwise
-	  (error "Unimplemented case in write-test-is-valid-update-body")))))
+	  (error "Unimplemented case in write-test-is-valid-update-body: ~a" rel)))))
     (let ((*variable->string* (var2str-cv "_x." is-class-var)))
       (write-tivu-body rel '())))))
 
 (defun write-test-is-valid-update-mh (outer-lets rel is-class-var dim-fct)
-)
+  (dolist (v (model-variables-assigned-in rel))
+    (check-rel-var-is-class-var v is-class-var)
+    (let ((vstr (default-variable->string v)))
+      (case (funcall dim-fct v)
+	(0 (fmt "bool _assigned_~a = false;" vstr))
+	(1 (fmt "bool [] _assigned_~a = new bool[_x.~a.Length];" vstr vstr))
+	(2 (fmt "BMatrix _assigned_~a = new BMatrix(_x.~a.NBRows, _x.~a.NBCols);"
+		  vstr vstr vstr)))))
+  (dolist (x (reverse outer-lets))
+    (destructuring-bind (v . e) x
+      (setf rel (make-relation-let :var v :val e :body rel))))
+  (let ((visitor-before-draw (fn (lhs) (write-assigned-test lhs dim-fct)))
+	(visitor-after-proposal
+	  (fn (prop-distr) (write-invariance-check outer-lets)))
+	(var2str (var2str-cv "_x." is-class-var)))
+    (write-rel-draw
+      rel nil visitor-before-draw visitor-after-proposal var2str)))
+
+(defun write-invariance-check (outer-lets)
+  (dolist (x outer-lets)
+    (destructuring-bind (v . e) x
+      (fmt "Assert.IsTrue(BMC.Equal(~a, ~a), \"~a should not change\");"
+	   v (expr->string e) v))))
+
+(defun check-rel-var-is-class-var (v is-class-var)
+  (unless (funcall is-class-var v)
+    (error "write-test-is-valid-update-mh: ~
+	    ~a is assigned in relation but is not a class variable" v)))
+
+(defun check-let-var-isnt-class-var (v is-class-var)
+  (when (funcall is-class-var v)
+    (error "Symbol ~a used both as a class variable and as a let variable" v)))
+
+(defun write-log-proposal-density (pfx is-class-var rel)
+  (let ((*variable->string* (var2str-cv "_x." is-class-var))
+	(*ljd-visitor-before*
+	  (fn (lhs-str lhs) (fmt "~a = ~a;" lhs-str (lhs-name lhs pfx))))
+	(*ljd-accum* "_lpd"))
+    (write-ljd-acc-rel rel t)))
+
+#|
+(defun write-log-proposal-density-main (pfx rel let-needs-brackets)
+  (adt-case relation rel
+    ((stochastic lhs rhs)
+     (write-lpd-stoch pfx lhs rhs))
+    ((let var val body)
+     (write-lpd-let
+       (let-list rel) (strip-lets body) let-needs-brackets))
+))
+
+(defun write-lpd-stoch (pfx lhs rhs)
+  (let ((lhs-str (crellhs->string lhs)))
+    (fmt "~a = ~a;" lhs-str (lhs-name lhs pfx))
+    (match-adt1 (distribution name args) rhs
+      (let ((dname (csharp-distr-log-density-name name))
+	    (args-str-list (mapcar #'expr->string args)))
+	(fmt "_lpd += ~a(~a~{, ~a~});" dname lhs-str args-str-list)))))
+
+(defun write-lpd-let (let-defs body needs-brackets)
+  (bracket-if needs-brackets
+    (dolist (x let-defs)
+      (destructuring-bind 
+|#
 
 (defun write-body-ldd-of-update (rel class-vars)
   (write-ljd-accum-rel "_ldd" rel nil (var2str-ext class-vars)))
@@ -914,86 +981,48 @@
    (funcall write-body rel class-vars)
    (fmt "return _ldd;")))
 
-(defun write-test-is-dag-update
-       (class-name update-name rel class-vars assigned-vars dim-fct &optional
-        (write-body #'write-rel-draw-with-dag-test))
-  (fmt "private static void TestIsDAG_Update_~a(~a _x)" update-name class-name)
-  (bracket
-   (fmt "_x = _x.Copy();")
-    (dolist (v assigned-vars)
-      (let ((vstr (variable->string v)))
-	(case (funcall dim-fct v)
-	  (0 (fmt "bool _assigned_~a = false;" vstr))
-	  (1 (fmt "bool[] _assigned_~a = new bool[_x.~a.Length];" vstr vstr))
-	  (2 (fmt "BMatrix _assigned_~a = new BMatrix(_x.~a.NBRows, _x.~a.NBCols);"
-		  vstr vstr vstr)))))
-    (funcall write-body rel class-vars dim-fct)))
-
-(defun write-rel-draw-with-dag-test (rel class-vars dim-fct)
-  (let ((visitor (lambda (lhs) (write-assigned-test lhs dim-fct))))
-    (write-rel-draw rel nil visitor (var2str-ext class-vars))))
-
-(defun write-test-outer-invariance
-       (class-name update-name rel class-vars &optional
-	(write-body #'write-test-outer-invariance-body))
-  (fmt "private static void TestOuterInvariance_~a(~a _x)"
-       update-name class-name)
-  (bracket
-   (fmt "_x = _x.Copy();")
-    (let ((*variable->string* (var2str-ext class-vars))
-	  (*write-rel-draw-visitor* #'default-wrd-visitor))
-      (funcall write-body rel '()))))
-
-(defun write-test-outer-invariance-body (rel rev-outer-lets)
-  (adt-case relation rel
-    ((mh lets proposal-distribution log-acceptance-ratio)
-     (write-test-outer-invariance-mh lets proposal-distribution rev-outer-lets))
-    ((loop var lo hi body)
-     (write-test-outer-invariance-loop var lo hi body rev-outer-lets))
-    ((let var val body)
-     (write-test-outer-invariance-let var val body rev-outer-lets))
-    (otherwise (error "Invalid relation in write-test-outer-invariance-body"))))
-
-(defun write-test-outer-invariance-let (var val body rev-outer-lets)
-  (fmt "var ~a = ~a;" (variable->string var) (expr->string val))
-  (write-test-outer-invariance-body body (cons (cons var val) rev-outer-lets)))
-
-(defun write-test-outer-invariance-loop (var lo hi body rev-outer-lets)
-  (let ((vstr (variable->string var)))
-    (fmt "int _lo_~a = ~a;" vstr (expr->string lo))
-    (fmt "int _hi_~a = ~a;" vstr (expr->string hi))
-    (fmt "for (int ~a = _lo_~a; ~a <= _hi_~a; ++~a) {"
-	 vstr vstr vstr vstr vstr)
-    (indent
-     (let* ((lo-def (cons (intern (strcat "_lo_" vstr)) lo))
-	    (hi-def (cons (intern (strcat "_hi_" vstr)) hi))
-	    (new-lets (list* hi-def lo-def rev-outer-lets)))
-	   (write-test-outer-invariance-body body new-lets)))
-    (fmt "}")))
-
-(defun write-test-outer-invariance-mh (lets prop-distr rev-outer-lets)
-  (dolist (d lets)
-    (destructuring-bind (var . val) d
-      (fmt "var ~a = ~a;" (variable->string var) (expr->string val))))
-  (write-rel-draw-main prop-distr nil)
-  (dolist (d (reverse rev-outer-lets))
-    (destructuring-bind (var . val) d
-      (let ((varstr (variable->string var))
-	    (valstr (expr->string val)))
-	(fmt "Assert.IsTrue(BMC.Equal(~a, ~a), \"~a should not change\");"
-	     varstr valstr varstr)))))
-
 (defun write-test-acceptance-ratio
-       (class-name upd-name rel class-vars &optional
+       (class-name upd-name rel is-class-var dim-fct &optional
 	(write-body #'write-test-acceptance-ratio-body))
-  (fmt "private static void TestAcceptanceRatio_~a(~a _x)" upd-name class-name)
+  (fmt "private static void TestAcceptanceRatio_~a(~a _x, double _tol)" upd-name class-name)
   (bracket
-    (let ((*variable->string* (var2str-ext class-vars))
-	  (*write-rel-draw-visitor* #'default-wrd-visitor))
-      (funcall write-body rel))))
+    (fmt "_x = _x.Copy();")
+      (funcall write-body rel is-class-var dim-fct)))
 
-(defun write-test-acceptance-ratio-body (rel)
-)
+(defun write-test-acceptance-ratio-body (rel is-class-var dim-fct)
+  ;; *** FIX: Need to rename write-test-is-valid-update-body ***
+  (write-test-is-valid-update-body rel is-class-var dim-fct #'write-test-acceptance-ratio-mh))
+
+(defun write-mh-save-new (prop-distr)
+  (flet ((f (lhs-str sav-str)
+           (fmt "var ~a = ~a;" sav-str lhs-str)))
+    (write-mh-saves-restores
+      prop-distr (list "_new_" "write-mh-save-new" #'f) '())))
+
+(defun write-test-acceptance-ratio-mh (outer-lets rel is-class-var dim-fct)
+  (fmt "double _ljd0 = _x.LogJointDensity();")
+  (let*((*write-rel-draw-always-write-mh-saves* t)
+	(var2str (var2str-cv "_x." is-class-var))
+	(visitor-before-draw #'do-nothing)
+	(lar (relation-mh-log-acceptance-ratio rel))
+	(visitor-after-proposal
+	 (fn (prop-distr)
+           (write-mh-save-new prop-distr)
+	   (fmt "double _ljd1 = _x.LogJointDensity();")
+	   ;; Compute proposal density from new state to old
+	   (fmt "double _lpd = 0.0;")
+	   (write-log-proposal-density "_save_" is-class-var prop-distr)
+	   (fmt "double _lpd1 = _lpd;")
+	   ;; Compute proposal density from old state to new
+	   (fmt "_lpd = 0.0;")
+	   (write-log-proposal-density "_new_" is-class-var prop-distr)
+	   (fmt "double _lpd0 = _lpd;")
+	   (fmt "Assert.AreEqual(~a, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");" (expr->string lar)))))
+    (dolist (x (reverse outer-lets))
+      (destructuring-bind (v . e) x
+        (setf rel (make-relation-let :var v :val e :body rel))))
+    (write-rel-draw
+      rel nil visitor-before-draw visitor-after-proposal var2str)))
 
 (defun write-csharp-log-joint-density (mdl)
   (let* ((excluded (vars-in-model mdl))
@@ -1012,7 +1041,10 @@
 	(*variable->string* var2str))
     (write-ljd-acc-rel rel let-needs-brackets)))
 
+
 (defparameter *ljd-accum* nil)
+(defun default-ljd-visitor-before (lhs-str lhs) nil)
+(defparameter *ljd-visitor-before* #'default-ljd-visitor-before)
 
 (defun write-ljd-acc-rel (rel &optional (let-needs-brackets t))
   (adt-case relation rel
@@ -1030,25 +1062,24 @@
     ((skip))))
 
 (defun write-ljd-acc-rel-let (let-defs body needs-brackets)
-  (flet
-    ((main ()
-       (dolist (x let-defs)
-         (destructuring-bind (var . val) x
-           (fmt "var ~a = ~a;" (variable->string var) (expr->string val))))
-       (write-ljd-acc-rel body)))
-    (if needs-brackets (bracket (main)) (main))))
+  (bracket-if needs-brackets
+    (dolist (x let-defs)
+      (destructuring-bind (var . val) x
+        (fmt "var ~a = ~a;" (variable->string var) (expr->string val))))
+    (write-ljd-acc-rel body)))
 
 (defun write-ljd-acc-rel-stoch (lhs rhs)
   (match-adt1 (distribution name args) rhs
     (let ((lhs-str (crellhs->string lhs))
-	  (dname (csharp-distr-density-name name))
+	  (dname (csharp-distr-log-density-name name))
 	  (args-str-list (mapcar #'expr->string args)))
+      (funcall *ljd-visitor-before* lhs-str lhs)
       (fmt "~a += ~a(~a~{, ~a~});" *ljd-accum* dname lhs-str args-str-list))))
 
 (defun crellhs->string (lhs)
   (expr->string (rellhs->expr lhs)))
 
-(defun csharp-distr-density-name (distr-symbol)
+(defun csharp-distr-log-density-name (distr-symbol)
   (strcat
     "BMC.LogDensity" (assoc-lookup distr-symbol +csharp-distr-name-assoc+)))
 
@@ -1089,14 +1120,19 @@
 (defun termination-test-string (var hi)
   (expr->string (expr-call '.<= (expr-var var) hi)))
 
-(defun default-wrd-visitor (rel) nil)
+(defun do-nothing (&rest args) nil)
 
-(defparameter *write-rel-draw-visitor* #'default-wrd-visitor)
+(defparameter *write-rel-draw-always-write-mh-saves* nil)
+(defparameter *write-rel-draw-visitor-before-draw* #'do-nothing)
+(defparameter *write-rel-draw-visitor-after-proposal* #'do-nothing)
 
-(defun write-rel-draw (rel &optional (let-needs-brackets t)
-			             (visitor #'default-wrd-visitor)
-				     (var2str #'default-variable->string))
-  (let ((*write-rel-draw-visitor* visitor)
+(defun write-rel-draw (rel &optional
+			   (let-needs-brackets t)
+			   (visitor-before-draw #'do-nothing)
+			   (visitor-after-proposal #'do-nothing)
+			   (var2str #'default-variable->string))
+  (let ((*write-rel-draw-visitor-before-draw* visitor-before-draw)
+	(*write-rel-draw-visitor-after-proposal* visitor-after-proposal)
 	(*variable->string* var2str))
     (write-rel-draw-main rel let-needs-brackets)))
 
@@ -1133,19 +1169,14 @@
      rel)))
 
 (defun write-rel-draw-let (let-defs body needs-brackets)
-  (flet
-   ((main ()
-      (dolist (x let-defs)
-	(destructuring-bind (var . val) x
-	  (fmt "var ~a = ~a;" (variable->string var) (expr->string val))))
-      (write-rel-draw-main body nil)))
-   (if needs-brackets
-       (bracket
-	 (main))
-     (main))))
+  (bracket-if needs-brackets
+    (dolist (x let-defs)
+      (destructuring-bind (var . val) x
+        (fmt "var ~a = ~a;" (variable->string var) (expr->string val))))
+    (write-rel-draw-main body nil)))
 
 (defun write-rel-draw-stoch (lhs rhs)
-  (funcall *write-rel-draw-visitor* lhs)
+  (funcall *write-rel-draw-visitor-before-draw* lhs)
   (match-adt1 (distribution name args) rhs
     (if (is-scalar-distr name)
       (fmt "~a = ~a(~{~a~^, ~});"
@@ -1189,32 +1220,39 @@
     (fmt "}")))
 
 (defun write-rel-draw-mh (lets prop-distr log-acc-ratio let-needs-brackets)
-  (flet ((main ()
-	   (dolist (d lets)
-	     (destructuring-bind (v . val) d
-	       (fmt "var ~a = ~a;" (variable->string v) (expr->string val))))
-	   (write-mh-saves prop-distr)
-	   (fmt-blank-line)
-	   (write-rel-draw-main prop-distr t)
-	   (fmt-blank-line)
-	   (fmt "double _lar = ~a;" (expr->string log-acc-ratio))
-	   (fmt "if (!BMC.Accept(_lar)) {")
-	   (indent
-	     (write-mh-restores prop-distr))
-	   (fmt "}")))
-    (if let-needs-brackets
-	(bracket (main))
-	(main))))
+  (bracket-if let-needs-brackets
+    (dolist (d lets)
+      (destructuring-bind (v . val) d
+        (fmt "var ~a = ~a;" (variable->string v) (expr->string val))))
+    (if (equalp (expr-const 0) log-acc-ratio)
+      (progn
+	(when *write-rel-draw-always-write-mh-saves*
+	  (write-mh-saves prop-distr))
+	(write-rel-draw-main prop-distr t)
+	(funcall *write-rel-draw-visitor-after-proposal* prop-distr))
+      (progn
+	(write-mh-saves prop-distr)
+	(fmt-blank-line)
+	(write-rel-draw-main prop-distr t)
+	(funcall *write-rel-draw-visitor-after-proposal* prop-distr)
+	(fmt-blank-line)
+	(fmt "double _lar = ~a;" (expr->string log-acc-ratio))
+	(fmt "if (!BMC.Accept(_lar)) {")
+	(indent
+	  (write-mh-restores prop-distr))
+	(fmt "}")))))
 
 (defun write-mh-saves (prop-distr)
   (flet ((f (lhs-str sav-str)
 	   (fmt "var ~a = BMC.Copy(~a);" sav-str lhs-str)))
-    (write-mh-saves-restores prop-distr (cons "write-mh-saves" #'f) '())))
+    (write-mh-saves-restores
+      prop-distr (list "_save_" "write-mh-saves" #'f) '())))
 
 (defun write-mh-restores (prop-distr)
   (flet ((f (lhs-str sav-str)
 	   (fmt "~a = ~a;" lhs-str sav-str)))
-    (write-mh-saves-restores prop-distr (cons "write-mh-restores" #'f) '())))
+    (write-mh-saves-restores
+      prop-distr (list "_save_" "write-mh-restores" #'f) '())))
 
 (defun write-mh-saves-restores (prop-distr x let-vars)
   (adt-case relation prop-distr
@@ -1222,17 +1260,18 @@
      (let ((fv (free-vars-in-rellhs lhs)))
        (dolist (v let-vars)
 	 (when (member v fv)
-	   (error "Unimplemented (problematic) case in ~a" (car x)))))
-     (funcall (cdr x) (crellhs->string lhs) (save-name lhs)))
+	   (error "Unimplemented (problematic) case in ~a" (second x)))))
+     (funcall (third x) (crellhs->string lhs) (lhs-name lhs (first x))))
     ((block members)
      (dolist (r members)
        (write-mh-saves-restores r x let-vars)))
     ((let var val body)
      (write-mh-saves-restores body x (cons var let-vars)))
     (otherwise
-     (error "Unimplemented case in ~a; prop-distr: ~a." (car x) prop-distr))))
+     (error "Unimplemented case in ~a; prop-distr: ~a."
+	    (second x) prop-distr))))
 
-(defun save-name (lhs)
+(defun lhs-name (lhs pfx)
   (flet ((encode-char (c)
 	   (if (alphanumericp c)
 	       (string c)
@@ -1242,9 +1281,9 @@
 		 (#\_ "__")
 		 (#\, "_cm")
 		 (#\Space "_sp")
-		 (otherwise (error "Unimplemented case in save-name"))))))
+		 (otherwise (error "Unimplemented case in lhs-name"))))))
     (let ((lhs-str (model:rellhs->string lhs)))
-      (apply #'strcat "_save_" (map 'list #'encode-char lhs-str)))))
+      (apply #'strcat pfx (map 'list #'encode-char lhs-str)))))
 
 (defun write-undefine-all-vars (var-decls)
   (fmt "private void UndefineAllVars() {")

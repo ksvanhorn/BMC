@@ -98,41 +98,15 @@ TestOuterLetsAreInvariant_ALPHA(x); (apply to M-H updates)
 TestAcceptanceRatio_ALPHA(x, tol);
 -- write-test-acceptance-ratio
 
-*** DELETE write-test-gibbs-update (compile.lsp) ***
 *** REMOVE unnecessary arguments in adt-case clauses ***
 
-
-NEXT: Implement code for doing unit test of M-H updates.
-General:
-  [outer layers consisting of
-   - lets: updates leave RHS unchanged
-   - ifs: updates leave test unchanged
-   - for: updates leave bounds unchanged]
-  [Generate test for outer layer: test generates same code
-   as impl itself, except that acceptance test is replaced
-   by assertion that the relevant vars should be unchanged.]
-  [inner layer: lets wrapped around a M-H rel.]
-  [Generate test for inner layer: same code as impl itself,
-   except that inner layer replaced by
-   + evaluate LogJointDensity()
-   - lets
-   + evaluate proposal density
-
-   - draw from proposal density
-   - compute log acceptance ratio
-
-   + evaluate LogJointDensity()
-   + lets
-   + evaluate proposal density
-
-   - Compare lar to (ljd1 + lpd1 - ljd0 - lpd0)]
-Additional test:
-  [Test that M-H proposal distr is valid by checking that no value
-   gets updated more than once.]
-
-Take a closer look at test for Gibbs updates -- I'm not sure that it's correct,
-in that it doesn't deal with the case where the draw depends on the variable
-or variables being updated.
+For each variable update var[idx1,...,idxn] <- val, record
+((var, idx1, ..., idxn), old-val, new-val)
+var _save_X = BMC.Recorder(X);
+_save_X.Record(X[...]);
+_save_X.Replay();
+_save_X.Next();
+_save_X.AtEnd();
 
 
 (:quant qand i (m n) (p i)) == (reduce-qand true (qvec i (m n) (p i)))
@@ -156,24 +130,4 @@ where f(n, y) = n + bool-to-int(y)
 (:quant qmat i (m n) (f i)) == (reduce-cons-row ? (qvec i (m n) (f i)))
 
 // These go in the test class
-
-public void TestUpdate_FOO(MyModel x, double tol)
-{
-  x = x.Copy();
-  x.Draw();
-  MyModel x1 = x.Copy();
-  x1.UpdateFromProposal_FOO();
-  double expected =
-    (LogProposalDensity_FOO(x) - LogProposalDensity_FOO(x1)) +
-    (x1.LogJointDensity() - x0.LogJointDensity());
-  double log_acceptance_ratio =
-    x1.LogAcceptanceFactor_FOO() - x.LogAcceptanceFactor_FOO();
-  Assert.AreEqual(expected, log_acceptance_ratio, tol, "FOO");  
-}
-
-public static double LogProposalDensity_FOO(MyModel x)
-{
-  ...
-}
-
 
