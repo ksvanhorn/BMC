@@ -13,6 +13,7 @@
        (load ,pkg-path)
        (lisp-unit:run-all-tests ,pkg-name))))
 
+; (trace compile::write-log-proposal-density)
 ;#|
 (runtests adt)
 (runtests utils)

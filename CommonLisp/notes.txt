@@ -108,6 +108,10 @@ _save_X.Replay();
 _save_X.Next();
 _save_X.AtEnd();
 
+var _save_mu_x_halo = BMC.Recorder(_x.mu_x_halo);
+var _save_ksi = BMC.Recorder(_x.ksi);
+_save_mu_x_halo.Record(mu_x_halo)
+
 
 (:quant qand i (m n) (p i)) == (reduce-qand true (qvec i (m n) (p i)))
 

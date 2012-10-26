@@ -121,8 +121,8 @@
 	     ('%pi "Math.PI")
 	     ('%e "Math.E")
 	     ('%true-pred "(x => true)")
-	     ('%infty- "Math.NegativeInfinity")
-	     ('%infty+ "Math.PositiveInfinity")
+	     ('%infty- "double.NegativeInfinity")
+	     ('%infty+ "double.PositiveInfinity")
 	     (t (error "Unimplemented case in compile::const->string: ~a."
 		       x))))))
 
@@ -275,13 +275,13 @@
     (neg . "-")
     (or . "||")
     (o^2 . "BMC.SelfOuterProduct")
-    (q@sum . "BMC.ArrSum")
+    (q@sum . "BMC.QArrSum")
     (qand . "BMC.ForAll")
     (qmax . "BMC.QMax")
     (qmin . "BMC.QMin")
     (qnum . "BMC.Count")
     (qmat . "BMC.QMatrix")
-    (qsum . "BMC.Sum")
+    (qsum . "BMC.QSum")
     (qvec . "BMC.QVec")
     (rmat . "BMC.RowMatrix")
     (sum . "BMC.Sum")
@@ -436,7 +436,7 @@
 )
 
 (defun write-prior-draw (gen-body)
-  (fmt "void Draw() {")
+  (fmt "public void Draw() {")
   (indent
     (funcall gen-body))
   (fmt "}"))  
@@ -790,7 +790,7 @@
 
 (defun write-test-updates (class-name update-names write-test-update-fct)
   (dolist (x '("System" "NUnit.Framework" "Estimation" "Common"))
-    (fmt "Using ~a;" x))
+    (fmt "using ~a;" x))
   (fmt-blank-line)
   (fmt "namespace Tests")
   (bracket
@@ -938,36 +938,32 @@
   (when (funcall is-class-var v)
     (error "Symbol ~a used both as a class variable and as a let variable" v)))
 
-(defun write-log-proposal-density (pfx is-class-var rel)
+(defun write-log-proposal-density (var-xform is-class-var rel)
   (let ((*variable->string* (var2str-cv "_x." is-class-var))
 	(*ljd-visitor-before*
-	  (fn (lhs-str lhs) (fmt "~a = ~a;" lhs-str (lhs-name lhs pfx))))
+	  (fn (lhs-str lhs)
+	    (fmt "~a = BMC.Copy(~a);"
+		 lhs-str (lhs-xformed->string lhs var-xform))))
 	(*ljd-accum* "_lpd"))
     (write-ljd-acc-rel rel t)))
 
-#|
-(defun write-log-proposal-density-main (pfx rel let-needs-brackets)
-  (adt-case relation rel
-    ((stochastic lhs rhs)
-     (write-lpd-stoch pfx lhs rhs))
-    ((let var val body)
-     (write-lpd-let
-       (let-list rel) (strip-lets body) let-needs-brackets))
-))
+(defun lhs-var (lhs)
+  (adt-case rellhs lhs
+    ((simple var) var)
+    ((array-elt var indices) var)
+    ((array-slice var indices) var)))
 
-(defun write-lpd-stoch (pfx lhs rhs)
-  (let ((lhs-str (crellhs->string lhs)))
-    (fmt "~a = ~a;" lhs-str (lhs-name lhs pfx))
-    (match-adt1 (distribution name args) rhs
-      (let ((dname (csharp-distr-log-density-name name))
-	    (args-str-list (mapcar #'expr->string args)))
-	(fmt "_lpd += ~a(~a~{, ~a~});" dname lhs-str args-str-list)))))
+(defun replace-lhs-var (lhs new-var)
+  (adt-case rellhs lhs
+    ((simple var)
+     (make-rellhs-simple :var new-var))
+    ((array-elt var indices)
+     (make-rellhs-array-elt :var new-var :indices indices))
+    ((array-slice var indices)
+     (make-rellhs-array-slice :var new-var :indices indices))))
 
-(defun write-lpd-let (let-defs body needs-brackets)
-  (bracket-if needs-brackets
-    (dolist (x let-defs)
-      (destructuring-bind 
-|#
+(defun lhs-xformed->string (lhs var-xform)
+  (crellhs->string (replace-lhs-var lhs (funcall var-xform (lhs-var lhs)))))
 
 (defun write-body-ldd-of-update (rel class-vars)
   (write-ljd-accum-rel "_ldd" rel nil (var2str-ext class-vars)))
@@ -993,34 +989,48 @@
   ;; *** FIX: Need to rename write-test-is-valid-update-body ***
   (write-test-is-valid-update-body rel is-class-var dim-fct #'write-test-acceptance-ratio-mh))
 
-(defun write-mh-save-new (prop-distr)
-  (flet ((f (lhs-str sav-str)
-           (fmt "var ~a = ~a;" sav-str lhs-str)))
-    (write-mh-saves-restores
-      prop-distr (list "_new_" "write-mh-save-new" #'f) '())))
+(defun var-xform-prefix (pfx)
+  (fn (v) (intern (strcat pfx (symbol-name v)))))
 
 (defun write-test-acceptance-ratio-mh (outer-lets rel is-class-var dim-fct)
   (fmt "double _ljd0 = _x.LogJointDensity();")
-  (let*((*write-rel-draw-always-write-mh-saves* t)
-	(var2str (var2str-cv "_x." is-class-var))
+  (let*((var2str (var2str-cv "_x." is-class-var))
 	(visitor-before-draw #'do-nothing)
 	(lar (relation-mh-log-acceptance-ratio rel))
+	(vxform-old (var-xform-prefix "_old_"))
+	(vxform-new (var-xform-prefix "_new_"))
+	(assigned-vars (model-variables-assigned-in rel))
 	(visitor-after-proposal
 	 (fn (prop-distr)
-           (write-mh-save-new prop-distr)
+	   (dolist (v assigned-vars)
+	     (fmt "var ~a = BMC.Copy(~a);"
+		  (variable->string (funcall vxform-new v))
+		  (variable->string v)))
 	   (fmt "double _ljd1 = _x.LogJointDensity();")
 	   ;; Compute proposal density from new state to old
 	   (fmt "double _lpd = 0.0;")
-	   (write-log-proposal-density "_save_" is-class-var prop-distr)
+	   (write-log-proposal-density vxform-old is-class-var prop-distr)
 	   (fmt "double _lpd1 = _lpd;")
+	   ;; Check that proposal is reversible
+	   (dolist (v assigned-vars)
+	     (let ((msg "Proposal must be reversible")
+		   (v-str (variable->string v))
+		   (vnew-str (variable->string (funcall vxform-old v))))
+	       (fmt "Assert.IsTrue(BMC.Equal(~a, ~a), \"~a\");"
+		    v-str vnew-str msg)))
 	   ;; Compute proposal density from old state to new
 	   (fmt "_lpd = 0.0;")
-	   (write-log-proposal-density "_new_" is-class-var prop-distr)
+	   (write-log-proposal-density vxform-new is-class-var prop-distr)
 	   (fmt "double _lpd0 = _lpd;")
 	   (fmt "Assert.AreEqual(~a, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");" (expr->string lar)))))
     (dolist (x (reverse outer-lets))
       (destructuring-bind (v . e) x
         (setf rel (make-relation-let :var v :val e :body rel))))
+    (let ((*variable->string* var2str))
+      (dolist (v assigned-vars)
+	(fmt "var ~a = BMC.Copy(~a);"
+	     (variable->string (funcall vxform-old v))
+	     (variable->string v))))
     (write-rel-draw
       rel nil visitor-before-draw visitor-after-proposal var2str)))
 
@@ -1122,7 +1132,6 @@
 
 (defun do-nothing (&rest args) nil)
 
-(defparameter *write-rel-draw-always-write-mh-saves* nil)
 (defparameter *write-rel-draw-visitor-before-draw* #'do-nothing)
 (defparameter *write-rel-draw-visitor-after-proposal* #'do-nothing)
 
@@ -1226,8 +1235,6 @@
         (fmt "var ~a = ~a;" (variable->string v) (expr->string val))))
     (if (equalp (expr-const 0) log-acc-ratio)
       (progn
-	(when *write-rel-draw-always-write-mh-saves*
-	  (write-mh-saves prop-distr))
 	(write-rel-draw-main prop-distr t)
 	(funcall *write-rel-draw-visitor-after-proposal* prop-distr))
       (progn

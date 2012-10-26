@@ -299,9 +299,9 @@
 		(cexpr->string (sexpr->expr '(- |x| |y|))))
   (assert-equal "-(X) * Y + -(Z)"
 		(cexpr->string (sexpr->expr '(+ (* (neg x) y) (neg z)))))
-  (assert-equal "BMC.Sum(M, N, (I => X[I - 1]))"
+  (assert-equal "BMC.QSum(M, N, (I => X[I - 1]))"
     (cexpr->string (sexpr->expr '(:quant qsum i (m n) (@ x i)))))
-  (assert-equal "BMC.Sum(M, N, (I => W[I - 1] < X[I - 1]), (I => Y[I - 1]))"
+  (assert-equal "BMC.QSum(M, N, (I => W[I - 1] < X[I - 1]), (I => Y[I - 1]))"
     (cexpr->string (sexpr->expr '(:quant qsum i (m n) (< (@ w i) (@ x i))
 					 (@ y i)))))
   (assert-equal "(x < y ? a + b : a * b)"
@@ -483,102 +483,104 @@ else {
 	 "TheClass" 'phi rel is-class-var-stub dim-fct-stub write-body))))
 
   (flet
-   ((write-log-proposal-density-test (expected &key rel pfx class-vars)
+   ((write-log-proposal-density-test (expected &key rel xform class-vars)
       (let ((rel1 (sexpr->rel rel))
-	    (is-class-var (fn (v) (member v class-vars))))
+	    (is-class-var (fn (v) (member v class-vars)))
+	    (var-xform (fn (v) (intern (strcat xform (symbol-name v))))))
 	(assert-equal
 	  expected
 	  (ppstr
-	    (compile::write-log-proposal-density pfx is-class-var rel1))))))
-   
+	    (compile::write-log-proposal-density
+	      var-xform is-class-var rel1))))))
+
    (write-log-proposal-density-test
-"_x.P = new_P;
+"_x.P = BMC.Copy(new_P);
 _lpd += BMC.LogDensityDirichlet(_x.P, _x.A);
 "
      :rel '(~ p (ddirch a))
-     :pfx "new_"
+     :xform "new_"
      :class-vars '(a p))
 
    (write-log-proposal-density-test
-"_x.Y = old_Y;
+"_x.Y = BMC.Copy(old_Y);
 _lpd += BMC.LogDensityCat(_x.Y, P);
 "
      :rel '(~ y (dcat p))
-     :pfx "old_"
+     :xform "old_"
      :class-vars '(y))
 
    (write-log-proposal-density-test
-"_x.Y[I - 1] = _new_Y_lbI_rb;
+"_x.Y[I - 1] = BMC.Copy(_new_Y[I - 1]);
 _lpd += BMC.LogDensityNorm(_x.Y[I - 1], _x.MU, SIGMA);
 "
      :rel '(~ (@ y i) (dnorm mu sigma))
-     :pfx "_new_"
+     :xform "_new_"
      :class-vars '(y mu))
 
    (write-log-proposal-density-test
-"_x.Z[R - 1] = _old_Z_lbR_rb;
+"_x.Z[R - 1] = BMC.Copy(_old_Z[R - 1]);
 _lpd += BMC.LogDensityGamma(_x.Z[R - 1], A * _x.C, _x.B / D);
 "
      :rel '(~ (@ z r) (dgamma (* a c) (/ b d)))
-     :pfx "_old_"
+     :xform "_old_"
      :class-vars '(z c b))
 
    (write-log-proposal-density-test
-"_x.V = new_V;
+"_x.V = BMC.Copy(new_V);
 _lpd += BMC.LogDensityMVNorm(_x.V, MU, _x.SIGMA);
 "
      :rel '(~ v (dmvnorm mu sigma))
-     :pfx "new_"
+     :xform "new_"
      :class-vars '(v sigma))
 
    (write-log-proposal-density-test
-"_x.Lambda = old_Lambda;
+"_x.Lambda = BMC.Copy(old_Lambda);
 _lpd += BMC.LogDensityWishart(_x.Lambda, NU + 3, W);
 "
      :rel '(~ |Lambda| (dwishart (+ nu 3) W))
-     :pfx "old_"
+     :xform "old_"
      :class-vars '(|Lambda|))
 
    (write-log-proposal-density-test
-"_x.U = new_U;
+"_x.U = BMC.Copy(new_U);
 _lpd += BMC.LogDensityInterval(_x.U, _x.Y, C);
 "
      :rel '(~ u (dinterval y c))
-     :pfx "new_"
+     :xform "new_"
      :class-vars '(u y))
 
    (write-log-proposal-density-test
 "{
     var SIGMA = 1 / Math.Sqrt(_x.LAMBDA);
-    _x.Y = old_Y;
+    _x.Y = BMC.Copy(old_Y);
     _lpd += BMC.LogDensityNorm(_x.Y, 0, SIGMA);
 }
 "
      :rel '(:let (sigma (/ 1 (^1/2 lambda)))
              (~ y (dnorm 0 sigma)))
-     :pfx "old_"
+     :xform "old_"
      :class-vars '(y lambda))
 
    (write-log-proposal-density-test
-"_x.Y = new_Y;
+"_x.Y = BMC.Copy(new_Y);
 _lpd += BMC.LogDensityCat(_x.Y, P);
-_x.Z = new_Z;
+_x.Z = BMC.Copy(new_Z);
 _lpd += BMC.LogDensityNorm(_x.Z, 0, _x.SIGMA[_x.Y - 1]);
 "
      :rel '(:block
 	    (~ y (dcat p))
 	    (~ z (dnorm 0 (@ sigma y))))
-     :pfx "new_"
+     :xform "new_"
      :class-vars '(y z sigma))
 
    (write-log-proposal-density-test
 "{
     var A = BMC.Sqr(G);
     var B = BMC.Sqr(_x.H);
-    _x.Y = old_Y;
+    _x.Y = BMC.Copy(old_Y);
     _lpd += BMC.LogDensityGamma(_x.Y, A, B);
 }
-_x.U = old_U;
+_x.U = BMC.Copy(old_U);
 _lpd += BMC.LogDensityNorm(_x.U, M, _x.Y);
 "
      :rel '(:block
@@ -586,7 +588,7 @@ _lpd += BMC.LogDensityNorm(_x.U, M, _x.Y);
              (:let (b (^2 h))
                (~ y (dgamma a b))))
 	     (~ u (dnorm m y)))
-     :pfx "old_"
+     :xform "old_"
      :class-vars '(y u h))
   )
 
@@ -604,16 +606,17 @@ _lpd += BMC.LogDensityNorm(_x.U, M, _x.Y);
 
    (write-tar-mh-test
 "double _ljd0 = _x.LogJointDensity();
-var _save_P = BMC.Copy(_x.P);
+var _old_P = BMC.Copy(_x.P);
 BMC.DrawDirichlet(_x.P, _x.A);
-var _new_P = _x.P;
+var _new_P = BMC.Copy(_x.P);
 double _ljd1 = _x.LogJointDensity();
 double _lpd = 0.0;
-_x.P = _save_P;
+_x.P = BMC.Copy(_old_P);
 _lpd += BMC.LogDensityDirichlet(_x.P, _x.A);
 double _lpd1 = _lpd;
+Assert.IsTrue(BMC.Equal(_x.P, _old_P), \"Proposal must be reversible\");
 _lpd = 0.0;
-_x.P = _new_P;
+_x.P = BMC.Copy(_new_P);
 _lpd += BMC.LogDensityDirichlet(_x.P, _x.A);
 double _lpd0 = _lpd;
 Assert.AreEqual(0.0e+0, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
@@ -627,16 +630,17 @@ Assert.AreEqual(0.0e+0, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptanc
 
    (write-tar-mh-test
 "double _ljd0 = _x.LogJointDensity();
-var _save_Y_lbI_cm_spJ_rb = BMC.Copy(_x.Y[I - 1, J - 1]);
+var _old_Y = BMC.Copy(_x.Y);
 _x.Y[I - 1, J - 1] = BMC.DrawNorm(_x.MU, SIGMA);
-var _new_Y_lbI_cm_spJ_rb = _x.Y[I - 1, J - 1];
+var _new_Y = BMC.Copy(_x.Y);
 double _ljd1 = _x.LogJointDensity();
 double _lpd = 0.0;
-_x.Y[I - 1, J - 1] = _save_Y_lbI_cm_spJ_rb;
+_x.Y[I - 1, J - 1] = BMC.Copy(_old_Y[I - 1, J - 1]);
 _lpd += BMC.LogDensityNorm(_x.Y[I - 1, J - 1], _x.MU, SIGMA);
 double _lpd1 = _lpd;
+Assert.IsTrue(BMC.Equal(_x.Y, _old_Y), \"Proposal must be reversible\");
 _lpd = 0.0;
-_x.Y[I - 1, J - 1] = _new_Y_lbI_cm_spJ_rb;
+_x.Y[I - 1, J - 1] = BMC.Copy(_new_Y[I - 1, J - 1]);
 _lpd += BMC.LogDensityNorm(_x.Y[I - 1, J - 1], _x.MU, SIGMA);
 double _lpd0 = _lpd;
 Assert.AreEqual(0.0e+0, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
@@ -650,17 +654,18 @@ Assert.AreEqual(0.0e+0, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptanc
 
   (write-tar-mh-test
 "double _ljd0 = _x.LogJointDensity();
+var _old_Z = BMC.Copy(_x.Z);
 var A = Math.Sqrt(_x.Z);
-var _save_Z = BMC.Copy(_x.Z);
 _x.Z = BMC.DrawNorm(_x.M, _x.S);
-var _new_Z = _x.Z;
+var _new_Z = BMC.Copy(_x.Z);
 double _ljd1 = _x.LogJointDensity();
 double _lpd = 0.0;
-_x.Z = _save_Z;
+_x.Z = BMC.Copy(_old_Z);
 _lpd += BMC.LogDensityNorm(_x.Z, _x.M, _x.S);
 double _lpd1 = _lpd;
+Assert.IsTrue(BMC.Equal(_x.Z, _old_Z), \"Proposal must be reversible\");
 _lpd = 0.0;
-_x.Z = _new_Z;
+_x.Z = BMC.Copy(_new_Z);
 _lpd += BMC.LogDensityNorm(_x.Z, _x.M, _x.S);
 double _lpd0 = _lpd;
 Assert.AreEqual(0.0e+0, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
@@ -676,25 +681,27 @@ Assert.AreEqual(0.0e+0, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptanc
   ;; distribution is appropriately limited, for a general M-H update.
   (write-tar-mh-test
 "double _ljd0 = _x.LogJointDensity();
+var _old_Y = BMC.Copy(_x.Y);
 var _save_Y = BMC.Copy(_x.Y);
 
 {
     var SIGMA = _x.ALPHA / Math.Sqrt(LAMBDA);
     _x.Y = BMC.DrawNorm(0, SIGMA);
 }
-var _new_Y = _x.Y;
+var _new_Y = BMC.Copy(_x.Y);
 double _ljd1 = _x.LogJointDensity();
 double _lpd = 0.0;
 {
     var SIGMA = _x.ALPHA / Math.Sqrt(LAMBDA);
-    _x.Y = _save_Y;
+    _x.Y = BMC.Copy(_old_Y);
     _lpd += BMC.LogDensityNorm(_x.Y, 0, SIGMA);
 }
 double _lpd1 = _lpd;
+Assert.IsTrue(BMC.Equal(_x.Y, _old_Y), \"Proposal must be reversible\");
 _lpd = 0.0;
 {
     var SIGMA = _x.ALPHA / Math.Sqrt(LAMBDA);
-    _x.Y = _new_Y;
+    _x.Y = BMC.Copy(_new_Y);
     _lpd += BMC.LogDensityNorm(_x.Y, 0, SIGMA);
 }
 double _lpd0 = _lpd;
@@ -718,24 +725,25 @@ if (!BMC.Accept(_lar)) {
   ;; distribution is appropriately limited, for a Gibbs update.
   (write-tar-mh-test
 "double _ljd0 = _x.LogJointDensity();
-var _save_Y = BMC.Copy(_x.Y);
+var _old_Y = BMC.Copy(_x.Y);
 {
     var SIGMA = _x.ALPHA / Math.Sqrt(LAMBDA);
     _x.Y = BMC.DrawNorm(0, SIGMA);
 }
-var _new_Y = _x.Y;
+var _new_Y = BMC.Copy(_x.Y);
 double _ljd1 = _x.LogJointDensity();
 double _lpd = 0.0;
 {
     var SIGMA = _x.ALPHA / Math.Sqrt(LAMBDA);
-    _x.Y = _save_Y;
+    _x.Y = BMC.Copy(_old_Y);
     _lpd += BMC.LogDensityNorm(_x.Y, 0, SIGMA);
 }
 double _lpd1 = _lpd;
+Assert.IsTrue(BMC.Equal(_x.Y, _old_Y), \"Proposal must be reversible\");
 _lpd = 0.0;
 {
     var SIGMA = _x.ALPHA / Math.Sqrt(LAMBDA);
-    _x.Y = _new_Y;
+    _x.Y = BMC.Copy(_new_Y);
     _lpd += BMC.LogDensityNorm(_x.Y, 0, SIGMA);
 }
 double _lpd0 = _lpd;
@@ -752,33 +760,35 @@ Assert.AreEqual(0.0e+0, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptanc
 
   (write-tar-mh-test
 "double _ljd0 = _x.LogJointDensity();
+var _old_Y = BMC.Copy(_x.Y);
+var _old_Z = BMC.Copy(_x.Z);
 var BAR = BMC.Vec(A, _x.B, C);
-var _save_Y = BMC.Copy(_x.Y);
-var _save_Z = BMC.Copy(_x.Z);
 {
     var PVEC = BMC.ArrPlus(_x.FOO, BAR);
     _x.Y = BMC.DrawCat(PVEC);
 }
 _x.Z = BMC.DrawGamma(A, _x.B);
-var _new_Y = _x.Y;
-var _new_Z = _x.Z;
+var _new_Y = BMC.Copy(_x.Y);
+var _new_Z = BMC.Copy(_x.Z);
 double _ljd1 = _x.LogJointDensity();
 double _lpd = 0.0;
 {
     var PVEC = BMC.ArrPlus(_x.FOO, BAR);
-    _x.Y = _save_Y;
+    _x.Y = BMC.Copy(_old_Y);
     _lpd += BMC.LogDensityCat(_x.Y, PVEC);
 }
-_x.Z = _save_Z;
+_x.Z = BMC.Copy(_old_Z);
 _lpd += BMC.LogDensityGamma(_x.Z, A, _x.B);
 double _lpd1 = _lpd;
+Assert.IsTrue(BMC.Equal(_x.Y, _old_Y), \"Proposal must be reversible\");
+Assert.IsTrue(BMC.Equal(_x.Z, _old_Z), \"Proposal must be reversible\");
 _lpd = 0.0;
 {
     var PVEC = BMC.ArrPlus(_x.FOO, BAR);
-    _x.Y = _new_Y;
+    _x.Y = BMC.Copy(_new_Y);
     _lpd += BMC.LogDensityCat(_x.Y, PVEC);
 }
-_x.Z = _new_Z;
+_x.Z = BMC.Copy(_new_Z);
 _lpd += BMC.LogDensityGamma(_x.Z, A, _x.B);
 double _lpd0 = _lpd;
 Assert.AreEqual(0.0e+0, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
@@ -796,17 +806,19 @@ Assert.AreEqual(0.0e+0, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptanc
 
   (write-tar-mh-test
 "double _ljd0 = _x.LogJointDensity();
+var _old_U = BMC.Copy(_x.U);
 var _save_U = BMC.Copy(_x.U);
 
 _x.U = BMC.DrawNorm(MU, _x.SIGMA);
-var _new_U = _x.U;
+var _new_U = BMC.Copy(_x.U);
 double _ljd1 = _x.LogJointDensity();
 double _lpd = 0.0;
-_x.U = _save_U;
+_x.U = BMC.Copy(_old_U);
 _lpd += BMC.LogDensityNorm(_x.U, MU, _x.SIGMA);
 double _lpd1 = _lpd;
+Assert.IsTrue(BMC.Equal(_x.U, _old_U), \"Proposal must be reversible\");
 _lpd = 0.0;
-_x.U = _new_U;
+_x.U = BMC.Copy(_new_U);
 _lpd += BMC.LogDensityNorm(_x.U, MU, _x.SIGMA);
 double _lpd0 = _lpd;
 Assert.AreEqual(_x.SIGMA * (_x.U - MU), (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
@@ -825,6 +837,8 @@ if (!BMC.Accept(_lar)) {
 
   (write-tar-mh-test
 "double _ljd0 = _x.LogJointDensity();
+var _old_Z = BMC.Copy(_x.Z);
+var _old_W = BMC.Copy(_x.W);
 var F = _x.Z[I - 1];
 var SIGMA2 = F * F;
 var _save_Z_lbI_rb = BMC.Copy(_x.Z[I - 1]);
@@ -832,19 +846,21 @@ var _save_W = BMC.Copy(_x.W);
 
 _x.Z[I - 1] = BMC.DrawNormTruncated(MU, SIGMA, _x.A, _x.B);
 _x.W = BMC.DrawNorm(_x.Z[I - 1], 1);
-var _new_Z_lbI_rb = _x.Z[I - 1];
-var _new_W = _x.W;
+var _new_Z = BMC.Copy(_x.Z);
+var _new_W = BMC.Copy(_x.W);
 double _ljd1 = _x.LogJointDensity();
 double _lpd = 0.0;
-_x.Z[I - 1] = _save_Z_lbI_rb;
+_x.Z[I - 1] = BMC.Copy(_old_Z[I - 1]);
 _lpd += BMC.LogDensityNormTruncated(_x.Z[I - 1], MU, SIGMA, _x.A, _x.B);
-_x.W = _save_W;
+_x.W = BMC.Copy(_old_W);
 _lpd += BMC.LogDensityNorm(_x.W, _x.Z[I - 1], 1);
 double _lpd1 = _lpd;
+Assert.IsTrue(BMC.Equal(_x.Z, _old_Z), \"Proposal must be reversible\");
+Assert.IsTrue(BMC.Equal(_x.W, _old_W), \"Proposal must be reversible\");
 _lpd = 0.0;
-_x.Z[I - 1] = _new_Z_lbI_rb;
+_x.Z[I - 1] = BMC.Copy(_new_Z[I - 1]);
 _lpd += BMC.LogDensityNormTruncated(_x.Z[I - 1], MU, SIGMA, _x.A, _x.B);
-_x.W = _new_W;
+_x.W = BMC.Copy(_new_W);
 _lpd += BMC.LogDensityNorm(_x.W, _x.Z[I - 1], 1);
 double _lpd0 = _lpd;
 Assert.AreEqual(_x.Z[I - 1] + SIGMA2, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
@@ -867,18 +883,19 @@ if (!BMC.Accept(_lar)) {
 
   (write-tar-mh-test
 "double _ljd0 = _x.LogJointDensity();
+var _old_Z = BMC.Copy(_x.Z);
 var A = BMC.Sqr(_x.Z);
 var B = Math.Exp(_x.Y);
-var _save_Z = BMC.Copy(_x.Z);
 _x.Z = BMC.DrawNorm(_x.M, A * B);
-var _new_Z = _x.Z;
+var _new_Z = BMC.Copy(_x.Z);
 double _ljd1 = _x.LogJointDensity();
 double _lpd = 0.0;
-_x.Z = _save_Z;
+_x.Z = BMC.Copy(_old_Z);
 _lpd += BMC.LogDensityNorm(_x.Z, _x.M, A * B);
 double _lpd1 = _lpd;
+Assert.IsTrue(BMC.Equal(_x.Z, _old_Z), \"Proposal must be reversible\");
 _lpd = 0.0;
-_x.Z = _new_Z;
+_x.Z = BMC.Copy(_new_Z);
 _lpd += BMC.LogDensityNorm(_x.Z, _x.M, A * B);
 double _lpd0 = _lpd;
 Assert.AreEqual(0.0e+0, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
@@ -893,6 +910,8 @@ Assert.AreEqual(0.0e+0, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptanc
 
   (write-tar-mh-test
 "double _ljd0 = _x.LogJointDensity();
+var _old_S = BMC.Copy(_x.S);
+var _old_X = BMC.Copy(_x.X);
 var Q0 = BMC.ArrTimes(_x.A, _x.B);
 var Q = BMC.ScalarTimesArr(BMC.Inv(BMC.Sum(Q0)), Q0);
 var S0 = _x.S[R - 1];
@@ -904,24 +923,26 @@ _x.S[R - 1] = BMC.DrawCat(Q);
     var M = _x.MU[_x.S[R - 1] - 1];
     _x.X[R - 1] = BMC.DrawNorm(M, SIGMA);
 }
-var _new_S_lbR_rb = _x.S[R - 1];
-var _new_X_lbR_rb = _x.X[R - 1];
+var _new_S = BMC.Copy(_x.S);
+var _new_X = BMC.Copy(_x.X);
 double _ljd1 = _x.LogJointDensity();
 double _lpd = 0.0;
-_x.S[R - 1] = _save_S_lbR_rb;
+_x.S[R - 1] = BMC.Copy(_old_S[R - 1]);
 _lpd += BMC.LogDensityCat(_x.S[R - 1], Q);
 {
     var M = _x.MU[_x.S[R - 1] - 1];
-    _x.X[R - 1] = _save_X_lbR_rb;
+    _x.X[R - 1] = BMC.Copy(_old_X[R - 1]);
     _lpd += BMC.LogDensityNorm(_x.X[R - 1], M, SIGMA);
 }
 double _lpd1 = _lpd;
+Assert.IsTrue(BMC.Equal(_x.S, _old_S), \"Proposal must be reversible\");
+Assert.IsTrue(BMC.Equal(_x.X, _old_X), \"Proposal must be reversible\");
 _lpd = 0.0;
-_x.S[R - 1] = _new_S_lbR_rb;
+_x.S[R - 1] = BMC.Copy(_new_S[R - 1]);
 _lpd += BMC.LogDensityCat(_x.S[R - 1], Q);
 {
     var M = _x.MU[_x.S[R - 1] - 1];
-    _x.X[R - 1] = _new_X_lbR_rb;
+    _x.X[R - 1] = BMC.Copy(_new_X[R - 1]);
     _lpd += BMC.LogDensityNorm(_x.X[R - 1], M, SIGMA);
 }
 double _lpd0 = _lpd;
@@ -942,6 +963,60 @@ if (!BMC.Accept(_lar)) {
 				      (~ (@ x r) (dnorm m sigma))))
 	   :log-acceptance-ratio (- (@ p (@ s r)) (@ p s0)))
     :class-vars '(s x A B p mu))
+
+  (write-tar-mh-test
+"double _ljd0 = _x.LogJointDensity();
+var _old_Y = BMC.Copy(_x.Y);
+var _old_V = BMC.Copy(_x.V);
+BMC.DrawMVNorm(_x.Y, _x.MU_Y, _x.SIGMA_Y);
+for (int I = 1; I <= N; ++I) {
+    if (1 == Z[I - 1]) {
+        var M = BMC.Dot(_x.MU_V, BMC.ArraySlice(_x.U, I - 1, BMC.FullRange));
+        _x.V[I - 1] = BMC.DrawNorm(M, _x.SIGMA_V);
+    }
+}
+var _new_Y = BMC.Copy(_x.Y);
+var _new_V = BMC.Copy(_x.V);
+double _ljd1 = _x.LogJointDensity();
+double _lpd = 0.0;
+_x.Y = BMC.Copy(_old_Y);
+_lpd += BMC.LogDensityMVNorm(_x.Y, _x.MU_Y, _x.SIGMA_Y);
+for (int I = 1; I <= N; ++I) {
+    if (1 == Z[I - 1]) {
+        var M = BMC.Dot(_x.MU_V, BMC.ArraySlice(_x.U, I - 1, BMC.FullRange));
+        _x.V[I - 1] = BMC.Copy(_old_V[I - 1]);
+        _lpd += BMC.LogDensityNorm(_x.V[I - 1], M, _x.SIGMA_V);
+    }
+}
+double _lpd1 = _lpd;
+Assert.IsTrue(BMC.Equal(_x.Y, _old_Y), \"Proposal must be reversible\");
+Assert.IsTrue(BMC.Equal(_x.V, _old_V), \"Proposal must be reversible\");
+_lpd = 0.0;
+_x.Y = BMC.Copy(_new_Y);
+_lpd += BMC.LogDensityMVNorm(_x.Y, _x.MU_Y, _x.SIGMA_Y);
+for (int I = 1; I <= N; ++I) {
+    if (1 == Z[I - 1]) {
+        var M = BMC.Dot(_x.MU_V, BMC.ArraySlice(_x.U, I - 1, BMC.FullRange));
+        _x.V[I - 1] = BMC.Copy(_new_V[I - 1]);
+        _lpd += BMC.LogDensityNorm(_x.V[I - 1], M, _x.SIGMA_V);
+    }
+}
+double _lpd0 = _lpd;
+Assert.AreEqual(0.0e+0, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
+"
+    :outer-lets '()
+    :rel
+    '(:metropolis-hastings
+      :lets ()
+      :proposal-distribution
+      (:block 
+        (~ y (dmvnorm mu_y sigma_y))
+        (:for i (1 n)
+          (:if (= 1 (@ z i))
+            (:let (m (dot mu_v (@ u i :all)))
+              (~ (@ v i) (dnorm m sigma_v))))))
+      :log-acceptance-ratio 0.0)
+    :class-vars '(y v mu_y sigma_y u mu_v sigma_v))
    )
 )
 
@@ -1606,10 +1681,10 @@ if (!BMC.Accept(_lar)) {
 
 (define-test compile-test-updates-tests
   (assert-equal
-"Using System;
-Using NUnit.Framework;
-Using Estimation;
-Using Common;
+"using System;
+using NUnit.Framework;
+using Estimation;
+using Common;
 
 namespace Tests
 {
@@ -2275,7 +2350,7 @@ X = BMC.DrawNorm(MU, SIGMA);
 
   (assert-equal
     (strcat-lines
-      "void Draw() {"
+      "public void Draw() {"
       "    <body>"
       "}")
     (ppstr (compile::write-prior-draw (fn () (fmt "<body>")))))

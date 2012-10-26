@@ -3,6 +3,11 @@
 (defmacro fn (params &rest body)
   `(lambda ,params ,@body))
 
+(defmacro λ (params &rest body)
+  `(lambda ,params ,@body))
+
+(define-symbol-macro · funcall)
+
 (defmacro dolist-inter ((var lst) action between)
   (let ((past-first (gensym)))
     `(let ((,past-first nil))

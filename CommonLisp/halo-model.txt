@@ -74,7 +74,7 @@
       (:if (= 1 (@ segment r))
         (:block
           (~ (@ x r (:range 2 nvars))
-             (dmvnorm mu_x_form (inv Lambda_x_form)))
+             (dmvnorm mu_x_form (inv-pd Lambda_x_form)))
 	  (:let (sigma (^-1/2 lambda_y_form))
           (:let (mu (+ mu_y_form (dot (@ x r (:range 2 nvars)) beta)))
             (~ (@ x r 1) (dnorm mu sigma)))))))
@@ -82,7 +82,7 @@
     ; haloers
     (:for k (1 nvars)
       (:block
-        (~ (@ gamma k) (dnorm 0 sigma_gamma))
+        (~ (@ gamma k) (dnorm 0 (@ sigma_gamma k)))
         (~ (@ mu_x_halo k)(dnorm 0 (@ sigma_mu_x_halo k)))
         (~ (@ lambda_x_halo k)
            (dgamma (@ alpha_lambda_x_halo k) (@ beta_lambda_x_halo k)))))
