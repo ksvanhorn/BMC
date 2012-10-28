@@ -762,7 +762,6 @@ Assert.AreEqual(0.0e+0, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptanc
 "double _ljd0 = _x.LogJointDensity();
 var _old_Y = BMC.Copy(_x.Y);
 var _old_Z = BMC.Copy(_x.Z);
-var BAR = BMC.Vec(A, _x.B, C);
 {
     var PVEC = BMC.ArrPlus(_x.FOO, BAR);
     _x.Y = BMC.DrawCat(PVEC);
@@ -884,8 +883,6 @@ if (!BMC.Accept(_lar)) {
   (write-tar-mh-test
 "double _ljd0 = _x.LogJointDensity();
 var _old_Z = BMC.Copy(_x.Z);
-var A = BMC.Sqr(_x.Z);
-var B = Math.Exp(_x.Y);
 _x.Z = BMC.DrawNorm(_x.M, A * B);
 var _new_Z = BMC.Copy(_x.Z);
 double _ljd1 = _x.LogJointDensity();
@@ -912,8 +909,6 @@ Assert.AreEqual(0.0e+0, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptanc
 "double _ljd0 = _x.LogJointDensity();
 var _old_S = BMC.Copy(_x.S);
 var _old_X = BMC.Copy(_x.X);
-var Q0 = BMC.ArrTimes(_x.A, _x.B);
-var Q = BMC.ScalarTimesArr(BMC.Inv(BMC.Sum(Q0)), Q0);
 var S0 = _x.S[R - 1];
 var _save_S_lbR_rb = BMC.Copy(_x.S[R - 1]);
 var _save_X_lbR_rb = BMC.Copy(_x.X[R - 1]);
@@ -1480,7 +1475,6 @@ if (!BMC.Accept(_lar)) {
   ;; distribution does not include the computation of the acceptance ratio.
   (write-tivu-mh-test
 "bool _assigned_y = false;
-var lambda = BMC.Sqr(_x.z);
 var m = -2;
 var _save_y = BMC.Copy(_x.y);
 
@@ -1609,8 +1603,6 @@ if (!BMC.Accept(_lar)) {
 
   (write-tivu-mh-test
 "bool _assigned_Z = false;
-var A = BMC.Sqr(_x.Z);
-var B = Math.Exp(_x.Y);
 Assert.IsFalse(_assigned_Z, \"Z assigned\");
 _assigned_Z = true;
 _x.Z = BMC.DrawNorm(_x.M, A * B);
@@ -1629,8 +1621,6 @@ Assert.IsTrue(BMC.Equal(B, Math.Exp(_x.Y)), \"B should not change\");
   (write-tivu-mh-test
 "bool _assigned_Z = false;
 bool _assigned_U = false;
-var A = BMC.Sqr(_x.Z);
-var B = Math.Exp(_x.Y);
 Assert.IsFalse(_assigned_Z, \"Z assigned\");
 _assigned_Z = true;
 _x.Z = BMC.DrawNorm(_x.M, A * B);
@@ -1653,8 +1643,6 @@ Assert.IsTrue(BMC.Equal(B, Math.Exp(_x.Y)), \"B should not change\");
 
   (write-tivu-mh-test
 "bool [] _assigned_S = new bool[_x.S.Length];
-var Q0 = BMC.ArrTimes(_x.A, _x.B);
-var Q = BMC.ScalarTimesArr(BMC.Inv(BMC.Sum(Q0)), Q0);
 var S0 = _x.S[R - 1];
 var _save_S_lbR_rb = BMC.Copy(_x.S[R - 1]);
 

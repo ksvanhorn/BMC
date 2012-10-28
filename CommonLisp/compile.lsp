@@ -913,9 +913,6 @@
 	(1 (fmt "bool [] _assigned_~a = new bool[_x.~a.Length];" vstr vstr))
 	(2 (fmt "BMatrix _assigned_~a = new BMatrix(_x.~a.NBRows, _x.~a.NBCols);"
 		  vstr vstr vstr)))))
-  (dolist (x (reverse outer-lets))
-    (destructuring-bind (v . e) x
-      (setf rel (make-relation-let :var v :val e :body rel))))
   (let ((visitor-before-draw (fn (lhs) (write-assigned-test lhs dim-fct)))
 	(visitor-after-proposal
 	  (fn (prop-distr) (write-invariance-check outer-lets)))
@@ -1023,9 +1020,6 @@
 	   (write-log-proposal-density vxform-new is-class-var prop-distr)
 	   (fmt "double _lpd0 = _lpd;")
 	   (fmt "Assert.AreEqual(~a, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");" (expr->string lar)))))
-    (dolist (x (reverse outer-lets))
-      (destructuring-bind (v . e) x
-        (setf rel (make-relation-let :var v :val e :body rel))))
     (let ((*variable->string* var2str))
       (dolist (v assigned-vars)
 	(fmt "var ~a = BMC.Copy(~a);"
@@ -1185,6 +1179,8 @@
     (write-rel-draw-main body nil)))
 
 (defun write-rel-draw-stoch (lhs rhs)
+  (when (is-rellhs-array-slice lhs)
+    (error "Unimplemented case in write-rel-draw-stoch: LHS is an array slice"))
   (funcall *write-rel-draw-visitor-before-draw* lhs)
   (match-adt1 (distribution name args) rhs
     (if (is-scalar-distr name)
