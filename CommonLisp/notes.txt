@@ -35,3 +35,4 @@ Handle quantifiers having non-trivial filters when printing out expressions.
 Write tests for BMatrix.
 
 Write/fix test that model itself is a DAG and that all vars are given defined values.
+
