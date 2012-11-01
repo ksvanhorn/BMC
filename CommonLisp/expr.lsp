@@ -43,6 +43,12 @@
 
 ;;; Converting s-expressions to exprs
 
+(defun xformer-sexpr->expr (stream subchar arg)
+  (let ((sexp (read stream t)))
+    (sexpr->expr sexp)))
+
+(set-dispatch-macro-character #\# #\e #'xformer-sexpr->expr)
+
 (defun sexpr->expr (x)
   (cond
     ((is-literal-value x)
@@ -83,7 +89,26 @@
   (destructuring-bind (var body) args
     (make-expr-lambda :var var :body (sexpr->expr body))))
 
+(defun split-quant-args (args)
+  (let ((args-rev nil)
+	(shape-arg nil))
+    (loop while (consp args) do
+      (if (eq :shape (car args))
+	(let ((shape-args (cdr args)))
+	  (unless (= 1 (length shape-args))
+	    (error ":shape keyword must be followed by exactly one argument"))
+	  (setf shape-arg (first shape-args))
+	  (setf args '()))
+	(progn
+	  (push (car args) args-rev)
+	  (setf args (cdr args)))))
+    (cons shape-arg (reverse args-rev))))
+
 (defun sexpr->expr-quantifier (args)
+  (destructuring-bind (shape . args1) (split-quant-args args)
+    (sexpr->expr-quantifier1 shape args1)))
+
+(defun sexpr->expr-quantifier1 (shape-sexp args)
   (unless (or (= 4 (length args)) (= 5 (length args)))
     (error "Wrong number of args for quantifier: ~w" args))
   (destructuring-bind (op var (lo-x hi-x) filter-or-body . maybe-body) args
@@ -100,8 +125,9 @@
       (let ((filter (if filter-x
 			(expr-lam var (sexpr->expr filter-x))
 		      (expr-const '%true-pred)))
-	    (body (expr-lam var (sexpr->expr body-x))))
-        (expr-call op lo hi filter body)))))
+	    (body (expr-lam var (sexpr->expr body-x)))
+	    (shape (mapcar #'sexpr->expr shape-sexp)))
+        (expr-app op (list* lo hi filter body shape))))))
 
 (defun sexpr->expr-array-app (_ args)
   (unless (and (consp args) (< 1 (length args)))

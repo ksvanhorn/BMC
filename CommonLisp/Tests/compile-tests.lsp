@@ -24,17 +24,16 @@
     '(i4 k m n x)
     (sort-unique
       (compile::vars-in-expr-list
-        (sexpr->exprs
-	 '((* (/ x 4) (+ k 3) (- m n))
-	   (:quant qand i4 (1 n) (< i4 k))
-	   (^1/2 (^ x 6))
-	   false)))))
+	 '(#e(* (/ x 4) (+ k 3) (- m n))
+	   #e(:quant qand i4 (1 n) (< i4 k))
+	   #e(^1/2 (^ x 6))
+	   #efalse))))
 
   (assert-equal
     '(a c x y z)
     (sort-unique
       (compile::vars-in-expr
-        (sexpr->expr '(+ a (:let (x (* y z)) (^ x c)))))))
+        #e(+ a (:let (x (* y z)) (^ x c))))))
 
   (assert-equal
     '(A AA ALPHA B BB FOO I II K M N UPPER-X V W X Z ZZ)
@@ -75,43 +74,43 @@
     (compile::n-symbols-not-in 2 '(+ x |i3| y |i1| w)))
 
   (assert-equalp
-    (sexpr->expr '(:quant qand i (1 (+ n 2))
-			(:quant qand j (1 (- m 3)) (is-real (@ x i j)))))
+    #e(:quant qand i (1 (+ n 2))
+	      (:quant qand j (1 (- m 3)) (is-real (@ x i j))))
     (compile::array-element-check
-      (sexpr->expr '(is-real (@ x i j)))
-      (sexpr->exprs '((+ n 2) (- m 3)))
+      #e(is-real (@ x i j))
+      '(#e(+ n 2) #e(- m 3))
       '(i j)))
 
   (assert-equalp
-    (sexpr->expr '(:quant qand i (1 (+ n 2)) (< 0 (@ x i))))
+    #e(:quant qand i (1 (+ n 2)) (< 0 (@ x i)))
     (compile::array-element-check
-      (sexpr->expr '(< 0 (@ x i)))
-      (sexpr->exprs '((+ n 2)))
+      #e(< 0 (@ x i))
+      (list #e(+ n 2))
       '(i)))
 
   (assert-equalp
     '()
-    (compile::scalar-type-checks (expr-var 'a) 'integer))
+    (compile::scalar-type-checks #ea 'integer))
 
   (assert-equalp
     '()
-    (compile::scalar-type-checks (sexpr->expr '(+ 3 n)) 'realxn))
+    (compile::scalar-type-checks #e(+ 3 n) 'realxn))
 
   (assert-equalp
-    (list (sexpr->expr '(<= 0 (@ x i))))
-    (compile::scalar-type-checks (sexpr->expr '(@ x i)) 'integerp0))
+    '(#e(<= 0 (@ x i)))
+    (compile::scalar-type-checks #e(@ x i) 'integerp0))
 
   (assert-equalp
-    (list (sexpr->expr '(< 0 a)))
-    (compile::scalar-type-checks (expr-var 'a) 'integerp))
+    '(#e(< 0 a))
+    (compile::scalar-type-checks #ea 'integerp))
 
   (assert-equalp
-    (list (sexpr->expr '(is-real x)))
-    (compile::scalar-type-checks (expr-var 'x) 'real))
+    '(#e(is-real x))
+    (compile::scalar-type-checks #ex 'real))
 
   (assert-equalp
-    (list (sexpr->expr '(:quant qand |i1| (1 n) (< 0 (@ x |i1|)))))
-    (compile::array-element-checks 'x 'integerp (sexpr->exprs '(n))))
+    '(#e(:quant qand |i1| (1 n) (< 0 (@ x |i1|))))
+    (compile::array-element-checks 'x 'integerp '(#en)))
 
   (assert-equalp
     (list (sexpr->expr '(:quant qand |i1| (1 n)
@@ -263,6 +262,37 @@
 	(assert-true (funcall is-class-var x)))
       (dolist (x '(foo bar x z))
 	(assert-false (funcall is-class-var x)))))
+
+#|
+  ;; expr-dim
+  (let* ((cases
+	  '(((o^2 (@ x r (:range 2 nv))) .
+	     ((+ 1 (- nv 2)) (+ 1 (- nv 2))))
+	    (($* (- (@ x r 1) myf) (@ x r (:range 3 nv))) .
+	     ((+ 1 (- nv 3))))
+	    ((@ x (:range 3 nr) 3) .
+	     ((+ 1 (- nr 3))))
+	    ((o^2 (@- (@ x r (:range 2 nv)) mxf)) .
+	     ((+ 1 (- nv 2)) (+ 1 (- nv 2))))
+	    ((@ x r :all) .
+             (nv))))
+	 (sexpr->dims-assoc
+	   (lambda (se)
+	     (destructuring-bind (var-name . dims-se) se
+               (cons var-name (sexpr->exprs dims-se)))))
+	(var-dims
+	  (mapcar sexpr->dims-assoc
+	    '((x . (nr nv))
+	      (nv . ())
+	      (r . ())
+	      (myf . ())
+	      (mxf . ((- nv 1)))))))
+    (dolist (x cases)
+      (destructuring-bind (e . dims) x
+        (assert-equalp
+	  (sexpr->exprs dims)
+	  (compile::expr-dim (sexpr->expr e) var-dims)))))
+|#
 )
 
 (defun cexpr->string (e) (compile::expr->string e))
@@ -2044,6 +2074,41 @@ public DMatrix b;
   (assert-equal
     (strcat-lines
       "{"
+      "    var _idx1_lo = M + 1;"
+      "    var _idx1_hi = 2 * N;"
+      "    var _buf = BMC.Buffer(V, BMC.Range(_idx1_lo - 1, _idx1_hi));"
+      "    BMC.DrawMVNorm(_buf, M, S);"
+      "    BMC.CopyInto(V, BMC.Range(_idx1_lo - 1, _idx1_hi), _buf);"
+      "}")
+    (ppstr (compile::write-rel-draw
+	    (sexpr->rel '(~ (@ v (:range (+ m 1) (* 2 n))) (dmvnorm m s))))))
+
+  (assert-equal
+    (strcat-lines
+      "{"
+      "    var _idx1 = I;"
+      "    var _buf = BMC.Buffer(V, _idx1 - 1, BMC.FullRange);"
+      "    BMC.DrawMVNorm(_buf, M, S);"
+      "    BMC.CopyInto(V, _idx1 - 1, BMC.FullRange, _buf);"
+      "}")
+    (ppstr (compile::write-rel-draw
+	    (sexpr->rel '(~ (@ v i :all) (dmvnorm m s))))))
+
+  (assert-equal
+    (strcat-lines
+      "{"
+      "    var _idx2_lo = LO;"
+      "    var _idx2_hi = HI;"
+      "    var _buf = BMC.Buffer(X, BMC.FullRange, BMC.Range(_idx2_lo - 1, _idx2_hi));"
+      "    BMC.DrawWishart(_buf, NU, W);"
+      "    BMC.CopyInto(X, BMC.FullRange, BMC.Range(_idx2_lo - 1, _idx2_hi), _buf);"
+      "}")
+    (ppstr (compile::write-rel-draw
+	     (sexpr->rel '(~ (@ x :all (:range lo hi)) (dwishart nu W))))))  
+
+  (assert-equal
+    (strcat-lines
+      "{"
       "    var sigma = alpha / Math.Sqrt(lambda);"
       "    x = BMC.DrawNorm(0, sigma);"
       "}")
@@ -2344,6 +2409,7 @@ X = BMC.DrawNorm(MU, SIGMA);
     (ppstr (compile::write-prior-draw (fn () (fmt "<body>")))))
 )
 
+#|
 (define-test dag-check-tests
   (assert-equal
    (strcat-lines
@@ -2367,6 +2433,7 @@ X = BMC.DrawNorm(MU, SIGMA);
 	 (z (integerp0 (+ n 1))))))))
   ; TODO: DAG check tests
 )
+|#
 
 (defun sexpr->rels (se-list) (mapcar #'sexpr->rel se-list))
 

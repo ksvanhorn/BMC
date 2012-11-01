@@ -162,8 +162,8 @@
   (unless (and (consp args) (< 1 (length args)))
     (error "@-slice expression must have at least two arguments"))
   (format nil "BMC.ArraySlice(~a~{, ~a~})"
-	 (array-expr->string (first args))
-	 (mapcar #'expr->string (mapcar #'slice-dec-expr (rest args)))))
+	  (array-expr->string (first args))
+	  (mapcar #'expr->string (mapcar #'slice-dec-expr (rest args)))))
 
 (defun slice-dec-expr (x)
   (cond ((and (is-expr-apply x) (eq '@-rng (expr-apply-fct x)))
@@ -174,7 +174,7 @@
 	   (dec-expr e)))
 	((and (is-expr-const x) (eq '@-all (expr-const-name x)))
 	 x)
-	(t (dec-expr x))))
+	(t (error "Unimplementable case in slice-dec-expr."))))
 
 (defun array-expr->string (e)
   (if (or (is-expr-const e) (is-expr-variable e))
@@ -182,8 +182,7 @@
     (format t "(~a)" (expr->string e))))
 
 (defun fexpr->string (fct args lprec rprec)
-  (when (is-fquant-with-default-filter fct args)
-    (setf args (list (first args) (second args) (fourth args))))
+  (setf args (remove-default-filter-if-fquant fct args))
   (when (eq '! fct)
     (setf fct :let)
     (setf args (reverse args)))
@@ -200,13 +199,12 @@
 	 (format nil "~a(~{~a~^, ~})"
 		 (fct-name fct) (mapcar #'expr->string args)))))
 
-(defun is-fquant-with-default-filter (fct args)
-  (and (is-fquant-symbol fct)
-       (progn
-	 (unless (= 4 (length args))
-	   (error "Quantifier with wrong number of arguments: (~a ~{~a~})"
-		  fct args))
-	 (equalp (expr-const '%true-pred) (third args)))))
+(defun remove-default-filter-if-fquant (fct args)
+  (if (and (is-fquant-symbol fct)
+	   (<= 3 (length args))
+	   (equalp (expr-const '%true-pred) (third args)))
+      (list* (first args) (second args) (nthcdr 3 args))
+    args))
 
 (defun bexpr->string (op args lprec rprec)
   (let* ((op-prec (precedences op))
@@ -428,8 +426,10 @@
   (flet ((f () (mapc #'write-rel-draw (model-body mdl))))
     (write-prior-draw #'f))
   (fmt-blank-line)
+#|
   (write-undefine-all-vars (model-vars mdl))
   (fmt-blank-line)
+|#
   (write-csharp-updates (mcimpl-updates impl))
   (fmt-blank-line)
   ; ... more ...
@@ -1179,19 +1179,63 @@
     (write-rel-draw-main body nil)))
 
 (defun write-rel-draw-stoch (lhs rhs)
-  (when (is-rellhs-array-slice lhs)
-    (error "Unimplemented case in write-rel-draw-stoch: LHS is an array slice"))
   (funcall *write-rel-draw-visitor-before-draw* lhs)
   (match-adt1 (distribution name args) rhs
-    (if (is-scalar-distr name)
-      (fmt "~a = ~a(~{~a~^, ~});"
-	   (crellhs->string lhs)
-	   (csharp-distr-draw-name name)
-	   (mapcar #'expr->string args))
-      (fmt "~a(~a~{, ~a~});"
-	   (csharp-distr-draw-name name)
-	   (crellhs->string lhs)
-	   (mapcar #'expr->string args)))))
+    (cond
+      ((is-scalar-distr name)
+       (write-rel-draw-stoch-univariate lhs name args rhs))
+      ((is-rellhs-array-slice lhs)
+       (write-rel-draw-stoch-array-slice lhs name args))
+      (t
+       (write-rel-draw-stoch-multivariate lhs name args)))))
+
+(defun write-rel-draw-stoch-univariate (lhs distr-name distr-args rhs)
+  (when (is-rellhs-array-slice lhs)
+    (error "Array slice used as LHS with scalar distribution in ~
+            write-rel-draw-stoch: LHS = ~a, DISTR = ~a" lhs rhs))
+  (fmt "~a = ~a(~{~a~^, ~});"
+       (crellhs->string lhs)
+       (csharp-distr-draw-name distr-name)
+       (mapcar #'expr->string distr-args)))
+
+(defun write-rel-draw-stoch-multivariate (lhs distr-name distr-args)
+  (fmt "~a(~a~{, ~a~});"
+       (csharp-distr-draw-name distr-name)
+       (crellhs->string lhs)
+       (mapcar #'expr->string distr-args)))
+
+(defun write-rel-draw-stoch-array-slice (lhs distr-name distr-args)
+  (bracket
+    (match-adt1 (rellhs-array-slice var indices) lhs
+      (let ((n 0)
+	    (xformed-idxs '()))
+	(dolist (x indices)
+	  (incf n)
+	  (push (xform-slice-arg n x) xformed-idxs))
+	(setf xformed-idxs (reverse xformed-idxs))
+	(let ((xformed-idx-strs
+	        (mapcar #'expr->string (mapcar #'slice-dec-expr xformed-idxs)))
+	      (var-str (variable->string var)))
+	  (fmt "var _buf = BMC.Buffer(~a~{, ~a~});" var-str xformed-idx-strs)
+	  (fmt "~a(_buf~{, ~a~});"
+	       (csharp-distr-draw-name distr-name)
+	       (mapcar #'expr->string distr-args))
+	  (fmt "BMC.CopyInto(~a~{, ~a~}, _buf);" var-str xformed-idx-strs))))))
+
+(defun xform-slice-arg (n idx)
+  (adt-case array-slice-index idx
+    ((scalar value)
+     (let ((v (intern (format nil "_idx~d" n))))
+       (fmt "var ~a = ~a;" (variable->string v) (expr->string value))
+       (expr-call '@-idx (expr-var v))))
+    ((range lo hi)
+     (let ((v-lo (intern (format nil "_idx~d_lo" n)))
+	   (v-hi (intern (format nil "_idx~d_hi" n))))
+       (fmt "var ~a = ~a;" (variable->string v-lo) (expr->string lo))
+       (fmt "var ~a = ~a;" (variable->string v-hi) (expr->string hi))
+       (expr-call '@-rng (expr-var v-lo) (expr-var v-hi))))
+    ((all)
+     (expr-const '@-all))))
 
 (defun is-scalar-distr (symbol)
   (member symbol +scalar-distributions+))
@@ -1288,6 +1332,7 @@
     (let ((lhs-str (model:rellhs->string lhs)))
       (apply #'strcat pfx (map 'list #'encode-char lhs-str)))))
 
+#|
 (defun write-undefine-all-vars (var-decls)
   (fmt "private void UndefineAllVars() {")
   (indent
@@ -1330,6 +1375,7 @@
 		   (indent (f (rest iv-list) (rest dim-list)))
 		   (fmt "}")))))
       (f idx-vars dims))))
+|#
 
 (defparameter *stoch-vars* nil)
 
@@ -1384,6 +1430,44 @@
 
 (defun density-name (distr-name)
   (compound-symbol distr-name 'density))
+
+#|
+(defun expr-dim (x var-dims)
+  (adt-case expr x
+    ((variable symbol)
+     (assoc-lookup symbol var-dims))
+    ((apply fct args)
+     (apply-dim fct args var-dims))
+    ((const name)
+     (cond
+      ((numberp name) '())
+      ((symbolp name) (assoc-lookup name var-dims))
+      (t (error "const name is neither number nor symbol"))))
+    ((lambda var body)
+     (error "Unimplemented"))))
+
+(defun apply-dim (fct-name args var-dims)
+  (case fct-name
+    ('o^2 (let ((d (expr-dim (first args) var-dims))) (append d d)))
+    ('$* (expr-dim (second args) var-dims))
+    ('- '())
+    ('@- (expr-dim (first args) var-dims))
+    ('@ '())
+    ('@-idx '())
+    ('@-rng (list (expr-call '+
+		    (expr-const 1)
+		    (expr-call '- (second args) (first args)))))
+    ('@-slice (apply #'append
+		(mapcar (lambda (n x) (slice-expr-dim n x var-dims))
+		  (assoc-lookup (expr-variable-symbol (first args)) var-dims)
+		  (rest args))))
+    (otherwise (error "Unimplemented case in apply-dim."))))
+
+(defun slice-expr-dim (n x var-dims)
+  (if (equalp x (expr-const '@-all))
+      (list n)
+    (expr-dim x var-dims)))
+|#
 
 #|
 (defun compile-to-csharp (csharp-name-space class-name mdl os)

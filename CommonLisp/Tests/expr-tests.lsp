@@ -113,6 +113,48 @@
 
   (assert-equalp
     (make-expr-apply
+      :fct 'q@sum
+      :args (list
+              (expr-var 'm)
+	      (expr-var 'n)
+	      (expr-lam 'j
+		(expr-call '=
+                  (expr-const 2)
+		  (expr-call '@ (expr-var 's) (expr-var 'j))))
+	      (expr-lam 'j
+		(expr-call '@-slice
+		  (expr-var 'x)
+		  (expr-const '@-all)
+		  (expr-call '@-idx (expr-var 'j))))
+	      (expr-call '- (expr-var 'nv) (expr-const 1))))
+    (sexpr->expr
+     '(:quant q@sum j (m n) (= 2 (@ s j)) (@ x :all j) :shape ((- nv 1)))))
+
+  (assert-equalp
+    (make-expr-apply
+      :fct 'q@sum
+      :args (list
+              (expr-var 'm)
+	      (expr-var 'n)
+	      (expr-lam 'j
+		(expr-call '=
+                  (expr-const 2)
+		  (expr-call '@ (expr-var 's) (expr-var 'j))))
+	      (expr-lam 'j
+		(expr-call '@-slice
+		  (expr-var 'x)
+		  (expr-const '@-all)
+		  (expr-call '@-idx (expr-var 'j))
+		  (expr-const '@-all)))
+	      (expr-call '- (expr-var 'nv) (expr-const 1))
+	      (expr-call '- (expr-var 'b) (expr-var 'a))))
+    (sexpr->expr
+     '(:quant q@sum j (m n) (= 2 (@ s j))
+	      (@ x :all j :all)
+	      :shape ((- nv 1) (- b a)))))
+
+  (assert-equalp
+    (make-expr-apply
       :fct '@-slice
       :args
         (list

@@ -33,7 +33,8 @@
     dnorm-density dmvnorm-density dgamma-density dwishart-density
     ddirch-log-density dcat-log-density dinterval-log-density
     dnorm-log-density dmvnorm-log-density dgamma-log-density
-    dwishart-log-density))
+    dwishart-log-density
+    qarrsum-filtered tuple))
 
 (defun is-scalar-type-symbol (x)
   (member x +scalar-type-symbols+))
