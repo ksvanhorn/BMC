@@ -38,7 +38,6 @@
     :@^1/2 :@^2 :@^-1 :@^-1/2 :@^-2
     :@+ :@- :@* :@/ :$*
     :diag_mat :o* :o^2 :cons :cons-col :cons-row
-    :qarrsum-filtered :tuple
 
     ;; finite quantifiers
     :qand :qor :qmin :qmax :qnum :qsum :qprod :qprod! :qvec :q@sum :qmat
