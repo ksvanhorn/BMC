@@ -100,6 +100,12 @@
 
 ;;; Printing expressions
 
+(defun assignable-expr->string (e)
+  (let ((s (expr->string e)))
+    (if (is-expr-var e)
+      (format nil "BMC.Copy(~a)" s)
+      s)))
+
 (defun expr->string (e &optional (lprec -1) (rprec -1))
   (adt-case expr e
     ((const name)
@@ -789,7 +795,7 @@
     (write-test-updates class-name update-names wtu-fct)))
 
 (defun write-test-updates (class-name update-names write-test-update-fct)
-  (dolist (x '("System" "NUnit.Framework" "Estimation" "Common"))
+  (dolist (x '("System" "NUnit.Framework" "Estimation" "Estimation.Samplers" "Common"))
     (fmt "using ~a;" x))
   (fmt-blank-line)
   (fmt "namespace Tests")
@@ -999,6 +1005,8 @@
 	(assigned-vars (model-variables-assigned-in rel))
 	(visitor-after-proposal
 	 (fn (prop-distr)
+	   (when (equalp (expr-const 0) lar)
+	     (fmt "double _lar = 0.0;"))
 	   (dolist (v assigned-vars)
 	     (fmt "var ~a = BMC.Copy(~a);"
 		  (variable->string (funcall vxform-new v))
@@ -1019,7 +1027,8 @@
 	   (fmt "_lpd = 0.0;")
 	   (write-log-proposal-density vxform-new is-class-var prop-distr)
 	   (fmt "double _lpd0 = _lpd;")
-	   (fmt "Assert.AreEqual(~a, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");" (expr->string lar)))))
+	   (fmt "Assert.AreEqual(_lar, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");"))))
+;	   (fmt "Assert.AreEqual(~a, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");" (expr->string lar)))))
     (let ((*variable->string* var2str))
       (dolist (v assigned-vars)
 	(fmt "var ~a = BMC.Copy(~a);"
@@ -1281,9 +1290,9 @@
 	(write-mh-saves prop-distr)
 	(fmt-blank-line)
 	(write-rel-draw-main prop-distr t)
+	(fmt "double _lar = ~a;" (expr->string log-acc-ratio))
 	(funcall *write-rel-draw-visitor-after-proposal* prop-distr)
 	(fmt-blank-line)
-	(fmt "double _lar = ~a;" (expr->string log-acc-ratio))
 	(fmt "if (!BMC.Accept(_lar)) {")
 	(indent
 	  (write-mh-restores prop-distr))

@@ -23,7 +23,7 @@
 	  (implfname (second ext:*args*))
 	  (ofname-base (third ext:*args*))
 	  (class-name (fourth ext:*args*))
-	  (csharp-namespace "Estimation")
+	  (csharp-namespace "Estimation.Samplers")
 	  (mdl)
 	  (impl))
       (assert (stringp ifname))

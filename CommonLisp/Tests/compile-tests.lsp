@@ -638,6 +638,7 @@ _lpd += BMC.LogDensityNorm(_x.U, M, _x.Y);
 "double _ljd0 = _x.LogJointDensity();
 var _old_P = BMC.Copy(_x.P);
 BMC.DrawDirichlet(_x.P, _x.A);
+double _lar = 0.0;
 var _new_P = BMC.Copy(_x.P);
 double _ljd1 = _x.LogJointDensity();
 double _lpd = 0.0;
@@ -649,7 +650,7 @@ _lpd = 0.0;
 _x.P = BMC.Copy(_new_P);
 _lpd += BMC.LogDensityDirichlet(_x.P, _x.A);
 double _lpd0 = _lpd;
-Assert.AreEqual(0.0e+0, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
+Assert.AreEqual(_lar, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
 "
      :outer-lets '()
      :rel '(:metropolis-hastings
@@ -662,6 +663,7 @@ Assert.AreEqual(0.0e+0, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptanc
 "double _ljd0 = _x.LogJointDensity();
 var _old_Y = BMC.Copy(_x.Y);
 _x.Y[I - 1, J - 1] = BMC.DrawNorm(_x.MU, SIGMA);
+double _lar = 0.0;
 var _new_Y = BMC.Copy(_x.Y);
 double _ljd1 = _x.LogJointDensity();
 double _lpd = 0.0;
@@ -673,7 +675,7 @@ _lpd = 0.0;
 _x.Y[I - 1, J - 1] = BMC.Copy(_new_Y[I - 1, J - 1]);
 _lpd += BMC.LogDensityNorm(_x.Y[I - 1, J - 1], _x.MU, SIGMA);
 double _lpd0 = _lpd;
-Assert.AreEqual(0.0e+0, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
+Assert.AreEqual(_lar, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
 "
      :outer-lets '()
      :rel '(:metropolis-hastings
@@ -687,6 +689,7 @@ Assert.AreEqual(0.0e+0, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptanc
 var _old_Z = BMC.Copy(_x.Z);
 var A = Math.Sqrt(_x.Z);
 _x.Z = BMC.DrawNorm(_x.M, _x.S);
+double _lar = 0.0;
 var _new_Z = BMC.Copy(_x.Z);
 double _ljd1 = _x.LogJointDensity();
 double _lpd = 0.0;
@@ -698,7 +701,7 @@ _lpd = 0.0;
 _x.Z = BMC.Copy(_new_Z);
 _lpd += BMC.LogDensityNorm(_x.Z, _x.M, _x.S);
 double _lpd0 = _lpd;
-Assert.AreEqual(0.0e+0, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
+Assert.AreEqual(_lar, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
 "
     :outer-lets '()
     :rel '(:metropolis-hastings
@@ -718,6 +721,7 @@ var _save_Y = BMC.Copy(_x.Y);
     var SIGMA = _x.ALPHA / Math.Sqrt(LAMBDA);
     _x.Y = BMC.DrawNorm(0, SIGMA);
 }
+double _lar = BMC.Sqr(_x.Y / SIGMA);
 var _new_Y = BMC.Copy(_x.Y);
 double _ljd1 = _x.LogJointDensity();
 double _lpd = 0.0;
@@ -735,9 +739,8 @@ _lpd = 0.0;
     _lpd += BMC.LogDensityNorm(_x.Y, 0, SIGMA);
 }
 double _lpd0 = _lpd;
-Assert.AreEqual(BMC.Sqr(_x.Y / SIGMA), (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
+Assert.AreEqual(_lar, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
 
-double _lar = BMC.Sqr(_x.Y / SIGMA);
 if (!BMC.Accept(_lar)) {
     _x.Y = _save_Y;
 }
@@ -760,6 +763,7 @@ var _old_Y = BMC.Copy(_x.Y);
     var SIGMA = _x.ALPHA / Math.Sqrt(LAMBDA);
     _x.Y = BMC.DrawNorm(0, SIGMA);
 }
+double _lar = 0.0;
 var _new_Y = BMC.Copy(_x.Y);
 double _ljd1 = _x.LogJointDensity();
 double _lpd = 0.0;
@@ -777,7 +781,7 @@ _lpd = 0.0;
     _lpd += BMC.LogDensityNorm(_x.Y, 0, SIGMA);
 }
 double _lpd0 = _lpd;
-Assert.AreEqual(0.0e+0, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
+Assert.AreEqual(_lar, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
 "
      :outer-lets '()
      :rel '(:metropolis-hastings
@@ -797,6 +801,7 @@ var _old_Z = BMC.Copy(_x.Z);
     _x.Y = BMC.DrawCat(PVEC);
 }
 _x.Z = BMC.DrawGamma(A, _x.B);
+double _lar = 0.0;
 var _new_Y = BMC.Copy(_x.Y);
 var _new_Z = BMC.Copy(_x.Z);
 double _ljd1 = _x.LogJointDensity();
@@ -820,7 +825,7 @@ _lpd = 0.0;
 _x.Z = BMC.Copy(_new_Z);
 _lpd += BMC.LogDensityGamma(_x.Z, A, _x.B);
 double _lpd0 = _lpd;
-Assert.AreEqual(0.0e+0, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
+Assert.AreEqual(_lar, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
 "
     :outer-lets '((bar . (vec a b c)))
     :rel '(:metropolis-hastings
@@ -839,6 +844,7 @@ var _old_U = BMC.Copy(_x.U);
 var _save_U = BMC.Copy(_x.U);
 
 _x.U = BMC.DrawNorm(MU, _x.SIGMA);
+double _lar = _x.SIGMA * (_x.U - MU);
 var _new_U = BMC.Copy(_x.U);
 double _ljd1 = _x.LogJointDensity();
 double _lpd = 0.0;
@@ -850,9 +856,8 @@ _lpd = 0.0;
 _x.U = BMC.Copy(_new_U);
 _lpd += BMC.LogDensityNorm(_x.U, MU, _x.SIGMA);
 double _lpd0 = _lpd;
-Assert.AreEqual(_x.SIGMA * (_x.U - MU), (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
+Assert.AreEqual(_lar, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
 
-double _lar = _x.SIGMA * (_x.U - MU);
 if (!BMC.Accept(_lar)) {
     _x.U = _save_U;
 }
@@ -875,6 +880,7 @@ var _save_W = BMC.Copy(_x.W);
 
 _x.Z[I - 1] = BMC.DrawNormTruncated(MU, SIGMA, _x.A, _x.B);
 _x.W = BMC.DrawNorm(_x.Z[I - 1], 1);
+double _lar = _x.Z[I - 1] + SIGMA2;
 var _new_Z = BMC.Copy(_x.Z);
 var _new_W = BMC.Copy(_x.W);
 double _ljd1 = _x.LogJointDensity();
@@ -892,9 +898,8 @@ _lpd += BMC.LogDensityNormTruncated(_x.Z[I - 1], MU, SIGMA, _x.A, _x.B);
 _x.W = BMC.Copy(_new_W);
 _lpd += BMC.LogDensityNorm(_x.W, _x.Z[I - 1], 1);
 double _lpd0 = _lpd;
-Assert.AreEqual(_x.Z[I - 1] + SIGMA2, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
+Assert.AreEqual(_lar, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
 
-double _lar = _x.Z[I - 1] + SIGMA2;
 if (!BMC.Accept(_lar)) {
     _x.Z[I - 1] = _save_Z_lbI_rb;
     _x.W = _save_W;
@@ -914,6 +919,7 @@ if (!BMC.Accept(_lar)) {
 "double _ljd0 = _x.LogJointDensity();
 var _old_Z = BMC.Copy(_x.Z);
 _x.Z = BMC.DrawNorm(_x.M, A * B);
+double _lar = 0.0;
 var _new_Z = BMC.Copy(_x.Z);
 double _ljd1 = _x.LogJointDensity();
 double _lpd = 0.0;
@@ -925,7 +931,7 @@ _lpd = 0.0;
 _x.Z = BMC.Copy(_new_Z);
 _lpd += BMC.LogDensityNorm(_x.Z, _x.M, A * B);
 double _lpd0 = _lpd;
-Assert.AreEqual(0.0e+0, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
+Assert.AreEqual(_lar, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
 "
     :outer-lets '((a . (^2 z))
 		  (b . (exp y)))
@@ -948,6 +954,7 @@ _x.S[R - 1] = BMC.DrawCat(Q);
     var M = _x.MU[_x.S[R - 1] - 1];
     _x.X[R - 1] = BMC.DrawNorm(M, SIGMA);
 }
+double _lar = _x.P[_x.S[R - 1] - 1] - _x.P[S0 - 1];
 var _new_S = BMC.Copy(_x.S);
 var _new_X = BMC.Copy(_x.X);
 double _ljd1 = _x.LogJointDensity();
@@ -971,9 +978,8 @@ _lpd += BMC.LogDensityCat(_x.S[R - 1], Q);
     _lpd += BMC.LogDensityNorm(_x.X[R - 1], M, SIGMA);
 }
 double _lpd0 = _lpd;
-Assert.AreEqual(_x.P[_x.S[R - 1] - 1] - _x.P[S0 - 1], (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
+Assert.AreEqual(_lar, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
 
-double _lar = _x.P[_x.S[R - 1] - 1] - _x.P[S0 - 1];
 if (!BMC.Accept(_lar)) {
     _x.S[R - 1] = _save_S_lbR_rb;
     _x.X[R - 1] = _save_X_lbR_rb;
@@ -1000,6 +1006,7 @@ for (int I = 1; I <= N; ++I) {
         _x.V[I - 1] = BMC.DrawNorm(M, _x.SIGMA_V);
     }
 }
+double _lar = 0.0;
 var _new_Y = BMC.Copy(_x.Y);
 var _new_V = BMC.Copy(_x.V);
 double _ljd1 = _x.LogJointDensity();
@@ -1027,7 +1034,7 @@ for (int I = 1; I <= N; ++I) {
     }
 }
 double _lpd0 = _lpd;
-Assert.AreEqual(0.0e+0, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
+Assert.AreEqual(_lar, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
 "
     :outer-lets '()
     :rel
@@ -1485,8 +1492,8 @@ var _save_y = BMC.Copy(_x.y);
     _assigned_y = true;
     _x.y = BMC.DrawNorm(0, sigma);
 }
-
 double _lar = BMC.Sqr(_x.y / sigma);
+
 if (!BMC.Accept(_lar)) {
     _x.y = _save_y;
 }
@@ -1514,9 +1521,9 @@ var _save_y = BMC.Copy(_x.y);
     _assigned_y = true;
     _x.y = BMC.DrawNorm(m, sigma);
 }
+double _lar = BMC.Sqr((_x.y - m) / sigma);
 Assert.IsTrue(BMC.Equal(lambda, BMC.Sqr(_x.z)), \"lambda should not change\");
 
-double _lar = BMC.Sqr((_x.y - m) / sigma);
 if (!BMC.Accept(_lar)) {
     _x.y = _save_y;
 }
@@ -1563,8 +1570,8 @@ var _save_U = BMC.Copy(_x.U);
 Assert.IsFalse(_assigned_U, \"U assigned\");
 _assigned_U = true;
 _x.U = BMC.DrawNorm(MU, _x.SIGMA);
-
 double _lar = _x.SIGMA * (_x.U - MU);
+
 if (!BMC.Accept(_lar)) {
     _x.U = _save_U;
 }
@@ -1585,8 +1592,8 @@ var _save_Z = BMC.Copy(_x.Z);
 Assert.IsFalse(_assigned_Z, \"Z assigned\");
 _assigned_Z = true;
 _x.Z = BMC.DrawNorm(MU, _x.SIGMA);
-
 double _lar = _x.SIGMA * (_x.Z - MU);
+
 if (!BMC.Accept(_lar)) {
     _x.Z = _save_Z;
 }
@@ -1613,8 +1620,8 @@ _x.Z[I - 1] = BMC.DrawNormTruncated(MU, SIGMA, _x.A, _x.B);
 Assert.IsFalse(_assigned_W, \"W assigned\");
 _assigned_W = true;
 _x.W = BMC.DrawNorm(_x.Z[I - 1], 1);
-
 double _lar = _x.Z[I - 1] + SIGMA2;
+
 if (!BMC.Accept(_lar)) {
     _x.Z[I - 1] = _save_Z_lbI_rb;
     _x.W = _save_W;
@@ -1679,10 +1686,10 @@ var _save_S_lbR_rb = BMC.Copy(_x.S[R - 1]);
 Assert.IsFalse(_assigned_S[R - 1], \"S[{0}] assigned\", R - 1);
 _assigned_S[R - 1] = true;
 _x.S[R - 1] = BMC.DrawCat(Q);
+double _lar = _x.P[_x.S[R - 1] - 1] - _x.P[S0 - 1];
 Assert.IsTrue(BMC.Equal(Q0, BMC.ArrTimes(_x.A, _x.B)), \"Q0 should not change\");
 Assert.IsTrue(BMC.Equal(Q, BMC.ScalarTimesArr(BMC.Inv(BMC.Sum(Q0)), Q0)), \"Q should not change\");
 
-double _lar = _x.P[_x.S[R - 1] - 1] - _x.P[S0 - 1];
 if (!BMC.Accept(_lar)) {
     _x.S[R - 1] = _save_S_lbR_rb;
 }
@@ -1702,6 +1709,7 @@ if (!BMC.Accept(_lar)) {
 "using System;
 using NUnit.Framework;
 using Estimation;
+using Estimation.Samplers;
 using Common;
 
 namespace Tests
@@ -2315,8 +2323,8 @@ public DMatrix b;
 "var _save_X = BMC.Copy(X);
 
 X = BMC.DrawNorm(MU, SIGMA);
-
 double _lar = SIGMA * (X - MU);
+
 if (!BMC.Accept(_lar)) {
     X = _save_X;
 }
@@ -2345,8 +2353,8 @@ if (!BMC.Accept(_lar)) {
 var _save_X = BMC.Copy(X);
 
 X = BMC.DrawNorm(MU, SIGMA);
-
 double _lar = SIGMA * (X - MU);
+
 if (!BMC.Accept(_lar)) {
     X = _save_X;
 }
@@ -2380,8 +2388,8 @@ X = BMC.DrawNorm(MU, SIGMA);
     var _save_Z_lbI_rb = BMC.Copy(Z[I - 1]);
 
     Z[I - 1] = BMC.DrawNormTruncated(MU, SIGMA, A, B);
-
     double _lar = Z[I - 1] + SIGMA2;
+
     if (!BMC.Accept(_lar)) {
         Z[I - 1] = _save_Z_lbI_rb;
     }
