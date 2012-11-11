@@ -43,6 +43,9 @@
 	      (*fmt-ostream* ostrm))
 	  (write-test-file class-name mdl impl))))))
 
+  ; TODO: Allow functions like max to have arbitrary number of arguments
+  ;  (and turn this into ops on two arguments at a time when generating
+  ;  code.)
   ; TODO: rework unit tests
   ; TODO: validation of initial Markov chain state
   ; TODO: generate updates for deterministic vars

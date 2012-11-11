@@ -102,7 +102,7 @@
 
 (defun assignable-expr->string (e)
   (let ((s (expr->string e)))
-    (if (is-expr-var e)
+    (if (is-expr-variable e)
       (format nil "BMC.Copy(~a)" s)
       s)))
 
@@ -872,7 +872,8 @@
     ((write-tivu-body (rel rev-outer-lets)
        (adt-case relation rel
 	 ((let var val body)
-	  (fmt "var ~a = ~a;" (variable->string var) (expr->string val))
+	  (fmt "var ~a = ~a;"
+	       (variable->string var) (assignable-expr->string val))
 	  (write-tivu-body body (cons (cons var val) rev-outer-lets)))
 	 ((loop var lo hi body)
 	  (let* ((var-str (variable->string var))
@@ -968,6 +969,7 @@
 (defun lhs-xformed->string (lhs var-xform)
   (crellhs->string (replace-lhs-var lhs (funcall var-xform (lhs-var lhs)))))
 
+#|
 (defun write-body-ldd-of-update (rel class-vars)
   (write-ljd-accum-rel "_ldd" rel nil (var2str-ext class-vars)))
 
@@ -979,6 +981,7 @@
    (fmt "double _ldd = 0.0;")
    (funcall write-body rel class-vars)
    (fmt "return _ldd;")))
+|#
 
 (defun write-test-acceptance-ratio
        (class-name upd-name rel is-class-var dim-fct &optional
@@ -1078,7 +1081,8 @@
   (bracket-if needs-brackets
     (dolist (x let-defs)
       (destructuring-bind (var . val) x
-        (fmt "var ~a = ~a;" (variable->string var) (expr->string val))))
+        (fmt "var ~a = ~a;"
+	     (variable->string var) (assignable-expr->string val))))
     (write-ljd-acc-rel body)))
 
 (defun write-ljd-acc-rel-stoch (lhs rhs)
@@ -1184,7 +1188,8 @@
   (bracket-if needs-brackets
     (dolist (x let-defs)
       (destructuring-bind (var . val) x
-        (fmt "var ~a = ~a;" (variable->string var) (expr->string val))))
+        (fmt "var ~a = ~a;"
+	     (variable->string var) (assignable-expr->string val))))
     (write-rel-draw-main body nil)))
 
 (defun write-rel-draw-stoch (lhs rhs)
@@ -1281,7 +1286,8 @@
   (bracket-if let-needs-brackets
     (dolist (d lets)
       (destructuring-bind (v . val) d
-        (fmt "var ~a = ~a;" (variable->string v) (expr->string val))))
+        (fmt "var ~a = ~a;"
+	     (variable->string v) (assignable-expr->string val))))
     (if (equalp (expr-const 0) log-acc-ratio)
       (progn
 	(write-rel-draw-main prop-distr t)
