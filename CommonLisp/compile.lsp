@@ -538,10 +538,8 @@
     (dolist (d arg-decls)
       (match-adt1 (decl var typ) d
 	(let ((vname (variable->string var))
-	      (infix (csharp-load-type-name typ))
-	      (dim-strings (type->dim-strings typ)))
-	  (fmt "~a = loader.Load~a(\"~a\"~{, ~a~});"
-	       vname infix vname dim-strings))))))
+	      (infix (csharp-load-type-name typ)))
+	  (fmt "~a = loader.Load~a(\"~a\");" vname infix vname))))))
 
 (defun type->dim-strings (typ)
   (adt-case vtype typ

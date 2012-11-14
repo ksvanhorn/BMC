@@ -2079,12 +2079,12 @@ public DMatrix b;
     K = loader.LoadInteger(\"K\");
     A = loader.LoadReal(\"A\");
     B = loader.LoadBoolean(\"B\");
-    MU = loader.LoadRealArray(\"MU\", N + 1);
-    IDX = loader.LoadIntegerArray(\"IDX\", 5);
-    BVEC = loader.LoadBooleanArray(\"BVEC\", N);
-    Sigma = loader.LoadDMatrix(\"Sigma\", N - 1, N - 1);
-    FOO = loader.LoadIMatrix(\"FOO\", N, K);
-    Bar = loader.LoadBMatrix(\"Bar\", K, K * N);
+    MU = loader.LoadRealArray(\"MU\");
+    IDX = loader.LoadIntegerArray(\"IDX\");
+    BVEC = loader.LoadBooleanArray(\"BVEC\");
+    Sigma = loader.LoadDMatrix(\"Sigma\");
+    FOO = loader.LoadIMatrix(\"FOO\");
+    Bar = loader.LoadBMatrix(\"Bar\");
 }
 "
       (ppstr (compile::write-csharp-load-arguments (sexpr->decls args)))))
