@@ -63,7 +63,7 @@
 
 (defpackage :utils
   (:use :cl)
-  (:export :starts-with :assoc-lookup :zip :strcat :strcat-lines
+  (:export :flet* :starts-with :assoc-lookup :zip :strcat :strcat-lines
 	   :read-file :int-range :is-list-of-length
 	   :list->pair-list :fn :dolist-inter
 	   :append-mapcar :fdebug :compound-symbol
@@ -121,7 +121,8 @@
    :is-relation-let :make-relation-let
    :relation-let-var :relation-let-val :relation-let-body
    :is-relation-mh :make-relation-mh :relation-mh-lets
-   :relation-mh-proposal-distribution :relation-mh-log-acceptance-ratio
+   :relation-mh-proposal-distribution :relation-mh-acceptmon
+   :relation-mh-log-acceptance-ratio
    :is-relation-skip :make-relation-skip
 
    :is-rellhs
@@ -144,9 +145,9 @@
 	   :assuming-se :subst-expr))
 
 (defpackage :mcimpl
-  (:use :cl :model :expr :utils :symbols :adt :prove)
+  (:use :cl :model :expr :model :utils :symbols :adt :prove)
   (:export :make-mcimpl :is-mcimpl :mcimpl-parameters
-	   :mcimpl-updates
+	   :mcimpl-updates :mcimpl-expectations :mcimpl-acceptmons
 	   :free-vars-in-rellhs
 	   :sexpr->mcimpl :read-mcimpl :params-names))
 

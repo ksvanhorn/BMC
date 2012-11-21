@@ -220,6 +220,8 @@
      (sexpr->mcimpl
       '(:mcimpl
 	(:parameters (x realp) (y integerp) (z (realp n)))
+	(:acceptmons)
+	(:expectations)
 	(:updates)))))
 
   (let* ((mdl
@@ -256,12 +258,32 @@
 	        '(:mcimpl
 	          (:parameters (m integer)
 		               (r real))
+		  (:acceptmons)
+		  (:expectations)
 		  (:updates)))))
     (let ((is-class-var (compile::class-var-pred-from mdl impl)))
       (dolist (x '(m r n a b c))
 	(assert-true (funcall is-class-var x)))
       (dolist (x '(foo bar x z))
 	(assert-false (funcall is-class-var x)))))
+
+  (assert-equalp
+    (sexpr->rel '(:metropolis-hastings
+		    :lets ()
+		    :proposal-distribution (~ p (ddirch a))
+		    :log-acceptance-ratio (dot a v)))
+    (compile::remove-acceptmon
+      (sexpr->rel '(:metropolis-hastings
+		    :lets ()
+		    :proposal-distribution (~ p (ddirch a))
+		    :acceptmon (am i j)
+		    :log-acceptance-ratio (dot a v)))))
+
+  (let ((mh (sexpr->rel '(:metropolis-hastings
+		    :lets ()
+		    :proposal-distribution (~ p (ddirch a))
+		    :log-acceptance-ratio (dot a v)))))
+    (assert-equalp mh (compile::remove-acceptmon mh)))
 
 #|
   ;; expr-dim
@@ -1838,26 +1860,6 @@ namespace Tests
     (ppstr (compile::write-test-updates "MyModel" '(alpha beta)
 	     (fn (x) (fmt "// Implement TestUpdate_~a" x)))))
 
-#|
-  (assert-equal
-"private static double LogDrawDensity_GAMMA(MyMuddle _x)
-{
-    double _ldd = 0.0;
-    // ...
-    return _ldd;
-}
-"
-    (let* ((rel (sexpr->rel '(~ a (dnorm m s))))
-	   (class-vars '(m c))
-	   (write-body 	(fn (rel1 cv1)
-			  (assert-equalp rel rel1)
-			  (assert-equalp class-vars cv1)
-			  (fmt "// ..."))))
-      (ppstr
-       (compile::write-log-draw-density-of-update
-	 "MyMuddle" 'gamma rel class-vars write-body))))
-|#
-
   (assert-equal
 "public static void TestUpdate_ALPHA(MyModel x, double tol)
 {
@@ -1876,105 +1878,6 @@ namespace Tests
 "
     (ppstr (compile::write-test-update-main "Mdl" 'beta)))
 )
-
-#|
-(define-test write-body-ldd-of-update-tests
-  (assert-equal
-    "_ldd += BMC.LogDensityDirichlet(_x.p, _x.alpha_p);
-"
-    (ppstr (compile::write-body-ldd-of-update
-	     (sexpr->rel '(~ |p| (ddirch |alpha_p|)))
-	     '(|p| |alpha_p|))))
-
-  (assert-equal
-    "_ldd += BMC.LogDensityCat(_x.x[i - 1], _x.p);
-"
-    (ppstr (compile::write-body-ldd-of-update
-	     (sexpr->rel '(~ (@ |x| |i|) (dcat |p|)))
-	     '(|x| |p|))))
-
-  (assert-equal
-    "_ldd += BMC.LogDensityNorm(_x.x[i - 1], MU, SIGMA);
-"
-    (ppstr (compile::write-body-ldd-of-update
-	     (sexpr->rel '(~ (@ |x| |i|) (dnorm mu sigma)))
-	     '(|x|))))
-
-  (assert-equal
-    "_ldd += BMC.LogDensityGamma(_x.x[i - 1], _x.A * C, _x.B / D);
-"
-    (ppstr (compile::write-body-ldd-of-update
-	     (sexpr->rel '(~ (@ |x| |i|) (dgamma (* a c) (/ b d))))
-	     '(|x| a b))))
-
-  (assert-equal
-    "_ldd += BMC.LogDensityMVNorm(_x.x, MU, _x.SIGMA);
-"
-    (ppstr (compile::write-body-ldd-of-update
-	     (sexpr->rel '(~ |x| (dmvnorm mu sigma)))
-	     '(|x| sigma))))
-
-  (assert-equal
-    "_ldd += BMC.LogDensityWishart(_x.Lambda, _x.nu + 3, V);
-"
-    (ppstr (compile::write-body-ldd-of-update
-	     (sexpr->rel '(~ |Lambda| (dwishart (+ |nu| 3) V)))
-	     '(|Lambda| |nu|))))
-
-  (assert-equal
-    "_ldd += BMC.LogDensityInterval(_x.v, _x.y, c);
-"
-    (ppstr (compile::write-body-ldd-of-update
-	      (sexpr->rel '(~ |v| (dinterval |y| |c|)))
-	      '(|v| |y|))))
-
-  (assert-equal
-    (strcat-lines
-      "var sigma = 1 / Math.Sqrt(lambda);"
-      "_ldd += BMC.LogDensityNorm(_x.Z, 0, sigma);")
-    (ppstr (compile::write-body-ldd-of-update
-	    (sexpr->rel '(:let (|sigma| (/ 1 (^1/2 |lambda|)))
-			   (~ z (dnorm 0 |sigma|))))
-	    '(z))))
-
-  (assert-equal
-    (strcat-lines "_ldd += BMC.LogDensityCat(_x.Y, P);"
-		  "_ldd += BMC.LogDensityNorm(_x.X, 0, _x.SIGMA[_x.Y - 1]);")
-    (ppstr (compile::write-body-ldd-of-update
-	     (sexpr->rel '(:block
-			    (~ y (dcat p))
-			    (~ x (dnorm 0 (@ sigma y)))))
-	     '(y x sigma))))
-
-  (assert-equal
-    (strcat-lines
-	    "if (V[I - 1] < 4) {"
-	    "    _ldd += BMC.LogDensityNorm(_x.Z[I - 1], _x.M, S);"
-            "}"
-	    "else {"
-	    "    _ldd += BMC.LogDensityCat(_x.W[I - 1], P);"
-	    "}")
-    (ppstr (compile::write-body-ldd-of-update
-	     (sexpr->rel '(:if (< (@ v i) 4)
-			    (~ (@ z i) (dnorm m s))
-			    (~ (@ w i) (dcat p))))
-	     '(z m w))))
-
-  (assert-equal
-    (strcat-lines
-      "for (int i = M - _x.K; i <= _x.N + A; ++i) {"
-      "    _ldd += BMC.LogDensityGamma(_x.W[i - 1], Math.Sqrt(Y[i - 1]), 1);"
-      "}")
-    (ppstr (compile::write-body-ldd-of-update
-	     (sexpr->rel '(:for |i| ((- m k) (+ n a))
-                            (~ (@ w |i|) (dgamma (^1/2 (@ y |i|)) 1))))
-	     '(k n w))))
-
-  (assert-equal
-    ""
-    (ppstr (compile::write-body-ldd-of-update (make-relation-skip) '())))
-)
-|#
 
 (define-test compile-tests
   (assert-equal
@@ -2021,6 +1924,20 @@ public DMatrix b;
       (ppstr (compile::gen-decls "Array vars" (sexpr->decls decls)))))
 
   (assert-equal
+"public abstract class AcceptanceMonitor
+{
+    public abstract void FOO(bool _accepted, double X);
+    public abstract void BAR(bool _accepted, int N, double Y);
+    public abstract void BAZ(bool _accepted);
+}
+"
+    (ppstr (compile::write-csharp-acceptmons-class
+	     `((foo ,(sexpr->decl '(x real)))
+	       (bar ,(sexpr->decl '(n integer))
+		    ,(sexpr->decl '(y real)))
+	       (baz)))))
+
+  (assert-equal
 "public MyClassName Copy()
 {
     MyClassName the_copy = new MyClassName();
@@ -2050,17 +1967,52 @@ public DMatrix b;
     (assert-equal
 "public void AllocateModelVariables()
 {
-    a = new double[2];
-    b = new DMatrix(2, 2);
-    c = new double[N];
-    d = new DMatrix(N, M - 1);
-    f = new IMatrix(K + 1, N);
-    g = new int[K];
-    h = new bool[N];
-    i = new BMatrix(M, K);
+    if (a == null) a = new double[2];
+    if (b == null) b = new DMatrix(2, 2);
+    if (c == null) c = new double[N];
+    if (d == null) d = new DMatrix(N, M - 1);
+    if (f == null) f = new IMatrix(K + 1, N);
+    if (g == null) g = new int[K];
+    if (h == null) h = new bool[N];
+    if (i == null) i = new BMatrix(M, K);
 }
 "
       (ppstr (compile::write-csharp-allocate-vars (sexpr->decls vars)))))
+
+  (let ((vars '((a real)
+		(b (real 2))
+		(c (real m n))
+		(d real))))
+    (assert-equal
+"public void AllocateAccumulators()
+{
+    _expectations = new Accumulators();
+    _expectations._N = 0;
+    _expectations.B = new double[2];
+    _expectations.C = new DMatrix(M, N);
+}
+"
+      (ppstr (compile::write-csharp-allocate-accums (sexpr->decls vars))))
+
+    (assert-equal
+"public void OutputExpectations(string _dirpath)
+{
+    double _N = (double)_expectations._N;
+
+    _expectations.A /= _N;
+    BMC.DivBy(_expectations.B, _N);
+    BMC.DivBy(_expectations.C, _N);
+    _expectations.D /= _N;
+
+    BMC.StoreScalars(_dirpath,
+      \"A\", _expectations.A,
+      \"D\", _expectations.D);
+    BMC.StoreArray(_dirpath, \"B\", _expectations.B);
+    BMC.StoreArray(_dirpath, \"C\", _expectations.C);
+}
+"
+      (ppstr (compile::write-csharp-output-expectations (sexpr->decls vars))))
+)
 
   (let ((args '((n integer)
 		(k integerp)
@@ -2141,6 +2093,89 @@ public DMatrix b;
 	         (:if (= (@ x |i|) 1)
 		   (~ (@ y |i|) (dnorm 0 sigma))
 		   (~ (@ y |i|) (dgamma b a)))))))))))
+
+  (assert-equalp
+"public void ZeroAccumulators()
+{
+    _expectations._N = 0;
+    _expectations.ALPHA = 0.0;
+    for (int _idx1 = 0; _idx1 < N; ++_idx1) {
+        _expectations.BETA[_idx1] = 0.0;
+    }
+    for (int _idx1 = 0; _idx1 < M; ++_idx1) {
+        for (int _idx2 = 0; _idx2 < K; ++_idx2) {
+            _expectations.GAMMA[_idx1, _idx2] = 0.0;
+        }
+    }
+}
+"
+    (ppstr
+      (compile::write-csharp-zero-accum
+        (sexpr->decls '((alpha real) (beta (real n)) (gamma (real m k)))))))
+
+  (assert-equalp
+"public void Accumulate()
+{
+    _expectations._N += 1;
+    _expectations.ALPHA += A;
+    BMC.Check(_expectations.DELTA.Length == DELTA.Length,
+              \"_expectations.DELTA.Length == DELTA.Length\");
+    for (int _idx1 = 0; _idx1 < M; ++_idx1) {
+        _expectations.DELTA[_idx1] += DELTA[_idx1];
+    }
+    BMC.Check(_expectations.GAMMA.NBRows == G.NBRows,
+              \"_expectations.GAMMA.NBRows == G.NBRows\");
+    BMC.Check(_expectations.GAMMA.NBCols == G.NBCols,
+              \"_expectations.GAMMA.NBCols == G.NBCols\");
+    for (int _idx1 = 0; _idx1 < N; ++_idx1) {
+        for (int _idx2 = 0; _idx2 < K; ++_idx2) {
+            _expectations.GAMMA[_idx1, _idx2] += G[_idx1, _idx2];
+        }
+    }
+}
+"
+    (ppstr
+      (compile::write-csharp-accumulate
+        (mcimpl::sexpr->expectations
+          '(:expectations
+             (alpha real a)
+	     (delta (real m) delta)
+	     (gamma (real n k) g))))))
+
+  (assert-equalp
+"public void Accumulate()
+{
+    _expectations._N += 1;
+    _expectations.ALPHA += Math.Exp(A);
+    {
+        var _tmp = BMC.MatrixInversePD(LAMBDA);
+        BMC.Check(_expectations.SIGMA.NBRows == _tmp.NBRows,
+                  \"_expectations.SIGMA.NBRows == _tmp.NBRows\");
+        BMC.Check(_expectations.SIGMA.NBCols == _tmp.NBCols,
+                  \"_expectations.SIGMA.NBCols == _tmp.NBCols\");
+        for (int _idx1 = 0; _idx1 < N; ++_idx1) {
+            for (int _idx2 = 0; _idx2 < N; ++_idx2) {
+                _expectations.SIGMA[_idx1, _idx2] += _tmp[_idx1, _idx2];
+            }
+        }
+    }
+    {
+        var _tmp = BMC.QVec(1, M, (I => Math.Sqrt(M[I - 1])));
+        BMC.Check(_expectations.DELTA.Length == _tmp.Length,
+                  \"_expectations.DELTA.Length == _tmp.Length\");
+        for (int _idx1 = 0; _idx1 < M; ++_idx1) {
+            _expectations.DELTA[_idx1] += _tmp[_idx1];
+        }
+    }
+}
+"
+    (ppstr
+      (compile::write-csharp-accumulate
+        (mcimpl::sexpr->expectations
+          '(:expectations
+             (alpha real (exp a))
+	     (Sigma (real n n) (inv-pd Lambda))
+	     (delta (real m) (:quant qvec i (1 m) (^1/2 (@ m i)))))))))
 )
 
 (define-test rel-draw-tests
@@ -2451,6 +2486,54 @@ if (!BMC.Accept(_lar)) {
      (sexpr->rel '(:metropolis-hastings
 		   :lets ()
 		   :proposal-distribution (~ x (dnorm mu sigma))
+		   :log-acceptance-ratio (* sigma (- x mu))))
+     nil)))
+
+  (assert-equal
+"var _save_X = BMC.Copy(X);
+
+X = BMC.DrawNorm(MU, SIGMA);
+double _lar = SIGMA * (X - MU);
+
+bool _accepted = BMC.Accept(_lar);
+if (_accepted) {
+    _acceptance_monitor.AM(true);
+}
+else {
+    X = _save_X;
+    _acceptance_monitor.AM(false);
+}
+"
+   (ppstr
+    (compile::write-rel-draw
+     (sexpr->rel '(:metropolis-hastings
+		   :lets ()
+		   :proposal-distribution (~ x (dnorm mu sigma))
+		   :acceptmon (am)
+		   :log-acceptance-ratio (* sigma (- x mu))))
+     nil)))
+
+  (assert-equal
+"var _save_X = BMC.Copy(X);
+
+X = BMC.DrawNorm(MU, SIGMA);
+double _lar = SIGMA * (X - MU);
+
+bool _accepted = BMC.Accept(_lar);
+if (_accepted) {
+    _acceptance_monitor.AM(true, I, A * B);
+}
+else {
+    X = _save_X;
+    _acceptance_monitor.AM(false, I, A * B);
+}
+"
+   (ppstr
+    (compile::write-rel-draw
+     (sexpr->rel '(:metropolis-hastings
+		   :lets ()
+		   :proposal-distribution (~ x (dnorm mu sigma))
+		   :acceptmon (am i (* a b))
 		   :log-acceptance-ratio (* sigma (- x mu))))
      nil)))
 

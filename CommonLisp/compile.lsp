@@ -427,15 +427,21 @@
   (fmt-blank-line)
   (write-csharp-allocate-vars (model-vars mdl))
   (fmt-blank-line)
+  (let* ((exp (mcimpl-expectations impl))
+	 (exp-decls (mapcar #'car exp)))
+    (write-csharp-allocate-accums exp-decls)
+    (fmt-blank-line)
+    (write-csharp-zero-accum exp-decls)
+    (fmt-blank-line)
+    (write-csharp-accumulate exp)
+    (fmt-blank-line)
+    (write-csharp-output-expectations exp-decls))
+  (fmt-blank-line)
   (write-csharp-log-joint-density mdl)
   (fmt-blank-line)
   (flet ((f () (mapc #'write-rel-draw (model-body mdl))))
     (write-prior-draw #'f))
   (fmt-blank-line)
-#|
-  (write-undefine-all-vars (model-vars mdl))
-  (fmt-blank-line)
-|#
   (write-csharp-updates (mcimpl-updates impl))
   (fmt-blank-line)
   ; ... more ...
@@ -448,7 +454,20 @@
   (fmt "}"))  
 
 (defun write-csharp-declarations (mdl impl)
+  (fmt "public class Accumulators")
+  (bracket
+    (fmt "public int _N;")
+    (gen-decls "" (mapcar #'car (mcimpl-expectations impl))))
+  (fmt-blank-line)
+  (write-csharp-acceptmons-class (mcimpl-acceptmons impl))
+  (fmt-blank-line)
+  (fmt "// Acceptance monitor")
+  (fmt "AcceptanceMonitor _acceptance_monitor = null;")
+  (fmt-blank-line)
   (gen-decls "Update parameters" (mcimpl-parameters impl))
+  (fmt-blank-line)
+  (fmt "// Accumulators")
+  (fmt "Accumulators _expectations;")
   (fmt-blank-line)
   (gen-decls "Model Arguments" (model-args mdl))
   (fmt-blank-line)
@@ -511,11 +530,34 @@
   (bracket
     (wcs-allocate-vars var-decls)))
 
-(defun wcs-allocate-vars (var-decls)
+(defun wcs-allocate-vars (var-decls &optional prefix)
   (dolist (d var-decls)
     (match-adt1 (decl var typ) d
       (when (is-vtype-array typ)
-	(fmt "~a = ~a;" (variable->string var) (csharp-new-string typ))))))
+	(let ((var-s (variable->string var))
+	      (new-s (csharp-new-string typ)))
+	(if prefix
+	    (fmt "~a.~a = ~a;" prefix var-s new-s)
+	  (fmt "if (~a == null) ~a = ~a;" var-s var-s new-s)))))))
+
+(defun write-csharp-acceptmons-class (acceptmons)
+  (flet* ((decl2str (d)
+	    (match-adt1 (decl var typ) d
+              (format nil "~a ~a" (type-string typ) (variable->string var))))
+	  (decls2strs (ds) (mapcar #'decl2str ds)))
+    (fmt "public abstract class AcceptanceMonitor")
+    (bracket
+      (dolist (x acceptmons)
+        (destructuring-bind (name . decls) x
+          (fmt "public abstract void ~a(bool _accepted~{, ~a~});"
+	       name (decls2strs decls)))))))
+
+(defun write-csharp-allocate-accums (decls)
+  (fmt "public void AllocateAccumulators()")
+  (bracket
+    (fmt "_expectations = new Accumulators();")
+    (fmt "_expectations._N = 0;")
+    (wcs-allocate-vars decls "_expectations")))
 
 (defun csharp-new-string (typ)
   (adt-case vtype typ
@@ -902,12 +944,20 @@
 	      (indent (write-tivu-body false-branch rol))
 	      (fmt "}"))))
 	 ((mh)
-	  (funcall write-mh
-	    (reverse rev-outer-lets) rel is-class-var dim-fct))
+	  (let ((ol (reverse rev-outer-lets))
+		(rel1 (remove-acceptmon rel)))
+	    (funcall write-mh ol rel1 is-class-var dim-fct)))
 	 (otherwise
 	  (error "Unimplemented case in write-test-is-valid-update-body: ~a" rel)))))
     (let ((*variable->string* (var2str-cv "_x." is-class-var)))
       (write-tivu-body rel '())))))
+
+(defun remove-acceptmon (mh)
+  (match-adt1 (relation-mh lets proposal-distribution log-acceptance-ratio) mh
+    (make-relation-mh :lets lets
+		      :proposal-distribution proposal-distribution
+		      :acceptmon nil
+		      :log-acceptance-ratio log-acceptance-ratio)))
 
 (defun write-test-is-valid-update-mh (outer-lets rel is-class-var dim-fct)
   (dolist (v (model-variables-assigned-in rel))
@@ -967,20 +1017,6 @@
 (defun lhs-xformed->string (lhs var-xform)
   (crellhs->string (replace-lhs-var lhs (funcall var-xform (lhs-var lhs)))))
 
-#|
-(defun write-body-ldd-of-update (rel class-vars)
-  (write-ljd-accum-rel "_ldd" rel nil (var2str-ext class-vars)))
-
-(defun write-log-draw-density-of-update
-       (class-name update-name rel class-vars &optional
-	(write-body #'write-body-ldd-of-update))
-  (fmt "private static double LogDrawDensity_~a(~a _x)" update-name class-name)
-  (bracket
-   (fmt "double _ldd = 0.0;")
-   (funcall write-body rel class-vars)
-   (fmt "return _ldd;")))
-|#
-
 (defun write-test-acceptance-ratio
        (class-name upd-name rel is-class-var dim-fct &optional
 	(write-body #'write-test-acceptance-ratio-body))
@@ -1029,7 +1065,6 @@
 	   (write-log-proposal-density vxform-new is-class-var prop-distr)
 	   (fmt "double _lpd0 = _lpd;")
 	   (fmt "Assert.AreEqual(_lar, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");"))))
-;	   (fmt "Assert.AreEqual(~a, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");" (expr->string lar)))))
     (let ((*variable->string* var2str))
       (dolist (v assigned-vars)
 	(fmt "var ~a = BMC.Copy(~a);"
@@ -1162,9 +1197,10 @@
      (write-rel-draw-loop var lo hi body))
     ((let var val body)
      (write-rel-draw-let (let-list rel) (strip-lets body) let-needs-brackets))
-    ((mh lets proposal-distribution log-acceptance-ratio)
+    ((mh lets proposal-distribution acceptmon log-acceptance-ratio)
      (write-rel-draw-mh
-       lets proposal-distribution log-acceptance-ratio let-needs-brackets))
+       lets proposal-distribution acceptmon log-acceptance-ratio
+       let-needs-brackets))
     ((skip)
      )))
 
@@ -1280,7 +1316,8 @@
       (write-rel-draw-main body nil))
     (fmt "}")))
 
-(defun write-rel-draw-mh (lets prop-distr log-acc-ratio let-needs-brackets)
+(defun write-rel-draw-mh (lets prop-distr acceptmon log-acc-ratio
+			  let-needs-brackets)
   (bracket-if let-needs-brackets
     (dolist (d lets)
       (destructuring-bind (v . val) d
@@ -1297,10 +1334,29 @@
 	(fmt "double _lar = ~a;" (expr->string log-acc-ratio))
 	(funcall *write-rel-draw-visitor-after-proposal* prop-distr)
 	(fmt-blank-line)
-	(fmt "if (!BMC.Accept(_lar)) {")
-	(indent
-	  (write-mh-restores prop-distr))
-	(fmt "}")))))
+	(if acceptmon
+	  (progn
+	    (flet ((report (accepted)
+		     (fmt "~a.~a(~a~{, ~a~});"
+			  (variable->string '|_acceptance_monitor|)
+			  (car acceptmon)
+			  accepted
+			  (mapcar #'expr->string (cdr acceptmon)))))
+	      (fmt "bool _accepted = BMC.Accept(_lar);")
+	      (fmt "if (_accepted) {")
+	      (indent
+	       (report "true"))
+	      (fmt "}")
+	      (fmt "else {")
+	      (indent
+	       (write-mh-restores prop-distr)
+	       (report "false"))
+	      (fmt "}")))
+	  (progn
+	    (fmt "if (!BMC.Accept(_lar)) {")
+	    (indent
+	     (write-mh-restores prop-distr))
+	    (fmt "}")))))))
 
 (defun write-mh-saves (prop-distr)
   (flet ((f (lhs-str sav-str)
@@ -1344,51 +1400,6 @@
 		 (otherwise (error "Unimplemented case in lhs-name"))))))
     (let ((lhs-str (model:rellhs->string lhs)))
       (apply #'strcat pfx (map 'list #'encode-char lhs-str)))))
-
-#|
-(defun write-undefine-all-vars (var-decls)
-  (fmt "private void UndefineAllVars() {")
-  (indent
-    (dolist (d var-decls)
-      (match-adt1 (decl var typ) d
-        (adt-case vtype typ
-	  ((scalar stype)
-	   (write-undefine-scalar-var var stype))
-	  ((array elem-type dims)
-	   (write-undefine-array-var var elem-type dims))))))
-  (fmt "}"))
-
-(defun write-undefine-scalar-var (var stype)
-  (let ((btyp (base-type stype)))
-    (let ((vname (variable->string var))
-	  (val (undefined-val btyp)))
-      (fmt "~a = ~a;" vname val))))
-
-(defun undefined-val (base-type)
-  (case base-type
-	('integer "BMC.InvalidInteger")
-	('realxn "Double.NaN")
-	(otherwise
-	   (error "Unimplemented case in undefined-val: ~a" base-type))))
-
-(defun write-undefine-array-var (var elem-type dims)
-  (let* ((used-vars (vars-in-expr-list dims))
-	 (idx-vars (n-symbols-not-in (length dims) used-vars))
-	 (val (undefined-val (base-type elem-type)))
-	 (lhs (make-rellhs-array-elt
-	        :var var :indices (mapcar #'expr-var idx-vars)))
-	 (lhs-s (crellhs->string lhs)))
-    (labels ((f (iv-list dim-list)
-	       (if (null dim-list)
-		 (fmt "~a = ~a;" lhs-s val)
-		 (let* ((iv (first iv-list))
-			(iv-s (variable->string iv))
-			(term-s (termination-test-string iv (car dim-list))))
-		   (fmt "for (int ~a = 1; ~a; ++~a) {" iv-s term-s iv-s)
-		   (indent (f (rest iv-list) (rest dim-list)))
-		   (fmt "}")))))
-      (f idx-vars dims))))
-|#
 
 (defparameter *stoch-vars* nil)
 
@@ -1443,6 +1454,109 @@
 
 (defun density-name (distr-name)
   (compound-symbol distr-name 'density))
+
+(defun write-csharp-zero-accum (decls)
+  (fmt "public void ZeroAccumulators()")
+  (bracket
+    (fmt "_expectations._N = 0;")
+    (dolist (d decls)
+      (match-adt1 (decl var typ) d
+	(adt-case vtype typ
+	  ((scalar stype)
+	   (fmt "_expectations.~a = 0.0;" (variable->string var)))
+	  ((array elem-type dims)
+	   (write-zero-array-accum 0 (variable->string var) dims)))))))
+
+(defun write-zero-array-accum (depth var-str dims)
+  (if (null dims)
+      (fmt "_expectations.~a[~{_idx~a~^, ~}] = 0.0;" var-str (int-range 1 depth))
+    (progn
+      (incf depth)
+      (fmt "for (int _idx~a = 0; _idx~a < ~a; ++_idx~a) {"
+	   depth depth (expr->string (car dims)) depth)
+      (indent
+        (write-zero-array-accum depth var-str (cdr dims)))
+      (fmt "}"))))
+
+(defun write-csharp-accumulate (expectations)
+  (fmt "public void Accumulate()")
+  (bracket
+    (fmt "_expectations._N += 1;")
+    (dolist (e expectations)
+      (destructuring-bind (decl . expr) e
+	(match-adt1 (decl var typ) decl
+	  (let ((var-str (variable->string var))
+		(expr-str (expr->string expr)))
+            (adt-case vtype typ
+              ((scalar stype)
+               (fmt "_expectations.~a += ~a;" var-str expr-str))
+	      ((array elem-type dims)
+	       (if (is-expr-variable expr)
+		   (write-csharp-accumulate-array var-str expr-str dims)
+		 (progn
+		   (bracket
+		     (fmt "var _tmp = ~a;" expr-str)
+		     (write-csharp-accumulate-array var-str "_tmp" dims))))))))))))
+
+(defun write-csharp-accumulate-array (var-str expr-str dims)
+  (write-dim-check var-str expr-str (length dims))
+  (write-csharp-array-accumulate 0 var-str expr-str dims))
+
+(defun write-dim-check (var-str expr-str n)
+  (case n
+    (1 (fmt "BMC.Check(_expectations.~a.Length == ~a.Length,"
+	    var-str expr-str)
+       (fmt "          \"_expectations.~a.Length == ~a.Length\");"
+	    var-str expr-str))
+    (2 (dolist (prop '("NBRows" "NBCols"))
+	 (fmt "BMC.Check(_expectations.~a.~a == ~a.~a,"
+	       var-str prop expr-str prop)
+	 (fmt "          \"_expectations.~a.~a == ~a.~a\");"
+	      var-str prop expr-str prop)))
+    (otherwise
+      (error "Unimplemented case in write-dim-check."))))
+
+(defun write-csharp-array-accumulate (depth var-str expr-str dims)
+  ; Currently only implement case that expr-str is name of array
+  (if (null dims)
+      (let ((rng (int-range 1 depth)))
+	(fmt "_expectations.~a[~{_idx~a~^, ~}] += ~a[~{_idx~a~^, ~}];"
+	     var-str rng expr-str rng))
+    (progn
+      (incf depth)
+      (fmt "for (int _idx~a = 0; _idx~a < ~a; ++_idx~a) {"
+	   depth depth (expr->string (car dims)) depth)
+      (indent
+        (write-csharp-array-accumulate depth var-str expr-str (cdr dims)))
+      (fmt "}"))))
+
+(defun write-csharp-output-expectations (decls)
+  (fmt "public void OutputExpectations(string _dirpath)")
+  (bracket
+    (fmt "double _N = (double)_expectations._N;")
+    (fmt-blank-line)
+    (let ((scalars '()))
+      (dolist (d decls)
+	(match-adt1 (decl var typ) d
+	  (let ((var-str (variable->string var)))
+	    (if (is-vtype-scalar typ)
+		(progn
+		  (fmt "_expectations.~a /= _N;" var-str)
+		  (push var-str scalars))
+	      (fmt "BMC.DivBy(_expectations.~a, _N);" var-str)))))
+      (fmt-blank-line)
+      (fmt "BMC.StoreScalars(_dirpath,")
+      (let ((cnt (length scalars)))
+	(dolist (v (reverse scalars))
+	  (decf cnt)
+	  (let ((terminator (if (zerop cnt) ");" ",")))
+	    (fmt "  \"~a\", _expectations.~a~a" v v terminator))))
+      (dolist (d decls)
+	(match-adt1 (decl var typ) d
+	  (unless (is-vtype-scalar typ)
+	    (let ((var-str (variable->string var)))
+	      (fmt "BMC.StoreArray(_dirpath, \"~a\", _expectations.~a);"
+		   var-str var-str))))))))
 
 #|
 (defun expr-dim (x var-dims)

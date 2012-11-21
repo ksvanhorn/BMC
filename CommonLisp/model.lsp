@@ -14,7 +14,7 @@
   (if condition true-branch false-branch)
   (loop var lo hi body)
   (let var val body)
-  (mh lets proposal-distribution log-acceptance-ratio)
+  (mh lets proposal-distribution acceptmon log-acceptance-ratio)
     ; Metropolis-Hastings
   (skip))
 
@@ -109,27 +109,42 @@
 
 (defun sexpr->mh-rel (x)
   (check-mh-rel x)
+  (when (= 6 (length x))
+    (setf x (append (butlast x) (list* nil nil (last x)))))
   (destructuring-bind
     (keyword-lets sexpr-lets
      keyword-pd sexpr-pd
+     keyword-acceptmon acceptmon
      keyword-lar sexpr-lar) x
     (make-relation-mh
       :lets (sexpr->lets sexpr-lets)
       :proposal-distribution (sexpr->rel sexpr-pd)
+      :acceptmon (and acceptmon (sexpr->acceptmon acceptmon))
       :log-acceptance-ratio (sexpr->expr sexpr-lar))))
 
 (defun sexpr->lets (se)
   (mapcar (lambda (x) (cons (first x) (sexpr->expr (second x)))) se))
 
+(defun sexpr->acceptmon (se)
+  (destructuring-bind (name . args) se
+    (unless (symbolp name)
+      (error "Acceptance monitor must have form (name argument...)."))
+    (cons name (mapcar #'sexpr->expr args))))
+
 (defun check-mh-rel (x)
-  (unless (and (consp x) (= 6 (length x))
+  (unless
+      (and (consp x)
+	   (let ((len (length x)))
+	     (and
+	       (or (= 6 len) (= 8 len))
 	       (eq :lets (nth 0 x))
 	       (let ((lets (nth 1 x)))
 		 (and (listp lets)
 		      (every (lambda (d) (= 2 (length d))) lets)
 		      (every (lambda (d) (symbolp (first d))) lets)))
 	       (eq :proposal-distribution (nth 2 x))
-	       (eq :log-acceptance-ratio (nth 4 x)))
+	       (or (= 6 len) (eq :acceptmon (nth 4 x)))
+	       (eq :log-acceptance-ratio (nth (- len 2) x)))))
     (error "Invalid Metropolis-Hastings update: ~W."
 	   (cons :metropolis-hastings x))))
 

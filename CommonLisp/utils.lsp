@@ -1,12 +1,14 @@
 (in-package :utils)
 
-(defmacro fn (params &rest body)
+(defmacro fn (params &body body)
   `(lambda ,params ,@body))
 
-(defmacro λ (params &rest body)
+(defmacro λ (params &body body)
   `(lambda ,params ,@body))
 
 (define-symbol-macro · funcall)
+
+(defmacro flet* (defs &body body) `(labels ,defs ,@body))
 
 (defmacro dolist-inter ((var lst) action between)
   (let ((past-first (gensym)))

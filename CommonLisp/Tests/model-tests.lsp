@@ -145,6 +145,7 @@
      :lets `((m . ,(sexpr->expr '(+ n 1)))
 	     (a . ,(sexpr->expr '(* x y))))
      :proposal-distribution (sexpr->rel '(~ x (dnorm m s)))
+     :acceptmon nil
      :log-acceptance-ratio (sexpr->expr '(+ x y)))
     (sexpr->rel '(:metropolis-hastings
 		  :lets ((m (+ n 1))
@@ -156,11 +157,29 @@
     (make-relation-mh
      :lets '()
      :proposal-distribution (sexpr->rel '(~ x (dnorm m s)))
+     :acceptmon nil
      :log-acceptance-ratio (sexpr->expr '(+ x y)))
     (sexpr->rel '(:metropolis-hastings
 		  :lets ()
 		  :proposal-distribution (~ x (dnorm m s))
 		  :log-acceptance-ratio (+ x y))))
+
+  (let ((arg1 (sexpr->expr 'i))
+	(arg2 (sexpr->expr '(+ u v)))
+	(proposal (sexpr->rel '(~ y (dgamma a b))))
+	(lar (sexpr->expr '(* a b))))		  
+    (assert-equalp
+      (make-relation-mh
+       :lets '()
+       :proposal-distribution proposal
+       :acceptmon `(whup ,arg1 ,arg2)
+       :log-acceptance-ratio lar)
+      (sexpr->rel
+       '(:metropolis-hastings
+	 :lets ()
+	 :proposal-distribution (~ y (dgamma a b))
+	 :acceptmon (whup i (+ u v))
+	 :log-acceptance-ratio (* a b)))))
 
   (assert-error 'error
     (sexpr->rel '(:metropolis-hastings
