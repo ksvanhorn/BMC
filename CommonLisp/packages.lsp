@@ -96,7 +96,7 @@
    :sexpr->rellhs :sexpr->rel
    :vtype->string :distr->string :rellhs->expr :rellhs->string
    :pp-decl :pp-rel :pp-model
-   :args-vars-names
+   :vars-names :args-vars-names
    :is-update :is-pure-rel
 
    :is-model :make-model :model-args :model-reqs :model-vars :model-body

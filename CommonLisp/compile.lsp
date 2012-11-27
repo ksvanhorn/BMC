@@ -413,6 +413,12 @@
   (match-adt1 (distribution name args) d
     (vars-in-expr-list args)))
 
+(defun rellhs-main-var (lhs)
+  (adt-case rellhs lhs
+    ((simple var) var)
+    ((array-elt var indices) var)
+    ((array-slice var indices) var)))
+
 (defun write-csharp-class-body (class-name mdl impl)
   (write-csharp-declarations mdl impl)
   (fmt-blank-line)
@@ -439,30 +445,45 @@
   (fmt-blank-line)
   (write-csharp-log-joint-density mdl)
   (fmt-blank-line)
-  (flet ((f () (mapc #'write-rel-draw (model-body mdl))))
-    (write-prior-draw #'f))
+  (let* ((rels (model-body mdl))
+	 (vars (vars-names mdl))
+	 (prior-draw-body (lambda ()
+	 		    (dolist (r rels)
+			      (write-rel-draw r t #'prior-draw-wrd-stoch)))))
+    (write-prior-draw vars prior-draw-body))
   (fmt-blank-line)
   (write-csharp-updates (mcimpl-updates impl))
   (fmt-blank-line)
   ; ... more ...
 )
 
-(defun write-prior-draw (gen-body)
-  (fmt "public void Draw() {")
+(defun prior-draw-wrd-stoch (lhs rhs)
+  (let ((lhs-var-str (variable->string (rellhs-main-var lhs))))
+    (fmt "if (!_omit_~a) {" lhs-var-str)
+    (indent
+     (write-rel-draw-stoch lhs rhs))
+    (fmt "}")))
+
+(defun write-prior-draw (model-vars gen-body)
+  (fmt "public void Draw() { Draw(new string[0]); }")
+  (fmt-blank-line)
+  (fmt "public void Draw(string[] _omit) {")
   (indent
+    (dolist (v model-vars)
+      (let ((vstr (variable->string v)))
+	(fmt "bool _omit_~a = Array.IndexOf(_omit, \"~a\") >= 0;" vstr vstr)))
+    (fmt-blank-line)
     (funcall gen-body))
   (fmt "}"))  
 
 (defun write-csharp-declarations (mdl impl)
+  (fmt "[Serializable]")
   (fmt "public class Accumulators")
   (bracket
     (fmt "public int _N;")
     (gen-decls "" (mapcar #'car (mcimpl-expectations impl))))
   (fmt-blank-line)
-  (write-csharp-acceptmons-class (mcimpl-acceptmons impl))
-  (fmt-blank-line)
-  (fmt "// Acceptance monitor")
-  (fmt "AcceptanceMonitor _acceptance_monitor = null;")
+  (write-csharp-acceptmons-methods (mcimpl-acceptmons impl))
   (fmt-blank-line)
   (gen-decls "Update parameters" (mcimpl-parameters impl))
   (fmt-blank-line)
@@ -540,17 +561,15 @@
 	    (fmt "~a.~a = ~a;" prefix var-s new-s)
 	  (fmt "if (~a == null) ~a = ~a;" var-s var-s new-s)))))))
 
-(defun write-csharp-acceptmons-class (acceptmons)
+(defun write-csharp-acceptmons-methods (acceptmons)
   (flet* ((decl2str (d)
 	    (match-adt1 (decl var typ) d
               (format nil "~a ~a" (type-string typ) (variable->string var))))
 	  (decls2strs (ds) (mapcar #'decl2str ds)))
-    (fmt "public abstract class AcceptanceMonitor")
-    (bracket
-      (dolist (x acceptmons)
-        (destructuring-bind (name . decls) x
-          (fmt "public abstract void ~a(bool _accepted~{, ~a~});"
-	       name (decls2strs decls)))))))
+    (dolist (x acceptmons)
+      (destructuring-bind (name . decls) x
+	(fmt "protected virtual void AcceptanceMonitor~a(bool _accepted~{, ~a~}) { }"
+	     name (decls2strs decls))))))
 
 (defun write-csharp-allocate-accums (decls)
   (fmt "public void AllocateAccumulators()")
@@ -968,12 +987,13 @@
 	(1 (fmt "bool [] _assigned_~a = new bool[_x.~a.Length];" vstr vstr))
 	(2 (fmt "BMatrix _assigned_~a = new BMatrix(_x.~a.NBRows, _x.~a.NBCols);"
 		  vstr vstr vstr)))))
-  (let ((visitor-before-draw (fn (lhs) (write-assigned-test lhs dim-fct)))
+  (let ((wrd-stoch (fn (lhs rhs)
+		       (write-assigned-test lhs dim-fct)
+		       (write-rel-draw-stoch lhs rhs)))
 	(visitor-after-proposal
 	  (fn (prop-distr) (write-invariance-check outer-lets)))
 	(var2str (var2str-cv "_x." is-class-var)))
-    (write-rel-draw
-      rel nil visitor-before-draw visitor-after-proposal var2str)))
+    (write-rel-draw rel nil wrd-stoch visitor-after-proposal var2str)))
 
 (defun write-invariance-check (outer-lets)
   (dolist (x outer-lets)
@@ -1035,7 +1055,7 @@
 (defun write-test-acceptance-ratio-mh (outer-lets rel is-class-var dim-fct)
   (fmt "double _ljd0 = _x.LogJointDensity();")
   (let*((var2str (var2str-cv "_x." is-class-var))
-	(visitor-before-draw #'do-nothing)
+	(wrd-stoch #'write-rel-draw-stoch)
 	(lar (relation-mh-log-acceptance-ratio rel))
 	(vxform-old (var-xform-prefix "_old_"))
 	(vxform-new (var-xform-prefix "_new_"))
@@ -1070,8 +1090,7 @@
 	(fmt "var ~a = BMC.Copy(~a);"
 	     (variable->string (funcall vxform-old v))
 	     (variable->string v))))
-    (write-rel-draw
-      rel nil visitor-before-draw visitor-after-proposal var2str)))
+    (write-rel-draw rel nil wrd-stoch visitor-after-proposal var2str)))
 
 (defun write-csharp-log-joint-density (mdl)
   (let* ((excluded (vars-in-model mdl))
@@ -1172,15 +1191,15 @@
 
 (defun do-nothing (&rest args) nil)
 
-(defparameter *write-rel-draw-visitor-before-draw* #'do-nothing)
-(defparameter *write-rel-draw-visitor-after-proposal* #'do-nothing)
+(defparameter *write-rel-draw-stoch* nil)
+(defparameter *write-rel-draw-visitor-after-proposal* nil)
 
 (defun write-rel-draw (rel &optional
 			   (let-needs-brackets t)
-			   (visitor-before-draw #'do-nothing)
+			   (wrd-stoch #'write-rel-draw-stoch)
 			   (visitor-after-proposal #'do-nothing)
 			   (var2str #'default-variable->string))
-  (let ((*write-rel-draw-visitor-before-draw* visitor-before-draw)
+  (let ((*write-rel-draw-stoch* wrd-stoch)
 	(*write-rel-draw-visitor-after-proposal* visitor-after-proposal)
 	(*variable->string* var2str))
     (write-rel-draw-main rel let-needs-brackets)))
@@ -1188,7 +1207,7 @@
 (defun write-rel-draw-main (rel &optional (let-needs-brackets t))
   (adt-case relation rel
     ((stochastic lhs rhs)
-     (write-rel-draw-stoch lhs rhs))
+     (funcall *write-rel-draw-stoch* lhs rhs))
     ((block members)
      (mapc #'write-rel-draw-main members))
     ((if condition true-branch false-branch)
@@ -1227,7 +1246,6 @@
     (write-rel-draw-main body nil)))
 
 (defun write-rel-draw-stoch (lhs rhs)
-  (funcall *write-rel-draw-visitor-before-draw* lhs)
   (match-adt1 (distribution name args) rhs
     (cond
       ((is-scalar-distr name)
@@ -1337,8 +1355,7 @@
 	(if acceptmon
 	  (progn
 	    (flet ((report (accepted)
-		     (fmt "~a.~a(~a~{, ~a~});"
-			  (variable->string '|_acceptance_monitor|)
+		     (fmt "this.AcceptanceMonitor~a(~a~{, ~a~});"
 			  (car acceptmon)
 			  accepted
 			  (mapcar #'expr->string (cdr acceptmon)))))

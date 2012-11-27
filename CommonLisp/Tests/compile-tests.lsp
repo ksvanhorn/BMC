@@ -1924,14 +1924,11 @@ public DMatrix b;
       (ppstr (compile::gen-decls "Array vars" (sexpr->decls decls)))))
 
   (assert-equal
-"public abstract class AcceptanceMonitor
-{
-    public abstract void FOO(bool _accepted, double X);
-    public abstract void BAR(bool _accepted, int N, double Y);
-    public abstract void BAZ(bool _accepted);
-}
+"protected virtual void AcceptanceMonitorFOO(bool _accepted, double X) { }
+protected virtual void AcceptanceMonitorBAR(bool _accepted, int N, double Y) { }
+protected virtual void AcceptanceMonitorBAZ(bool _accepted) { }
 "
-    (ppstr (compile::write-csharp-acceptmons-class
+    (ppstr (compile::write-csharp-acceptmons-methods
 	     `((foo ,(sexpr->decl '(x real)))
 	       (bar ,(sexpr->decl '(n integer))
 		    ,(sexpr->decl '(y real)))
@@ -2497,11 +2494,11 @@ double _lar = SIGMA * (X - MU);
 
 bool _accepted = BMC.Accept(_lar);
 if (_accepted) {
-    _acceptance_monitor.AM(true);
+    this.AcceptanceMonitorAM(true);
 }
 else {
     X = _save_X;
-    _acceptance_monitor.AM(false);
+    this.AcceptanceMonitorAM(false);
 }
 "
    (ppstr
@@ -2521,11 +2518,11 @@ double _lar = SIGMA * (X - MU);
 
 bool _accepted = BMC.Accept(_lar);
 if (_accepted) {
-    _acceptance_monitor.AM(true, I, A * B);
+    this.AcceptanceMonitorAM(true, I, A * B);
 }
 else {
     X = _save_X;
-    _acceptance_monitor.AM(false, I, A * B);
+    this.AcceptanceMonitorAM(false, I, A * B);
 }
 "
    (ppstr
@@ -2658,37 +2655,62 @@ if (!BMC.Accept(_lar)) {
 
   (assert-equal
     (strcat-lines
-      "public void Draw() {"
+      "public void Draw() { Draw(new string[0]); }"
+      ""
+      "public void Draw(string[] _omit) {"
+      "    bool _omit_ALPHA = Array.IndexOf(_omit, \"ALPHA\") >= 0;"
+      "    bool _omit_BETA = Array.IndexOf(_omit, \"BETA\") >= 0;"
+      "    bool _omit_GAMMA = Array.IndexOf(_omit, \"GAMMA\") >= 0;"
+      ""
       "    <body>"
       "}")
-    (ppstr (compile::write-prior-draw (fn () (fmt "<body>")))))
-)
+    (ppstr (compile::write-prior-draw '(ALPHA BETA GAMMA) (fn () (fmt "<body>")))))
 
-#|
-(define-test dag-check-tests
+  (assert-equal 'baz
+    (compile::rellhs-main-var
+      (sexpr->rellhs 'baz)))
+  (assert-equal 'bar
+    (compile::rellhs-main-var
+      (sexpr->rellhs '(@ bar (+ i 1) (* j 3)))))
+  (assert-equal 'bop
+    (compile::rellhs-main-var
+      (sexpr->rellhs '(@ bop :all (:range m n) k))))
+
   (assert-equal
-   (strcat-lines
-     "private void UndefineAllVars() {"
-     "    for (int i1 = 1; i1 <= N; ++i1) {"
-     "        for (int i2 = 1; i2 <= 7; ++i2) {"
-     "            Y[i1 - 1, i2 - 1] = Double.NaN;"
-     "        }"
-     "    }"
-     "    M = BMC.InvalidInteger;"
-     "    R = Double.NaN;"
-     "    for (int i1 = 1; i1 <= N + 1; ++i1) {"
-     "        Z[i1 - 1] = BMC.InvalidInteger;"
-     "    }"
-     "}")
-   (ppstr (compile::write-undefine-all-vars
-     (sexpr->decls
-       '((y (realp n 7))
-	 (m integer)
-	 (r real)
-	 (z (integerp0 (+ n 1))))))))
-  ; TODO: DAG check tests
+    (strcat-lines
+      "if (!_omit_Y) {"
+      "    Y[I - 1] = BMC.DrawNorm(J + X[I - 1], Z[J - 1] * A[J - 1]);"
+      "}")
+    (ppstr
+      (compile::prior-draw-wrd-stoch
+        (sexpr->rellhs '(@ y i))
+	(sexpr->distr '(dnorm (+ j (@ x i)) (* (@ z j) (@ a j)))))))
+
+  (assert-equal
+    (strcat-lines
+      "if (!_omit_Z) {"
+      "    Z = BMC.DrawNorm(MU, A);"
+      "}")
+    (ppstr
+      (compile::prior-draw-wrd-stoch
+        (sexpr->rellhs 'z)
+	(sexpr->distr '(dnorm mu a)))))
+
+  (assert-equal
+    (strcat-lines
+      "if (!_omit_Y) {"
+      "    {"
+      "        var _idx1 = I;"
+      "        var _buf = BMC.Buffer(Y, _idx1 - 1, BMC.FullRange);"
+      "        BMC.DrawMVNorm(_buf, MU, SIGMA);"
+      "        BMC.CopyInto(Y, _idx1 - 1, BMC.FullRange, _buf);"
+      "    }"
+      "}")
+    (ppstr
+      (compile::prior-draw-wrd-stoch
+       (sexpr->rellhs '(@ y i :all))
+       (sexpr->distr '(dmvnorm mu sigma)))))
 )
-|#
 
 (defun sexpr->rels (se-list) (mapcar #'sexpr->rel se-list))
 

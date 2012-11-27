@@ -3,7 +3,7 @@
     (nresp integerp)
     (nvars integerp)
     (nlevels (integerp nvars))
-    (ucp (real nvars (- (vmax nlevels) 1)))
+    (ucp (realxn nvars (- (vmax nlevels) 1)))
     (mu_nu (real 3))
     (sigma_nu (realp 3))
     (sigma_mu_y_form realp)
@@ -24,6 +24,9 @@
   (:reqs
     (<= 3 nvars)
     (:quant qand k (1 nvars) (<= 3 (@ nlevels k)))
+    (:quant qand k (1 nvars)
+      (:quant qand lvl (1 (- (@ nlevels k) 1))
+        (is-real (@ ucp k lvl))))
     (:quant qand k (1 nvars)
       (:quant qand lvl (1 (- (@ nlevels k) 2))
         (< (@ ucp k lvl) (@ ucp k (+ 1 lvl)))))
@@ -82,7 +85,9 @@
     ; haloers
     (:for k (1 nvars)
       (:block
-        (~ (@ gamma k) (dnorm 0 (@ sigma_gamma k)))
+        (:if (= 1 k)
+	  (~ (@ gamma k) (dnorm-trunc 0 (@ sigma_gamma k) %infty- 0))
+          (~ (@ gamma k) (dnorm 0 (@ sigma_gamma k))))
         (~ (@ mu_x_halo k)(dnorm 0 (@ sigma_mu_x_halo k)))
         (~ (@ lambda_x_halo k)
            (dgamma (@ alpha_lambda_x_halo k) (@ beta_lambda_x_halo k)))))
