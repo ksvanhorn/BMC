@@ -72,4 +72,17 @@ baz
   (assert-equal '() (list->pair-list '()))
   (assert-equal '((a . 2)) (list->pair-list '(a 2)))
   (assert-equal '((a . b) (c . d) (5 . 3)) (list->pair-list '(a b c d 5 3)))
+
+  #+nil
+  (flet* ((leaf-every (pred x)
+	    (or (null x)
+		(and (atom x) (funcall pred x))
+		(and (consp x)
+		     (leaf-every pred (car x))
+		     (leaf-every pred (cdr x)))))
+	  (in-symbol-pkg (a) (eq (find-package 'symbols) (symbol-package a))))
+    (let ((x (with-input-from-string (is "(a (b c) ((d (e f)) g) h)")
+	       (utils::read-stream is))))
+      (assert-true (leaf-every #'in-symbol-pkg x)))
+    (assert-true (in-symbol-pkg (bmc-symb "not-predefined-anywhere"))))
 )

@@ -16,6 +16,10 @@
     :boolean
     :integer :integerp0 :integerp
     :realxn :realx :real :realp0 :realp
+    :@-all-type
+
+    ;; constructor for function types of form integer -> type
+    :int-map
 
     ;; predicates for scalar types
     :is-boolean :is-number :is-numberu :is-integeru
@@ -30,6 +34,7 @@
     :.= :.!= :.< :.<= :.> :.>= :.is-symm-pd
     
     ;; functions
+    :identity
     :@ :@-slice :@-rng :@-idx :vec :rmat :array-length :num-dims
     :abs-det :mv-gamma-fct :trace :quad :fac
     :+ :- :* :*! :/ :^ :neg :exp :log :tanh :max :min :vmax
@@ -39,7 +44,7 @@
     :@+ :@- :@* :@/ :$*
     :diag_mat :o* :o^2 :cons :cons-col :cons-row
 
-    ;; finite quantifiers
+    ;; finite quantifiers and associated constants
     :qand :qor :qmin :qmax :qnum :qsum :qprod :qprod! :qvec :q@sum :qmat
     :.qand :.qor
 
@@ -57,16 +62,17 @@
     ;; model symbols
     :~
 
-    ;; coordination
-    :i :i1 :k
+    ;; symbols used in quantifiers in prove package
+    :i :k
     ))
 
 (defpackage :utils
   (:use :cl)
-  (:export :flet* :starts-with :assoc-lookup :zip :strcat :strcat-lines
+  (:export :flet* :while :starts-with :assoc-lookup :zip :strcat :strcat-lines
 	   :read-file :int-range :is-list-of-length
+	   :has-duplicates :has-no-duplicates
 	   :list->pair-list :fn :dolist-inter
-	   :append-mapcar :fdebug :compound-symbol
+	   :append-mapcar :fdebug :compound-symbol :bmc-symb
 	   :n-symbols-not-in :symbol-not-in
 	   :indent :fmt :fmt-blank-line
 	   :*indent-level* :*indent-amount* :*fmt-ostream*))
@@ -75,18 +81,35 @@
   (:use :cl :utils)
   (:export :defadt :defadt1 :adt-case :match-adt1))
 
+(defpackage :lazy
+  (:use :cl)
+  (:export :lcdr :lcar :lcons :lappend :list->lazy :lazy->list))
+
 (defpackage :expr
   (:use :cl :symbols :adt :utils)
   (:export
-   :free-vars-in-expr :occurs-free
+   :free-vars-in-expr :occurs-free :rename-var
    :sexpr->expr :expr->string :is-scalar-index :is-slice-all :is-slice-range
-   :*convert-boolean-functions*
+   :*convert-boolean-functions* :is-let-expr :is-quant-expr
    :expr-call :expr-app :expr-var :expr-const :expr-lam
    :is-expr
    :is-expr-const :make-expr-const :expr-const-name
    :is-expr-variable :make-expr-variable :expr-variable-symbol
    :is-expr-apply :make-expr-apply :expr-apply-fct :expr-apply-args
    :is-expr-lambda :make-expr-lambda :expr-lambda-var :expr-lambda-body))
+
+(defpackage :type-inference
+  (:use :cl :utils :symbols :adt :lazy :expr)
+  (:export :bare-type :bare-type-scalar :bare-type-array :bare-type-int-map
+           :is-bare-type 
+	   :is-bare-type-scalar :is-bare-type-array :is-bare-type-int-map
+	   :make-bare-type-scalar :make-bare-type-array :make-bare-type-int-map
+	   :bare-type-scalar-stype
+	   :bare-type-array-elem-type :bare-type-array-num-dims
+	   :bare-type-int-map-return-type
+
+           :sexpr->bare-type :infer-type
+	   :var-type :no-var-types :add-var-type :assocs->env))
 
 (defpackage :model
   (:use :cl :symbols :adt :utils :expr)
@@ -156,7 +179,7 @@
   (:export :simplify-expr))
 
 (defpackage :compile
-  (:use :cl :mcimpl :model :expr :utils :adt :symbols)
+  (:use :cl :mcimpl :model :expr :utils :adt :symbols :type-inference)
   (:shadow :expr->string)
   (:export :compile-to-csharp :write-test-file :write-test-updates))
 

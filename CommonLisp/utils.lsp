@@ -10,6 +10,9 @@
 
 (defmacro flet* (defs &body body) `(labels ,defs ,@body))
 
+(defmacro while (test &body body)
+  `(loop while ,test do ,@body))
+
 (defmacro dolist-inter ((var lst) action between)
   (let ((past-first (gensym)))
     `(let ((,past-first nil))
@@ -30,6 +33,10 @@
 (defun is-list-of-length (n x)
   (or (and (= 0 n) (eq nil x))
       (and (consp x) (is-list-of-length (- n 1) (cdr x)))))
+
+(defun has-no-duplicates (x) (= (length x) (length (remove-duplicates x))))
+
+(defun has-duplicates (x) (/= (length x) (length (remove-duplicates x))))
 
 (defun zip (&rest lists) (apply #'mapcar #'list lists))
 
@@ -55,12 +62,18 @@
   (format nil "~{~a~%~}" args))
 
 (defun read-file (ifname)
-  (with-open-file (is ifname)
-    (let ((*read-default-float-format* 'long-float))
-      (read is))))
+  (with-open-file (is ifname) (read-stream is)))
+
+(defun read-stream (is)
+  (let ((*read-default-float-format* 'long-float)
+	(*package* (find-package 'symbols)))
+    (read is)))
 
 (defun fdebug (format &rest args)
-  (apply #'format t (strcat "~&" format "~%") args))
+  (apply #'format *standard-output* (strcat "~&" format "~%") args)
+  (finish-output *standard-output*))
+
+(defun bmc-symb (s) (intern s))
 
 (defun compound-symbol (x y)
   (intern (format nil "~a-~a" x y)))
@@ -105,5 +118,3 @@
   (format *fmt-ostream* "~%"))
 
 (defparameter *fmt-ostream* *standard-output*)
-
-; TODO: add def for common pattern (apply #'append (mapcar <fct> <list>))

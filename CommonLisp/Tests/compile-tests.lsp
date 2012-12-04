@@ -1,5 +1,5 @@
 (defpackage :compile-tests
-  (:use :cl :lisp-unit :compile :mcimpl :model :expr :symbols
+  (:use :cl :lisp-unit :compile :mcimpl :model :expr :symbols :type-inference
 	:utils :testing-utilities))
 (in-package :compile-tests)
 
@@ -2847,6 +2847,388 @@ public void Update_BAZ()
   (assert-equalp
     (expr-const 1)
     (compile::rel->pdf (make-relation-skip)))
+)
+
+(define-test lift-let-tests
+  (macrolet ((expect (enew &key ((:from e)))
+	       `(assert-equalp
+		  ,(sexpr->expr enew)
+		  (compile::expand-true-pred ,(sexpr->expr e)))))
+    (expect (:lambda i true) :from %true-pred)
+    (expect (+ 1 x) :from (+ 1 x))
+    (expect (:lambda v (* v v)) :from (:lambda v (* v v)))
+    (expect (:quant qsum i (m n) true (@ a i))
+	    :from
+	    (:quant qsum i (m n) (@ a i)))
+  )
+  (macrolet ((expect (enew &key ((:from e)))
+	       `(assert-equalp
+		  ,(sexpr->expr enew)
+		  (compile::lift-let ,(sexpr->expr e)))))
+
+    (expect v :from v)
+
+    (expect 1 :from 1)
+
+    (expect (+ v 3) :from (+ v 3))
+
+    (expect (! f 3) :from (! f 3))
+
+    (expect (:lambda v (* v v)) :from (:lambda v (* v v)))
+
+    (expect (:let (a (+ x 3)) (* a a))
+	    :from
+	    (:let (a (+ x 3)) (* a a)))
+
+    (expect (:let (x (^1/2 y)) (* (+ a b) (^2 (- z x))))
+	    :from
+	    (* (+ a b) (:let (x (^1/2 y)) (^2 (- z x)))))
+
+    (expect (:let (x (^2 y))
+	      (:let (z (- u v))
+                (/ (+ 3 x) (+ 2 z))))
+	    :from
+	    (/ (:let (x (^2 y)) (+ 3 x))
+	       (:let (z (- u v)) (+ 2 z))))
+
+    (expect (:let (a 1)
+	      (:let (b 2)
+		(= 3 (+ a b))))
+	    :from
+	    (= 3 (:let (a 1) (:let (b 2) (+ a b)))))
+
+    (expect (:let (z (^ y 3))
+	      (:let (a (+ (* u v) (/ (+ c z) z)))
+		(* a a)))
+	    :from
+	    (:let (a (+ (* u v)
+			(:let (z (^ y 3)) (/ (+ c z) z))))
+	      (* a a)))
+
+    (expect (:let (z (^ y 3))
+	      (:let (a (+ (* u v) (/ (+ c z) z)))
+	        (:let (b (- a v 1))
+        	  (^ a b))))
+	    :from
+	    (:let (a (+ (* u v)
+			(:let (z (^ y 3)) (/ (+ c z) z))))
+	      (:let (b (- a v 1))
+		(^ a b))))
+
+    (expect (:lambda (v)
+	      (:let (b (* a v))
+                (+ a (* b b))))
+	    :from
+	    (:lambda (v) (+ a (:let (b (* a v)) (* b b))))))
+
+  ; x names two different bound let variables
+  (assert-error 'error
+    (compile::lift-let
+      #e(+ (:let (x 3) (* x x)) (:let (x u) (+ u u)))))
+
+  ; x names both a bound and unbound variable
+  (assert-error 'error
+    (compile::lift-let
+      #e(+ (:let (x 3) (* x x)) (+ x u))))
+
+  (macrolet ((expect (result &key ((:from arg)))
+	       `(assert-equalp ,(sexpr->expr result)
+			       (compile::rename-duplicate-vars
+				 ,(sexpr->expr arg)))))
+    (expect x :from x)
+    (expect 3 :from 3)
+    (expect (+ u v) :from (+ u v))
+
+    (expect (+ (:let (x 3) (* x x)) (:let (y 4) (exp y)))
+	    :from
+	    (+ (:let (x 3) (* x x)) (:let (y 4) (exp y))))
+
+    (expect (+ (:let (x 3) (* x x)) (:let (x1 4) (exp x1)))
+	    :from
+	    (+ (:let (x 3) (* x x)) (:let (x 4) (exp x))))
+
+    (expect (+ (:let (x 3) (* x x)) (:let (x2 4) (+ x2 x1)))
+	    :from
+	    (+ (:let (x 3) (* x x)) (:let (x 4) (+ x x1))))
+
+    (expect (+ (:let (x 3) (* x1 x)) (:let (x2 4) (exp x2)))
+	    :from
+	    (+ (:let (x 3) (* x1 x)) (:let (x 4) (exp x))))
+
+    (expect (+ x (:let (x1 3) x1) (:let (y1 4) y1) y)
+	    :from
+	    (+ x (:let (x 3) x) (:let (y 4) y) y))
+
+    (expect (+ (:quant qsum i (m n) (@ v i))
+	       (:quant qprod i1 (m n) (< (@ x i1) 3) (@ w i1)))
+	    :from
+            (+ (:quant qsum i (m n) (@ v i))
+	       (:quant qprod i (m n) (< (@ x i) 3) (@ w i)))))
+
+  (macrolet ((expect (enew &key ((:from e)))
+	       `(assert-equalp
+                  ,(sexpr->expr enew)
+                  (compile::lettify-quant ,(sexpr->expr e)))))
+
+    (expect h :from h)
+    (expect 3 :from 3)
+    (expect (* a (^2 b)) :from (* a (^2 b)))
+
+    (expect (:let (x (* a a)) (+ x y))
+	    :from
+	    (:let (x (* a a)) (+ x y)))
+
+    (expect (:let (q (:quant qsum i (m n) true (@ a i))) q)
+	    :from
+	    (:quant qsum i (m n) true (@ a i)))
+
+    (expect (+ x (:let (q (:quant qsum i (m n) true (@ a i))) q))
+	    :from
+	    (+ x (:quant qsum i (m n) true (@ a i))))
+
+    (expect (:let (x 3) (:let (q (:quant qand i (j k) true (< (@ a i) x))) q))
+	    :from
+	    (:let (x 3) (:quant qand i (j k) true (< (@ a i) x))))
+
+    (expect (:let (x 3) (or w (:let (q (:quant qand i (j k) true (< (@ a i) x)))
+				 q)))
+	    :from
+	    (:let (x 3) (or w (:quant qand i (j k) true (< (@ a i) x)))))
+
+    (expect (:let (x (:quant qprod i (m n) true (@ a i))) (^ x x))
+	    :from
+	    (:let (x (:quant qprod i (m n) true (@ a i))) (^ x x)))
+
+    (expect (:let (x (* a (:let (q (:quant qsum i (m n) true (@ a i))) q)))
+	       (+ x x))
+	    :from
+	    (:let (x (* a (:quant qsum i (m n) true (@ a i))))
+	       (+ x x)))
+
+    (expect (:let (q (:quant qsum i (m n) true
+		       (+ (:let (q (:quant qprod j (a b) true (@ c i j))) q)
+			  (@ d i))))
+		  q)
+	    :from
+	    (:quant qsum i (m n) true
+              (+ (:quant qprod j (a b) true (@ c i j))
+		 (@ d i))))
+
+    (expect (* m
+	       (:let (q (:quant qsum i (m n) true
+	                  (+ (:let (q (:quant qprod j (a b) true (@ c i j))) q)
+			     (@ d i))))
+		 q))
+	    :from
+	    (* m (:quant qsum i (m n) true
+		   (+ (:quant qprod j (a b) true (@ c i j))
+		      (@ d i)))))
+
+    ; let var is in scope only in body, not in RHS of definition
+    (expect (+ v (:let (q (:quant qand i (q r) true (@ a i))) q))
+	    :from
+	    (+ v (:quant qand i (q r) true (@ a i))))
+
+    ; let var is in scope only in body, not in RHS of definition
+    (expect (+ v (:let (q (:quant qand i (r q) true (@ a i))) q))
+	    :from
+	    (+ v (:quant qand i (r q) true (@ a i))))
+
+    ; let var is in scope only in body, not in RHS of definition
+    (expect (+ v (:let (q (:quant qand i (m n) true (@ q i))) q))
+	    :from
+	    (+ v (:quant qand i (m n) true (@ q i))))
+
+    (expect (+ (:let
+                 (q (:quant qsum i (m n) true
+                      (:let
+                        (q (:quant qprod j (mm nn) true
+			     (* (@ b i j)
+                                (:let (q (:quant qmax k (1 3) true (@ v i j k)))
+                                  q))))
+			q)))
+		 q)
+	       y)
+	    :from
+	    (+ (:quant qsum i (m n) true
+		 (:quant qprod j (mm nn) true
+		    (* (@ b i j) (:quant qmax k (1 3) true (@ v i j k)))))
+	       y))
+  )
+
+  ; integration test
+  (macrolet ((expect (enew &key ((:from e)))
+	       `(assert-equalp
+                  ,(sexpr->expr enew)
+                  (compile::lift-let-and-quant 'lhs ,(sexpr->expr e)))))
+    (expect (:let (lhs1 (^2 a))
+              (* u (/ lhs1 b)))
+	    :from
+	    (* u (:let (lhs (^2 a)) (/ lhs b))))
+    (expect (:let (q (:quant qsum j (m n) true (@ a j))) q)
+	    :from
+	    (:quant qsum j (m n) (@ a j)))
+    (expect (:let (q1 (:quant qsum i (m n) true
+                        (:let (q2 (:quant qprod j (mm nn) true (@ a i j)))
+                          q2)))
+	    (:let (y1 (:quant qmax i1 (beg end) (@ b i1) (@ p i1)))
+            (:let (q3 (:quant qmin j1 (foo bar) true (+ (@ baz j1) (@ bop j1))))
+            (+ x
+	       (/ q 3)
+	       q1
+	       (* y1 q3)
+	       (^2 y)))))
+	    :from
+	    (+ x
+	       (/ q 3)
+	       (:quant qsum i (m n)
+		 (:quant qprod j (mm nn) (@ a i j)))
+	       (:let (y (:quant qmax i (beg end) (@ b i) (@ p i)))
+		 (* y (:quant qmin j (foo bar) (+ (@ baz j) (@ bop j)))))
+	       (^2 y))))
+)
+
+(define-test write-let-assignment-tests
+  (loop for (typ . str) in
+	'((#trealxn . "double")
+	  (#t(realxn 1) . "double[]")
+	  (#t(realxn 2) . "DMatrix")
+	  (#tinteger . "int")
+	  (#t(integer 1) . "int[]")
+	  (#t(integer 2) . "IMatrix")
+	  (#tboolean . "bool")
+	  (#t(boolean 1) . "bool[]")
+	  (#t(boolean 2) . "BMatrix"))
+    do
+    (assert-equal str (compile::bare-type->string typ)))
+
+  (let ((env (assocs->env '((z . #trealxn) (zi . #tinteger)
+			    (x . #trealxn) (xi . #tinteger)
+			    (y . #trealxn) (yi . #tinteger)
+			    (a . #trealxn) (ai . #tinteger)
+			    (b . #trealxn) (bi . #tinteger)
+			    (xvec . #t(realxn 1))
+			    (xivec . #t(integer 1))
+			    (xmat . #t(realxn 2))
+			    (zmat . #t(realxn 2))
+			    (i . #tinteger) (j . #tinteger)))))
+    (macrolet ((expect (var expr arrow &body strings)
+	         (assert (eq '=> arrow))
+	         `(assert-equal
+		   (strcat-lines ,@strings)
+		   (ppstr
+		    (compile::write-let-assignment
+		     ',var (sexpr->expr ',expr) env)))))
+      (expect foo 1 =>
+	      "int FOO = 1;")
+
+      (expect |_tmp| (+ z (* x y)) =>
+	      "double _tmp = Z + X * Y;")
+
+      (expect bar (+ y (:let (v (+ a b)) (* v v))) =>
+	      "double BAR;"
+	      "{"
+	      "    double V = A + B;"
+	      "    BAR = Y + V * V;"
+	      "}")
+
+      (expect baz (+ yi (:let (v (+ ai bi)) (* v v))) =>
+	      "int BAZ;"
+	      "{"
+	      "    int V = AI + BI;"
+	      "    BAZ = YI + V * V;"
+	      "}")
+
+      (expect foo (:let (yi (* a b)) (* 2.0 yi)) =>
+	      "double FOO;"
+	      "{"
+	      "    double YI = A * B;"
+              "    FOO = 2.0e+0 * YI;"
+              "}")
+
+      (expect bar (:let (i (+ xi 3))
+                    (:let (j (- yi 2))
+		      (* (@ xmat i i) (@ zmat j j)))) =>
+	     "double BAR;"
+	     "{"
+             "    int I = XI + 3;"
+             "    int J = YI - 2;"
+             "    BAR = XMAT[I - 1, I - 1] * ZMAT[J - 1, J - 1];"
+             "}")
+
+      (expect baz (:quant qsum idx ((+ ai 1) bi) (@ xivec idx)) =>
+      "int BAZ;"
+      "{"
+      "    int Q = 0;"
+      "    int _last_IDX = BI;"
+      "    for (int IDX = AI + 1; IDX <= _last_IDX; ++IDX) {"
+      "        Q = Q + XIVEC[IDX - 1];"
+      "    }"
+      "    BAZ = Q;"
+      "}")
+
+      (expect foo (:quant qsum idx (ai bi)
+                    (< 0.0 (@ xvec idx)) (@ xivec idx)) =>
+      "int FOO;"
+      "{"
+      "    int Q = 0;"
+      "    int _last_IDX = BI;"
+      "    for (int IDX = AI; IDX <= _last_IDX; ++IDX) {"
+      "        if (0.0e+0 < XVEC[IDX - 1]) {"
+      "            Q = Q + XIVEC[IDX - 1];"
+      "        }"
+      "    }"
+      "    FOO = Q;"
+      "}")
+
+      (expect bar (:quant qprod idx (1 ai) (@ xvec idx)) =>
+      "double BAR;"
+      "{"
+      "    double Q = 1.0e+0;"
+      "    int _last_IDX = AI;"
+      "    for (int IDX = 1; IDX <= _last_IDX; ++IDX) {"
+      "        Q = Q * XVEC[IDX - 1];"
+      "    }"
+      "    BAR = Q;"
+      "}")
+
+      (expect baz
+	      (:let (tmp1 (* x y))
+		(+ (:quant qsum i (1 ai)
+                     (:quant qsum j (xi yi)
+                       (@ xmat i j)))
+		   (:quant qprod i (2 bi)
+		     (:let (tmp1 (@ xvec i))
+		       (* tmp1 tmp1)))
+		   tmp1))
+	      =>
+      "double BAZ;"
+      "{"
+      "    double TMP1 = X * Y;"
+      "    double Q = 0.0e+0;"
+      "    int _last_I = AI;"
+      "    for (int I = 1; I <= _last_I; ++I) {"
+      "        {"
+      "            double Q1 = 0.0e+0;"
+      "            int _last_J = YI;"
+      "            for (int J = XI; J <= _last_J; ++J) {"
+      "                Q1 = Q1 + XMAT[I - 1, J - 1];"
+      "            }"
+      "            Q = Q + Q1;"
+      "        }"
+      "    }"
+      "    double Q2 = 1.0e+0;"
+      "    int _last_I1 = BI;"
+      "    for (int I1 = 2; I1 <= _last_I1; ++I1) {"
+      "        {"
+      "            double TMP11 = XVEC[I1 - 1];"
+      "            Q2 = Q2 * (TMP11 * TMP11);"
+      "        }"
+      "    }"
+      "    BAZ = Q + Q2 + TMP1;"
+      "}")
+; TODO: more quantifiers
+      ))
 )
 
 ; TODO: write and test code to verify DAG

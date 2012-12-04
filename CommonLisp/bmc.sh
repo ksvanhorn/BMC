@@ -4,6 +4,7 @@
 (load "symbols")
 (load "adt")
 (load "utils")
+(load "bare-types")
 (load "expr")
 (load "model")
 (load "mcimpl")

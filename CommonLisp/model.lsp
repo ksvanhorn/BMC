@@ -795,7 +795,7 @@
 	 (push idxvar result)))))
 
 (defun var-symbol (pfx n)
-  (intern (strcat pfx (write-to-string n)) "KEYWORD"))
+  (bmc-symb (strcat pfx (write-to-string n)) "KEYWORD"))
 
 (defun fully-free-of (var expr)
   (cond

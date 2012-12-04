@@ -5,8 +5,6 @@
 
 (defun field-decl (x) `(,x nil :read-only t))
 
-(defun has-no-duplicates (x) (= (length x) (length (remove-duplicates x))))
-
 (defun check-defadt-subtype (base-type x)
   (unless (and (consp x) (every #'symbolp x))
     (error "In (defadt ~W ... ~W ...): ~

@@ -468,3 +468,50 @@
       (assert-true (occurs-free 'v e)))
     (dolist (e (mapcar #'sexpr->expr no))
       (assert-false (occurs-free 'v e)))))
+
+(define-test rename-var-tests
+  (assert-equalp
+    #e1
+    (rename-var 'x 'y #e1))
+
+  (assert-equalp
+    #e z
+    (rename-var 'x 'y #e z))
+
+  (assert-equalp
+    #e y
+    (rename-var 'x 'y #e x))
+
+  (assert-equalp
+    #e(+ a b)
+    (rename-var 'x 'y #e(+ a b)))
+
+  (assert-equalp
+    #e(+ a xn)
+    (rename-var 'xo 'xn #e(+ a xo)))
+
+  (assert-equalp
+    #e(+ xn b)
+    (rename-var 'xo 'xn #e(+ xo b)))
+
+  (assert-equalp
+    #e(:lambda v (* v v))
+    (rename-var 'a 'b #e(:lambda v (* v v))))
+    
+  (assert-equalp
+    #e(:lambda a (* a x))
+    (rename-var 'a 'b #e(:lambda a (* a x))))
+    
+  (assert-equalp
+    #e(:lambda a (* a y))
+    (rename-var 'x 'y #e(:lambda a (* a x))))
+
+  (assert-equalp
+    #e(+ x (* y (^2 x)))
+    (rename-var 'x 'x #e(+ x (* y (^2 x)))))
+
+  (assert-equalp
+    #e(+ (* 3 y) (:quant qsum i (m (* 2 y)) (@ a y i)))
+    (rename-var 'x 'y
+      #e(+ (* 3 x) (:quant qsum i (m (* 2 x)) (@ a x i)))))
+)

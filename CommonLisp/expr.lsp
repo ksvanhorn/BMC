@@ -41,6 +41,24 @@
     ((apply fct args)
      (some (lambda (x) (occurs-free var-symbol x)) args))))
 
+(defun rename-var (old-var new-var e)
+  (when (eq old-var new-var)
+    (return-from rename-var e))
+  (flet* ((subst (x)
+	    (adt-case expr x
+	      ((const name) x)
+	      ((variable symbol)
+	       (if (eq old-var symbol)
+		 (expr-var new-var)
+		 x))
+	      ((apply fct args)
+	       (expr-app fct (mapcar #'subst args)))
+	      ((lambda var body)
+	       (if (eq old-var var)
+		 x
+		 (expr-lam var (subst body)))))))
+    (subst e)))
+
 ;;; Converting s-expressions to exprs
 
 (defun xformer-sexpr->expr (stream subchar arg)
@@ -296,10 +314,28 @@
 
 (defun convert-function-symbol (s)
   (if (and *convert-boolean-functions* (member s +boolean-functions+))
-      (intern (strcat "." (symbol-name s)))
+      (bmc-symb (strcat "." (symbol-name s)))
       s))
 (defparameter *convert-boolean-functions* nil)
 (defconstant +boolean-functions+
   '(= != < <= > >= and or not => <=> qand qor is-symm-pd
     is-boolean is-integer is-integerp0 is-integerp
     is-realxn is-realx is-real is-realp0 is-realp))
+
+(defun is-let-expr (e)
+  (and (is-expr-apply e)
+       (eq '! (expr-apply-fct e))
+       (let ((args (expr-apply-args e)))
+	 (and (is-list-of-length 2 args)
+	      (destructuring-bind (f val) args
+                (and (is-expr-lambda f)
+		     (list (expr-lambda-var f) val (expr-lambda-body f))))))))
+
+(defun is-quant-expr (e)
+  (adt-case expr e
+    ((apply fct args)
+     (and (is-fquant-symbol fct)
+	  (<= 4 (length args) 5)
+	  (every #'is-expr-lambda (subseq args 2 4))
+	  (cons fct args)))
+    (otherwise nil)))
