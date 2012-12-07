@@ -22,13 +22,14 @@
     .is-realxn .is-realx .is-real .is-realp0 .is-realp
     = != < <= > >= is-symm-pd
     .= .!= .< .<= .> .>= .is-symm-pd quad fac
-    @ @-slice vec rmat array-length num-dims abs-det mv-gamma-fct trace
+    @ @-slice @-rng @-idx int real
+    vec rmat array-length num-dims abs-det mv-gamma-fct trace
     + - * *! / ^ neg exp log tanh max min vmax
     sum dot inv inv-pd if-then-else ! gamma-fct length
     ^1/2 ^2 ^-1 ^-1/2 ^-2
     @^1/2 @^2 @^-1 @^-1/2 @^-2
     @+ @- @* @/ $*
-    diag_mat o* o^2 cons cons-col cons-row
+    diag_mat o* o^2 cons cons-col cons-row real-zero-arr
     ddirch-density dcat-density dinterval-density
     dnorm-density dmvnorm-density dgamma-density dwishart-density
     ddirch-log-density dcat-log-density dinterval-log-density

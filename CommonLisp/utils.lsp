@@ -118,3 +118,15 @@
   (format *fmt-ostream* "~%"))
 
 (defparameter *fmt-ostream* *standard-output*)
+
+; From Paul Graham's book _On Lisp_
+(defmacro alambda (parms &body body)
+  `(flet* ((self ,parms ,@body))
+     #'self))
+
+(defun rethrow-error (x format-control &rest format-args)
+  (let* ((format-control-x (simple-condition-format-control x))
+	 (format-args-x (simple-condition-format-arguments x))
+	 (full-format-control (strcat format-control format-control-x))
+	 (full-format-args (append format-args format-args-x)))
+    (apply #'error full-format-control full-format-args)))

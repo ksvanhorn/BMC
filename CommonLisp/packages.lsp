@@ -16,7 +16,7 @@
     :boolean
     :integer :integerp0 :integerp
     :realxn :realx :real :realp0 :realp
-    :@-all-type
+    :@-all-type :@-rng-type :@-idx-type
 
     ;; constructor for function types of form integer -> type
     :int-map
@@ -34,7 +34,7 @@
     :.= :.!= :.< :.<= :.> :.>= :.is-symm-pd
     
     ;; functions
-    :identity
+    :identity :int #| real |#
     :@ :@-slice :@-rng :@-idx :vec :rmat :array-length :num-dims
     :abs-det :mv-gamma-fct :trace :quad :fac
     :+ :- :* :*! :/ :^ :neg :exp :log :tanh :max :min :vmax
@@ -42,7 +42,7 @@
     :^1/2 :^2 :^-1 :^-1/2 :^-2
     :@^1/2 :@^2 :@^-1 :@^-1/2 :@^-2
     :@+ :@- :@* :@/ :$*
-    :diag_mat :o* :o^2 :cons :cons-col :cons-row
+    :diag_mat :o* :o^2 :cons :cons-col :cons-row :real-zero-arr
 
     ;; finite quantifiers and associated constants
     :qand :qor :qmin :qmax :qnum :qsum :qprod :qprod! :qvec :q@sum :qmat
@@ -75,7 +75,8 @@
 	   :append-mapcar :fdebug :compound-symbol :bmc-symb
 	   :n-symbols-not-in :symbol-not-in
 	   :indent :fmt :fmt-blank-line
-	   :*indent-level* :*indent-amount* :*fmt-ostream*))
+	   :*indent-level* :*indent-amount* :*fmt-ostream*
+	   :alambda :self :rethrow-error))
 
 (defpackage :adt
   (:use :cl :utils)

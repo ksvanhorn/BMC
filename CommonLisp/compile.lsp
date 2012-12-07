@@ -205,6 +205,13 @@
 	       (true-branch (expr->string (second args)))
 	       (false-branch (expr->string (third args))))
 	   (format nil "(~a ? ~a : ~a)" test true-branch false-branch)))
+	((eq 'real-zero-arr fct)
+	 (case (length args)
+	       (1 (format nil "new double[~a]" (expr->string (car args))))
+	       (2 (format nil "new DMatrix(~a, ~a)"
+			  (expr->string (first args))
+			  (expr->string (second args))))
+	       (otherwise (error "Unimplemented case in fexpr->string."))))
 	(t
 	 (format nil "~a(~{~a~^, ~})"
 		 (fct-name fct) (mapcar #'expr->string args)))))
@@ -260,6 +267,8 @@
   '(
     (and . "&&")
     (array-length . "BMC.Length")
+    (int . "Convert.ToInt32")
+    (real . "Convert.ToDouble")
     (cons . "BMC.Cons")
     (cons-col . "BMC.ConsCol")
     (cons-row . "BMC.ConsRow")
@@ -457,10 +466,18 @@
 			      (write-rel-draw r t #'prior-draw-wrd-stoch)))))
     (write-prior-draw vars prior-draw-body))
   (fmt-blank-line)
-  (write-csharp-updates (mcimpl-updates impl))
+  (let ((*env* (initial-environment mdl impl)))
+    (fdebug "*env*: ~a" *env*)
+    (write-csharp-updates (mcimpl-updates impl)))
   (fmt-blank-line)
   ; ... more ...
 )
+
+(defparameter *env* nil)
+
+(defmacro extend-env (var typ &body body)
+  `(let ((*env* (and *env* (add-var-type *env* ,var ,typ))))
+     ,@body))
 
 (defun prior-draw-wrd-stoch (lhs rhs)
   (let ((lhs-var-str (variable->string (rellhs-main-var lhs))))
@@ -894,7 +911,9 @@
   (fmt-blank-line)
   (write-test-is-valid-update class-name update-name rel is-class-var dim-fct)
   (fmt-blank-line)
-  (write-test-acceptance-ratio class-name update-name rel is-class-var dim-fct))
+  (let ((*env* (initial-environment mdl impl)))
+    (write-test-acceptance-ratio
+      class-name update-name rel is-class-var dim-fct)))
 
 (defun write-test-update-main (class-name update-name)
   (fmt "public static void TestUpdate_~a(~a x, double tol)"
@@ -1233,12 +1252,19 @@
 
 (defun write-rel-draw-let (let-defs body needs-brackets)
   (bracket-if needs-brackets
-    (dolist (x let-defs)
-      (destructuring-bind (var . val) x
-        (fmt "var ~a = ~a;"
-	     (variable->string var)
-	     (expr->string (assignable-expr val)))))
-    (write-rel-draw-main body nil)))
+    (let ((new-env *env*))
+      (dolist (x let-defs)
+	(destructuring-bind (var . val) x
+	  (if new-env
+	    (progn
+	      (write-let-assignment var val new-env)
+	      (setf new-env
+		    (add-var-type new-env var (infer-type val new-env))))
+	    (fmt "var ~a = ~a;"
+		 (variable->string var)
+		 (expr->string (assignable-expr val))))))
+      (let ((*env* new-env))
+	(write-rel-draw-main body nil)))))
 
 (defun write-rel-draw-stoch (lhs rhs)
   (match-adt1 (distribution name args) rhs
@@ -1324,16 +1350,19 @@
     (fmt "for (int ~a = ~a; ~a; ++~a) {"
 	 var-str lo-str term-str var-str)
     (bracket-end
-      (write-rel-draw-main body nil))))
+      (extend-env var #tinteger
+	(write-rel-draw-main body nil)))))
 
 (defun write-rel-draw-mh (lets prop-distr acceptmon log-acc-ratio
 			  let-needs-brackets)
   (bracket-if let-needs-brackets
     (dolist (d lets)
       (destructuring-bind (v . val) d
-        (fmt "var ~a = ~a;"
-	     (variable->string v)
-	     (expr->string (assignable-expr val)))))
+        (if *env*
+	  (write-let-assignment v val *env*)
+	  (fmt "var ~a = ~a;"
+	       (variable->string v)
+	       (expr->string (assignable-expr val))))))
     (if (equalp (expr-const 0) log-acc-ratio)
       (progn
 	(write-rel-draw-main prop-distr t)
@@ -1366,7 +1395,9 @@
 	     (write-mh-restores prop-distr))))))))
 
 (defun write-lar (log-acc-ratio)
-  (fmt "double _lar = ~a;" (expr->string log-acc-ratio)))
+  (if *env*
+    (write-let-assignment (bmc-symb "_lar") log-acc-ratio *env)
+    (fmt "double _lar = ~a;" (expr->string log-acc-ratio))))
 
 (defun write-mh-saves (prop-distr)
   (flet ((f (lhs-str sav-str)
@@ -1780,7 +1811,10 @@
 (defun write-let (val-type var val env)
   (let ((quant-expansion (is-quant-expr val)))
     (if quant-expansion
-      (write-let-quant val-type var quant-expansion env)
+      (destructuring-bind (fct . args) quant-expansion
+	(if (reduction-params fct val-type)
+	  (write-let-quant val-type var fct args env)
+	  (write-let-simple val-type var val)))
       (write-let-simple val-type var val))))
 
 (defun write-let-simple (val-type var val)
@@ -1792,16 +1826,26 @@
 ;;; REQUIRE: all variables in fct-and-args are distinct from each other
 ;;; and from var.
 ;;;
-(defun write-let-quant (val-type var fct-and-args env)
-  (destructuring-bind (fct lo hi filter body . maybe-shape) fct-and-args
+(defun write-let-quant (val-type var fct args env)
+  (destructuring-bind (lo hi filter body . maybe-shape) args
     (let* ((var-str (variable->string var))
 	   (idx-var (expr-lambda-var filter))
 	   (idx-var-str (variable->string idx-var))
 	   (filter-body (expr-lambda-body filter))
 	   (body-body (expr-lambda-body body))
 	   (tmp (reduction-params fct val-type))
-	   (init-val (cdr tmp))
-	   (reduction (car tmp)))
+	   (reduction (car tmp))
+	   (init-val (let ((val (cadr tmp)))
+		       (cond ((is-fct-symbol val)
+			      (expr-app val maybe-shape))
+			     ((is-expr val)
+			      val)
+			     (t (error "Bad initial value in reduction for ~a."
+				       fct)))))			     
+	   (xform-fct (cddr tmp))
+	   (xform (if xform-fct
+		    (lambda (x) (expr-call xform-fct x))
+		    #'identity)))
       (fmt "~a ~a = ~a;"
 	   (bare-type->string val-type) var-str (expr->string init-val))
       (fmt "int _last_~a = ~a;" idx-var-str (expr->string hi))
@@ -1813,7 +1857,7 @@
        (flet ((write-body ()
 		(write-let-assignment
 		  var
-		  (expr-call reduction (expr-var var) body-body)
+		  (expr-call reduction (expr-var var) (funcall xform body-body))
 		  (add-var-type (add-var-type env var val-type)
 				idx-var #tinteger)
 		  t)))
@@ -1830,11 +1874,14 @@
     (otherwise nil)))
 
 (let (ht)
-  (defun reduction-params (fct val-type)
+  (defun init-reduction-params ()
     (when (null ht)
-      (setf ht (create-reduction-params)))
+      (setf ht (create-reduction-params))))
+  (defun reduction-params (fct val-type &key (optional nil))
+    (init-reduction-params)
     (or (gethash (cons fct val-type) ht)
-	(error "No reduction params found for (~a, ~a)." fct val-type))))
+	(and optional
+	     (error "No reduction params found for (~a, ~a)." fct val-type)))))
 
 (defun create-reduction-params ()
   (let ((ht (make-hash-table :test #'equalp)))
@@ -1843,10 +1890,33 @@
     ht))
 
 (defparameter *reduction-params*
-  '(((qsum . #tinteger) . (+ . #e0))
-    ((qsum . #trealxn) . (+ . #e0.0))
-    ((qprod . #tinteger) . (* . #e1))
-    ((qprod . #trealxn) . (* . #e1.0))))
+  '(((qsum . #tinteger) . (+ #e0))
+    ((qsum . #trealxn) . (+ #e0.0))
+    ((qprod . #tinteger) . (* #e1))
+    ((qprod . #trealxn) . (* #e1.0))
+    ((qnum . #tinteger) . (+ #e0 . int))
+    ((q@sum . #t(realxn 1)). (@+ real-zero-arr))))
+
+(defun initial-environment (mdl impl)
+  (assocs->env (initial-environment-assocs mdl impl)))
+
+(defun initial-environment-assocs (mdl impl)
+  (let ((args (model-args mdl))
+	(vars (model-vars mdl))
+	(parms (mcimpl-parameters impl)))
+    (mapcar #'decl->assoc (append args vars parms))))
+
+(defun decl->assoc (d)
+  (match-adt1 (decl var typ) d
+    (cons
+      var
+      (adt-case vtype typ
+	((scalar stype)
+	 (make-bare-type-scalar :stype (base-type stype)))
+	((array elem-type dims)
+	 (make-bare-type-array
+	   :elem-type (base-type elem-type)
+	   :num-dims (length dims)))))))
 
 #|
 (defun expr-dim (x var-dims)

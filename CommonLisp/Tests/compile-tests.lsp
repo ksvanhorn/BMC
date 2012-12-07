@@ -2255,15 +2255,18 @@ protected virtual void AcceptanceMonitorBAZ(bool _accepted) { }
     (ppstr (compile::write-rel-draw
 	     (sexpr->rel '(~ (@ x :all (:range lo hi)) (dwishart nu W))))))  
 
-  (assert-equal
-    (strcat-lines
+  (let ((compile::*env* (assocs->env '((|lambda| . #trealxn)))))
+    (assert-equal
+     (strcat-lines
       "{"
-      "    var sigma = alpha / Math.Sqrt(lambda);"
+      "    double alpha = 4.0e+0;"
+      "    double sigma = alpha / Math.Sqrt(lambda);"
       "    x = BMC.DrawNorm(0, sigma);"
       "}")
-    (ppstr (compile::write-rel-draw
-	     (sexpr->rel '(:let (|sigma| (/ |alpha| (^1/2 |lambda|)))
-			    (~ |x| (dnorm 0 |sigma|)))))))
+     (ppstr (compile::write-rel-draw
+	     (sexpr->rel '(:let (|alpha| 4.0)
+                          (:let (|sigma| (/ |alpha| (^1/2 |lambda|)))
+				(~ |x| (dnorm 0 |sigma|)))))))))
 
   (assert-equal
     (strcat-lines
@@ -2351,18 +2354,19 @@ protected virtual void AcceptanceMonitorBAZ(bool _accepted) { }
 	     (sexpr->rel '(:for |i| ((- m 1) (+ n 2))
                             (~ (@ x |i|) (dnorm 0 (^1/2 (@ y |i|)))))))))
 
-  (assert-equal
-    (strcat-lines
+  (let ((compile::*env* (assocs->env '((foo . #t(realxn 1))))))
+    (assert-equal
+     (strcat-lines
       "for (int i = M - 1; i <= N + 2; ++i) {"
-      "    var j = i - 2;"
-      "    var MU = FOO[j - 1];"
+      "    int j = i - 2;"
+      "    double MU = FOO[j - 1];"
       "    X[i - 1] = BMC.DrawNorm(MU, Math.Sqrt(Y[i - 1]));"
       "}")
-    (ppstr (compile::write-rel-draw
-	     (sexpr->rel '(:for |i| ((- m 1) (+ n 2))
-			    (:let (|j| (- |i| 2))
-			    (:let (mu (@ foo |j|))
-                              (~ (@ x |i|) (dnorm mu (^1/2 (@ y |i|)))))))))))
+     (ppstr (compile::write-rel-draw (sexpr->rel
+       '(:for |i| ((- m 1) (+ n 2))
+	      (:let (|j| (- |i| 2))
+		    (:let (mu (@ foo |j|))
+			  (~ (@ x |i|) (dnorm mu (^1/2 (@ y |i|))))))))))))
 
   (flet ((lhs-name-se (se pfx) (compile::lhs-name (sexpr->rellhs se) pfx)))
     (assert-equal "_foo_x" (lhs-name-se '|x| "_foo_"))
@@ -3111,6 +3115,7 @@ public void Update_BAZ()
 			    (xivec . #t(integer 1))
 			    (xmat . #t(realxn 2))
 			    (zmat . #t(realxn 2))
+			    (n . #tinteger)
 			    (i . #tinteger) (j . #tinteger)))))
     (macrolet ((expect (var expr arrow &body strings)
 	         (assert (eq '=> arrow))
@@ -3192,6 +3197,32 @@ public void Update_BAZ()
       "    BAR = Q;"
       "}")
 
+      (expect baz (:quant qnum ix (2 bi) (< (@ xvec ix) 0.0)) =>
+      "int BAZ;"
+      "{"
+      "    int Q = 0;"
+      "    int _last_IX = BI;"
+      "    for (int IX = 2; IX <= _last_IX; ++IX) {"
+      "        Q = Q + Convert.ToInt32(XVEC[IX - 1] < 0.0e+0);"
+      "    }"
+      "    BAZ = Q;"
+      "}")
+
+      (expect foo (:quant q@sum ix (1 j) (= 2 (@ xivec ix))
+                    (@ xmat ix :all) :shape (n))
+	      =>
+      "double[] FOO;"
+      "{"
+      "    double[] Q = new double[N];"
+      "    int _last_IX = J;"
+      "    for (int IX = 1; IX <= _last_IX; ++IX) {"
+      "        if (2 == XIVEC[IX - 1]) {"
+      "            Q = BMC.ArrPlus(Q, BMC.ArraySlice(XMAT, IX - 1, BMC.FullRange));"
+      "        }"
+      "    }"
+      "    FOO = Q;"
+      "}")
+
       (expect baz
 	      (:let (tmp1 (* x y))
 		(+ (:quant qsum i (1 ai)
@@ -3230,6 +3261,76 @@ public void Update_BAZ()
 ; TODO: more quantifiers
       ))
 )
+
+(define-test initial-environment-tests
+  (macrolet ((expect (d arrow a)
+	       (assert (eq '=> arrow))
+	       `(assert-equalp
+		  ',a
+		  (compile::decl->assoc (sexpr->decl ',d)))))
+    (expect (x integer) => (x . #tinteger))
+    (expect (x1 integerp) => (x1 . #tinteger))
+    (expect (x2 integerp0) => (x2 . #tinteger))
+
+    (expect (y realxn) => (y . #trealxn))
+    (expect (y1 realx) => (y1 . #trealxn))
+    (expect (y2 real) => (y2 . #trealxn))
+    (expect (y3 realp0) => (y3 . #trealxn))
+    (expect (y4 realp) => (y4 . #trealxn))
+
+    (expect (z boolean) => (z . #tboolean))
+
+    (expect (a (integer k)) => (a . #t(integer 1)))
+    (expect (a1 (integerp k m n)) => (a1 . #t(integer 3)))
+    (expect (a2 (integerp0 m n)) => (a2 . #t(integer 2)))
+
+    (expect (b (realxn 4 n)) => (b . #t(realxn 2)))
+    (expect (b1 (realx 3)) => (b1 . #t(realxn 1)))
+    (expect (b2 (real j k 4)) => (b2 . #t(realxn 3)))
+    (expect (b3 (realp m)) => (b3 . #t(realxn 1)))
+    (expect (b4 (realp0 5 2)) => (b4 . #t(realxn 2)))
+
+    (expect (c (boolean m 3 7)) => (c . #t(boolean 3)))
+  )
+  (macrolet ((model-with-decls (args vars)
+	       `(raw-sexpr->model '(:model (:args ,@args) (:reqs)
+	  		                   (:vars ,@vars) (:invs) (:body))))
+	     (impl-with-parms (params)
+	       `(sexpr->mcimpl '(:mcimpl (:parameters ,@params)
+					 (:acceptmons)
+					 (:expectations)
+					 (:updates))))
+	     (expect (model impl arrow assoc-list)
+	       (assert (eq '=> arrow))
+	      `(assert-equalp
+		 ',assoc-list
+		 (compile::initial-environment-assocs ,model ,impl))))
+    (expect (model-with-decls () ())
+	    (impl-with-parms ())
+	    => ())
+    (expect (model-with-decls ((x integer)) ((y realxn)))
+	    (impl-with-parms ((z boolean)))
+	    => ((x . #tinteger)
+		(y . #trealxn)
+		(z . #tboolean)))
+    (expect (model-with-decls ((a (boolean n))
+                               (b integerp))
+			      ((c (real m n))
+			       (d (integerp0 3))))
+	    (impl-with-parms ((e realp)
+                              (f (integer n))
+			      (g (realxn b b))))
+	    =>
+	    ((a . #t(boolean 1))
+	     (b . #tinteger)
+	     (c . #t(realxn 2))
+	     (d . #t(integer 1))
+	     (e . #trealxn)
+	     (f . #t(integer 1))
+	     (g . #t(realxn 2))))
+)
+)
+
 
 ; TODO: write and test code to verify DAG
 ; TODO: test for case when model language name and C# name for function
