@@ -13,10 +13,12 @@
 
 (defun sexpr->named-expr-list (se) (mapcar #'sexpr->named-expr se))
 
+;;; TODO: move this to utils?
 (defun sort-unique (symbols)
   (remove-duplicates (sort (copy-list symbols) #'string<)))
 
 (define-test compile-util-tests
+  ;; TODO: move this to utils-tests?
   (assert-equal
     '(a b c) (sort-unique '(b c b b a c c a)))
 
@@ -62,16 +64,16 @@
 			     (~ z (dgamma (* 4 bb) 1)))))))))
 
 
-  (assert-equal
-    '(|i1| |i2|) (compile::n-symbols-not-in 2 '(v j k)))
+  (let ((variables::*genvar-counter* 100))
+    (assert-equal
+      '(variables::|__i100| variables::|__i101|) (variables:n-new-vars 2 "i"))
+    (assert-equal 102 variables::*genvar-counter*))
 
-  (assert-equal
-    '(|i1| |i3| |i6|)
-    (compile::n-symbols-not-in 3 '(|i2| qand |i4| n < |i4| m + * |i5| n)))
-
-  (assert-equal
-    '(|i2| |i4|)
-    (compile::n-symbols-not-in 2 '(+ x |i3| y |i1| w)))
+  (let ((variables::*genvar-counter* 57))
+    (assert-equal
+      '(variables::|__k57|)
+      (variables:n-new-vars 1 "k"))
+    (assert-equal 58 variables::*genvar-counter*))
 
   (assert-equalp
     #e(:quant qand i (1 (+ n 2))
@@ -353,6 +355,8 @@
 		(cexpr->string (sexpr->expr '(+ (* (neg x) y) (neg z)))))
   (assert-equal "BMC.QSum(M, N, (I => X[I - 1]))"
     (cexpr->string (sexpr->expr '(:quant qsum i (m n) (@ x i)))))
+  (assert-equal "BMC.QSum(M, N, (I => X[I - 1]))"
+    (cexpr->string (sexpr->expr '(:quant qsum i (m n) true (@ x i)))))
   (assert-equal "BMC.QSum(M, N, (I => W[I - 1] < X[I - 1]), (I => Y[I - 1]))"
     (cexpr->string (sexpr->expr '(:quant qsum i (m n) (< (@ w i) (@ x i))
 					 (@ y i)))))
@@ -2549,8 +2553,10 @@ else {
 		   :log-acceptance-ratio 0))
      nil)))
 
+  (let ((compile::*env*
+	  (assocs->env '((m . #trealxn) (sigma . #trealxn) (x . #trealxn)))))
   (assert-equal
-"var MU = 2 * M;
+"double MU = 2.0e+0 * M;
 var _save_X = BMC.Copy(X);
 
 X = BMC.DrawNorm(MU, SIGMA);
@@ -2563,10 +2569,10 @@ if (!BMC.Accept(_lar)) {
    (ppstr
     (compile::write-rel-draw
      (sexpr->rel '(:metropolis-hastings
-		   :lets ((mu (* 2 m)))
+		   :lets ((mu (* 2.0 m)))
 		   :proposal-distribution (~ x (dnorm mu sigma))
 		   :log-acceptance-ratio (* sigma (- x mu))))
-     nil)))
+     nil))))
 
   (assert-equal
 "var MU = 2 * M;
@@ -3061,17 +3067,28 @@ public void Update_BAZ()
   )
 
   ; integration test
-  (macrolet ((expect (enew &key ((:from e)))
+  (macrolet ((expect (enew &key ((:from lhs)) ((:assigned e)))
 	       `(assert-equalp
                   ,(sexpr->expr enew)
-                  (compile::lift-let-and-quant 'lhs ,(sexpr->expr e)))))
+                  (compile::lift-let-and-quant
+		    ,(sexpr->expr lhs) ,(sexpr->expr e)))))
     (expect (:let (lhs1 (^2 a))
               (* u (/ lhs1 b)))
-	    :from
+	    :from lhs :assigned
 	    (* u (:let (lhs (^2 a)) (/ lhs b))))
+
     (expect (:let (q (:quant qsum j (m n) true (@ a j))) q)
-	    :from
+	    :from lhs :assigned
 	    (:quant qsum j (m n) (@ a j)))
+
+    (expect (:let (a1 (* u i))
+              (:let (i1 (+ a1 j k))
+                (/ a1 i1)))
+	    :from (@ a i) :assigned
+            (:let (a (* u i))
+              (:let (i (+ a j k))
+                (/ a i))))
+
     (expect (:let (q1 (:quant qsum i (m n) true
                         (:let (q2 (:quant qprod j (mm nn) true (@ a i j)))
                           q2)))
@@ -3082,7 +3099,7 @@ public void Update_BAZ()
 	       q1
 	       (* y1 q3)
 	       (^2 y)))))
-	    :from
+	    :from lhs :assigned
 	    (+ x
 	       (/ q 3)
 	       (:quant qsum i (m n)
@@ -3221,6 +3238,19 @@ public void Update_BAZ()
       "        }"
       "    }"
       "    FOO = Q;"
+      "}")
+
+      (expect bar (:quant qvec idx (j n) (* (real idx) (^2 (@ xvec idx))))
+	      =>
+      "double[] BAR;"
+      "{"
+      "    int _first_IDX = J;"
+      "    int _last_IDX = N;"
+      "    double[] Q = new double[_last_IDX - _first_IDX + 1];"
+      "    for (int IDX = _first_IDX; IDX <= _last_IDX; ++IDX) {"
+      "        Q[IDX - _first_IDX] = Convert.ToDouble(IDX) * BMC.Sqr(XVEC[IDX - 1]);"
+      "    }"
+      "    BAR = Q;"
       "}")
 
       (expect baz

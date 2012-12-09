@@ -1,5 +1,53 @@
 (in-package :compile)
 
+;;; Structural symbols for model and impl: KEYWORD namespace
+;;; Function symbols: FUNCT namespace
+;;; Constant symbols: CONST namespace
+;;; Type symbols: TYPE namespace
+;;; Variables: VAR namespace
+
+;;; sexpr->expr, etc. take care of making sure everything is in the correct
+;;; namespace.
+
+;;; New scheme:
+;;; - Temp vars with fixed names have form _<ident>, where <ident> does not
+;;;   start with "_".
+;;; - Generated temp vars have form __<ident><num>
+;;; - Temp vars, generated vars, and vars appearing in model or impl
+;;;   are all in same package.
+; _omit_<varname>
+; _omit
+; _N
+; _expectations
+; _accepted
+; _accepted
+; _assigned_<varname>
+; _idx
+; _idx1
+; _idx2
+; _idx<num>
+; _idx<num>_lo
+; _idx<num>_hi
+; _x
+; _lo_<varname>
+; _hi_<varname>
+; _if_<num>
+; _lpd
+; _lpd0
+; _lpd1
+; _tol
+; _ljd0
+; _ljd1
+; _old_<varname>
+; _new_<varname>
+; _lar
+; _buf
+; _save_<varname>
+; _tmp
+; _dirpath
+;_last_<varname>
+;_first_<varname>
+
 ;;; Main function
 
 (defun compile-to-csharp (csharp-name-space class-name mdl impl)
@@ -219,9 +267,15 @@
 (defun remove-default-filter-if-fquant (fct args)
   (if (and (is-fquant-symbol fct)
 	   (<= 3 (length args))
-	   (equalp (expr-const '%true-pred) (third args)))
+	   (is-always-true (third args)))
       (list* (first args) (second args) (nthcdr 3 args))
     args))
+
+(defun is-always-true (filter)
+  (or (equalp #e%true-pred filter)
+      (adt-case expr filter
+	((lambda var body) (equalp #etrue body))
+	(otherwise nil))))
 
 (defun bexpr->string (op args lprec rprec)
   (let* ((op-prec (precedences op))
@@ -467,7 +521,6 @@
     (write-prior-draw vars prior-draw-body))
   (fmt-blank-line)
   (let ((*env* (initial-environment mdl impl)))
-    (fdebug "*env*: ~a" *env*)
     (write-csharp-updates (mcimpl-updates impl)))
   (fmt-blank-line)
   ; ... more ...
@@ -890,10 +943,11 @@
 (defun make-write-test-update-fct (class-name mdl impl)
   (let ((is-class-var (class-var-pred-from mdl impl))
 	(dim-fct (model->dim-fct mdl))
-	(updates-assoc (mcimpl-updates impl)))
+	(updates-assoc (mcimpl-updates impl))
+	(env0 (initial-environment mdl impl)))
     (fn (upd-name)
       (let ((rel (assoc-lookup upd-name updates-assoc)))
-	(write-test-update class-name upd-name rel is-class-var dim-fct)))))
+	(write-test-update class-name upd-name rel is-class-var dim-fct env0)))))
 
 (defun model->dim-fct (mdl)
   (flet ((var-dim (d)
@@ -904,14 +958,14 @@
     (let ((dim-lookup (mapcar #'var-dim (model-vars mdl))))
       (lambda (v) (assoc-lookup v dim-lookup)))))
 
-(defun write-test-update (class-name update-name rel is-class-var dim-fct)
+(defun write-test-update (class-name update-name rel is-class-var dim-fct env0)
   (unless (is-update rel)
     (error "Invalid update: ~a." rel))
   (write-test-update-main class-name update-name)
   (fmt-blank-line)
   (write-test-is-valid-update class-name update-name rel is-class-var dim-fct)
   (fmt-blank-line)
-  (let ((*env* (initial-environment mdl impl)))
+  (let ((*env* env0))
     (write-test-acceptance-ratio
       class-name update-name rel is-class-var dim-fct)))
 
@@ -948,10 +1002,13 @@
     ((write-tivu-body (rel rev-outer-lets)
        (adt-case relation rel
 	 ((let var val body)
-	  (fmt "var ~a = ~a;"
-	       (variable->string var)
-	       (expr->string (assignable-expr val)))
-	  (write-tivu-body body (cons (cons var val) rev-outer-lets)))
+	  (if *env*
+	    (write-let-assignment var val *env*)
+	    (fmt "var ~a = ~a;"
+		 (variable->string var)
+		 (expr->string (assignable-expr val))))
+	  (extend-env var (infer-type val *env*)
+	    (write-tivu-body body (cons (cons var val) rev-outer-lets))))
 	 ((loop var lo hi body)
 	  (let* ((var-str (variable->string var))
 		 (lo-var-str (strcat "_lo_" var-str))
@@ -963,9 +1020,10 @@
 	    (fmt "for (int ~a = ~a; ~a <= ~a; ++~a) {"
 		 var-str lo-var-str var-str hi-var-str var-str)
 	    (bracket-end
-	      (write-tivu-body 
-	        body
-		`((,hi-var . ,hi) (,lo-var . ,lo) ,@rev-outer-lets)))))
+	      (extend-env var #tinteger
+		(write-tivu-body 
+		  body
+		  `((,hi-var . ,hi) (,lo-var . ,lo) ,@rev-outer-lets))))))
 	 ((if condition true-branch false-branch)
 	  (incf ifcnt)
 	  (let* ((ifcnt-str (format nil "_if_~d" ifcnt))
@@ -1356,47 +1414,51 @@
 (defun write-rel-draw-mh (lets prop-distr acceptmon log-acc-ratio
 			  let-needs-brackets)
   (bracket-if let-needs-brackets
-    (dolist (d lets)
-      (destructuring-bind (v . val) d
-        (if *env*
-	  (write-let-assignment v val *env*)
-	  (fmt "var ~a = ~a;"
-	       (variable->string v)
-	       (expr->string (assignable-expr val))))))
-    (if (equalp (expr-const 0) log-acc-ratio)
-      (progn
-	(write-rel-draw-main prop-distr t)
-	(funcall *write-rel-draw-visitor-after-proposal* prop-distr))
-      (progn
-	(write-mh-saves prop-distr)
-	(fmt-blank-line)
-	(write-rel-draw-main prop-distr t)
-	(write-lar log-acc-ratio)
-	(funcall *write-rel-draw-visitor-after-proposal* prop-distr)
-	(fmt-blank-line)
-	(if acceptmon
+    (let ((new-env *env*))
+      (dolist (d lets)
+	(destructuring-bind (v . val) d
+	  (if *env*
+	    (progn
+	      (write-let-assignment v val new-env)
+	      (setf new-env (add-var-type new-env v (infer-type val new-env))))
+	    (fmt "var ~a = ~a;"
+		 (variable->string v)
+		 (expr->string (assignable-expr val))))))
+      (let ((*env* new-env))
+	(if (equalp (expr-const 0) log-acc-ratio)
 	  (progn
-	    (flet ((report (accepted)
-		     (fmt "this.AcceptanceMonitor~a(~a~{, ~a~});"
-			  (car acceptmon)
-			  accepted
-			  (mapcar #'expr->string (cdr acceptmon)))))
-	      (fmt "bool _accepted = BMC.Accept(_lar);")
-	      (fmt "if (_accepted) {")
-	      (bracket-end
-	       (report "true"))
-	      (fmt "else {")
-	      (bracket-end
-	       (write-mh-restores prop-distr)
-	       (report "false"))))
+	    (write-rel-draw-main prop-distr t)
+	    (funcall *write-rel-draw-visitor-after-proposal* prop-distr))
 	  (progn
-	    (fmt "if (!BMC.Accept(_lar)) {")
-	    (bracket-end
-	     (write-mh-restores prop-distr))))))))
+	    (write-mh-saves prop-distr)
+	    (fmt-blank-line)
+	    (write-rel-draw-main prop-distr t)
+	    (write-lar log-acc-ratio)
+	    (funcall *write-rel-draw-visitor-after-proposal* prop-distr)
+	    (fmt-blank-line)
+	    (if acceptmon
+	      (progn
+		(flet ((report (accepted)
+			 (fmt "this.AcceptanceMonitor~a(~a~{, ~a~});"
+			      (car acceptmon)
+			      accepted
+			      (mapcar #'expr->string (cdr acceptmon)))))
+		  (fmt "bool _accepted = BMC.Accept(_lar);")
+		  (fmt "if (_accepted) {")
+		  (bracket-end
+		   (report "true"))
+		  (fmt "else {")
+		  (bracket-end
+		   (write-mh-restores prop-distr)
+		   (report "false"))))
+	      (progn
+		(fmt "if (!BMC.Accept(_lar)) {")
+		(bracket-end
+		 (write-mh-restores prop-distr))))))))))
 
 (defun write-lar (log-acc-ratio)
   (if *env*
-    (write-let-assignment (bmc-symb "_lar") log-acc-ratio *env)
+    (write-let-assignment (bmc-symb "_lar") log-acc-ratio *env*)
     (fmt "double _lar = ~a;" (expr->string log-acc-ratio))))
 
 (defun write-mh-saves (prop-distr)
@@ -1749,12 +1811,12 @@
 
 (defun lift-let-and-quant (lhs e)
   (let* ((lqe (lettify-quant (expand-true-pred e)))
-	 (lhs-rhs (rename-duplicate-vars (expr-call 'vec (expr-var lhs) lqe)))
+	 (lhs-rhs (rename-duplicate-vars (expr-call 'vec lhs lqe)))
 	 (rhs (adt-case expr lhs-rhs
 		((apply fct args)
 		 (assert (eq 'vec fct))
 		 (destructuring-bind (arg1 arg2) args
-		   (assert (eq lhs (expr-variable-symbol arg1)))
+		   (assert (equalp lhs arg1))
 		   arg2)))))
     (lift-let rhs)))
 
@@ -1770,11 +1832,12 @@
      (bare-scalar-type-symbol->string stype))
     ((array elem-type num-dims)
      (case num-dims
-       (1 (strcat (bare-scalar-type-symbol->string elem-type) "[]"))
-       (2 (case elem-type
-            (realxn "DMatrix")
-	    (integer "IMatrix")
-	    (boolean "BMatrix")))))))
+       (1 (strcat (bare-type->string elem-type) "[]"))
+       (2 (when (is-bare-type-scalar elem-type)
+	    (case (bare-type-scalar-stype elem-type)
+	      (realxn "DMatrix")
+	      (integer "IMatrix")
+	      (boolean "BMatrix"))))))))
 
 (defun bare-type->string (typ)
   (let ((s (bt->string typ)))
@@ -1783,8 +1846,13 @@
     s))
 
 (defun write-let-assignment (var expr env &optional (predeclared nil))
+  (let* ((lhs (expr-var var))
+	 (lhs-str (expr->string lhs)))
+    (write-let-assignment-to-lhs lhs lhs-str expr env predeclared)))
+
+(defun write-let-assignment-to-lhs (lhs lhs-str expr env predeclared)
   (flet
-    ((write-assn (var-str let-expansion e)
+    ((write-assn (let-expansion e)
        (loop while let-expansion do
          (destructuring-bind (v val body) let-expansion
 	   (let ((val-type (infer-type val env)))
@@ -1792,29 +1860,31 @@
 	     (setf env (add-var-type env v val-type))
 	     (setf e body)
 	     (setf let-expansion (is-let-expr body)))))
-       (fmt "~a = ~a;" var-str (expr->string e))))
-    (let* ((e (lift-let-and-quant var expr))
+       (fmt "~a = ~a;" lhs-str (expr->string e))))
+    (let* ((e (lift-let-and-quant lhs expr))
 	   (typ-str (bare-type->string (infer-type e env)))
-	   (var-str (variable->string var))
 	   (let-expansion (is-let-expr e)))
       (if let-expansion
 	(progn
 	  (unless predeclared
-	    (fmt "~a ~a;" typ-str var-str))
+	    (fmt "~a ~a;" typ-str lhs-str))
 	  (bracket
-	    (write-assn var-str let-expansion e)))
+	    (write-assn let-expansion e)))
 	(let ((e-str (expr->string e)))
 	  (if predeclared
-	    (fmt "~a = ~a;" var-str e-str)
-	    (fmt "~a ~a = ~a;" typ-str var-str e-str)))))))
+	    (fmt "~a = ~a;" lhs-str e-str)
+	    (fmt "~a ~a = ~a;" typ-str lhs-str e-str)))))))
 
 (defun write-let (val-type var val env)
   (let ((quant-expansion (is-quant-expr val)))
     (if quant-expansion
       (destructuring-bind (fct . args) quant-expansion
-	(if (reduction-params fct val-type)
-	  (write-let-quant val-type var fct args env)
-	  (write-let-simple val-type var val)))
+	(cond
+	  ((reduction-params fct val-type)
+	   (write-let-quant val-type var fct args env))
+	  ((eq 'qvec fct)
+	   (write-let-qvec val-type var args env))
+	  (t (write-let-simple val-type var val))))
       (write-let-simple val-type var val))))
 
 (defun write-let-simple (val-type var val)
@@ -1823,7 +1893,7 @@
        (variable->string var)
        (expr->string val)))
 
-;;; REQUIRE: all variables in fct-and-args are distinct from each other
+;;; REQUIRE: all variables in args are distinct from each other
 ;;; and from var.
 ;;;
 (defun write-let-quant (val-type var fct args env)
@@ -1873,6 +1943,34 @@
     ((const name) (eq 'true name))
     (otherwise nil)))
 
+;;; REQUIRE: all variables in args are distinct from each other
+;;; and from var.
+;;;
+(defun write-let-qvec (val-type var args env)
+  (assert (equalp #t(realxn 1) val-type))
+  (destructuring-bind (lo hi filter body . maybe-shape) args
+    (assert (is-always-true filter))
+    (let* ((var-str (variable->string var))
+	   (idx-var (expr-lambda-var filter))
+	   (idx-var-str (variable->string idx-var))
+	   (first-idx-var (bmc-symb (strcat "_first_" (symbol-name idx-var))))
+	   (body-body (expr-lambda-body body)))
+      (fmt "int _first_~a = ~a;" idx-var-str (expr->string lo))
+      (fmt "int _last_~a = ~a;" idx-var-str (expr->string hi))
+      (fmt "~a ~a = new double[_last_~a - _first_~a + 1];"
+	   (bare-type->string val-type) var-str idx-var-str idx-var-str)
+      (fmt "for (int ~a = _first_~a; ~a <= _last_~a; ++~a) {"
+	   idx-var-str idx-var-str idx-var-str idx-var-str idx-var-str)
+      (bracket-end
+        (write-let-assignment-to-lhs
+	  (sexpr->expr `(@ ,var (+ (- ,idx-var ,first-idx-var) 1)))
+	  (format nil "~a[~a - ~a]"
+		  var-str idx-var-str (variable->string first-idx-var))
+	  body-body
+	  (add-var-type (add-var-type env var val-type)
+			idx-var #tinteger)
+	  t)))))
+
 (let (ht)
   (defun init-reduction-params ()
     (when (null ht)
@@ -1915,7 +2013,7 @@
 	 (make-bare-type-scalar :stype (base-type stype)))
 	((array elem-type dims)
 	 (make-bare-type-array
-	   :elem-type (base-type elem-type)
+	   :elem-type (make-bare-type-scalar :stype (base-type elem-type))
 	   :num-dims (length dims)))))))
 
 #|

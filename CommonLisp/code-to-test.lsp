@@ -1,5 +1,6 @@
 (load "packages")
 (load "symbols")
+(load "variables")
 (load "adt")
 (load "utils")
 (load "lazy")

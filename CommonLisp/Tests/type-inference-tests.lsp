@@ -11,14 +11,22 @@
 	 (@-rng-type . #s(bare-type-scalar :stype @-rng-type))
 	 (@-idx-type . #s(bare-type-scalar :stype @-idx-type))
      
-	 ((realxn 1) . #s(bare-type-array :elem-type realxn :num-dims 1))
-	 ((integer 2) . #s(bare-type-array :elem-type integer :num-dims 2))
-	 ((boolean 3) . #s(bare-type-array :elem-type boolean :num-dims 3))
+	 ((realxn 1) . #s(bare-type-array
+			   :elem-type #s(bare-type-scalar :stype realxn)
+			   :num-dims 1))
+	 ((integer 2) . #s(bare-type-array
+			    :elem-type #s(bare-type-scalar :stype integer)
+			    :num-dims 2))
+	 ((boolean 3) . #s(bare-type-array
+			    :elem-type #s(bare-type-scalar :stype boolean)
+			    :num-dims 3))
 
-	 (((realxn 2) 3) . #s(bare-type-array
-			      :elem-type #s(bare-type-array
-					    :elem-type realxn :num-dims 2)
-			      :num-dims 3))
+	 (((realxn 2) 3) .
+          #s(bare-type-array
+	      :elem-type #s(bare-type-array
+			     :elem-type #s(bare-type-scalar :stype realxn)
+			     :num-dims 2)
+	      :num-dims 3))
 
 	 ((int-map realxn) . #s(bare-type-int-map :return-type
 			       #s(bare-type-scalar :stype realxn)))
@@ -29,13 +37,19 @@
 
 	 ((int-map realxn 2) .
 	  #s(bare-type-int-map :return-type
-	    #s(bare-type-array :elem-type realxn :num-dims 2)))
+	    #s(bare-type-array
+	        :elem-type #s(bare-type-scalar :stype realxn)
+		:num-dims 2)))
 	 ((int-map integer 3) .
 	  #s(bare-type-int-map :return-type
-	    #s(bare-type-array :elem-type integer :num-dims 3)))
+	    #s(bare-type-array
+	        :elem-type #s(bare-type-scalar :stype integer)
+		:num-dims 3)))
 	 ((int-map boolean 1) .
 	  #s(bare-type-int-map :return-type
-	    #s(bare-type-array :elem-type boolean :num-dims 1))))
+	    #s(bare-type-array
+	        :elem-type #s(bare-type-scalar :stype boolean)
+		:num-dims 1))))
        do
        (assert-equalp typ (sexpr->bare-type sexpr)))
 
@@ -92,14 +106,16 @@
 		 (k . #tinteger)
 		 (r . #trealxn)
 		 (s . #trealxn)
-		 (b . #tboolean)
+		 (b . #tboolean) (b1 . #tboolean) (b2 . #tboolean)
 		 (xvec . #t(realxn 1))
 		 (yvec . #t(realxn 1))
 		 (zvec . #t(realxn 1))
 		 (veci . #t(integer 1))
 		 (xmat . #t(realxn 2))
 		 (ymat . #t(realxn 2))
-		 (zmat . #t(realxn 2))))))
+		 (zmat . #t(realxn 2))
+		 (vec-of-vecs . #t((realxn 1) 1))
+		 (vec-of-mats . #t((realxn 2) 1))))))
     (loop for (expr . typ) in
 	  '((#e i . #tinteger)
 	    (#e(<= 5 i) . #tboolean)
@@ -111,14 +127,26 @@
 	    (#e(* s r) . #trealxn)
 	    (#e(/ s r) . #trealxn)
 	    (#e(= i k) . #tboolean)
+	    (#e(!= i k) . #tboolean)
+	    (#e(and b b1 b2) . #tboolean)
+	    (#e(max 3.1 2.7 -3.8) . #trealxn)
+	    (#e(max 5 -3 27) . #tinteger)
+	    (#e(min 1.2 5.8 -10.3) . #trealxn)
+	    (#e(min -12 5 3) . #tinteger)
 	    (#e(^1/2 r) . #trealxn)
 	    (#e(^-1/2 r) . #trealxn)
 	    (#e(^-2 r) . #trealxn)
 	    (#e(^-1 r) . #trealxn)
 	    (#e(^2 r) . #trealxn)
 	    (#e(^2 i) . #tinteger)
+	    (#e(log r) . #trealxn)
+	    (#e(exp r) . #trealxn)
+	    (#e(tanh r) . #trealxn)
+	    (#e(neg r) . #trealxn)
+	    (#e(neg i) . #tinteger)
 	    (#e(int false) . #tinteger)
 	    (#e(real 12) . #trealxn)
+	    (#e(dmvnorm-density xvec yvec xmat) . #trealxn)
 	    (#e(@^-1 xvec) . #t(realxn 1))
 	    (#e(@^-1 xmat) . #t(realxn 2))
 	    (#e(@^-2 xvec) . #t(realxn 1))
@@ -131,6 +159,8 @@
 	    (#e(@* xmat ymat zmat) . #t(realxn 2))
 	    (#e(@- xvec yvec) . #t(realxn 1))
 	    (#e(@- xmat ymat) . #t(realxn 2))
+	    (#e(@/ xvec xvec) . #t(realxn 1))
+	    (#e(@/ xmat ymat) . #t(realxn 2))
 	    (#e(is-integerp i) . #tboolean)
 	    (#e(is-realp r) . #tboolean)
 	    (#e(is-real r) . #tboolean)
@@ -156,6 +186,11 @@
 	    (#e(vec r) . #t(realxn 1))
 	    (#e(vec r s) . #t(realxn 1))
 	    (#e(vec r s 2.7) . #t(realxn 1))
+	    (#e(vec xvec yvec zvec) . #t((realxn 1) 1))
+	    (#e(vec xmat ymat zmat) . #t((realxn 2) 1))
+	    (#e(@ vec-of-vecs i) . #t(realxn 1))
+	    (#e(@ vec-of-mats i) . #t(realxn 2))
+	    (#e(sum xvec) . #trealxn)
 	    (#e(cons 1.3 xvec) . #t(realxn 1))
 	    (#e(cons-col xvec xmat) . #t(realxn 2))
 	    (#e(cons-row xvec xmat) . #t(realxn 2))
@@ -163,12 +198,15 @@
 	    (#e(:quant qand idx (1 i) b) . #tboolean)
 	    (#e(:quant qsum idx (i 10) (@ veci idx)) . #tinteger)
 	    (#e(:quant qnum idx (i k) b) . #tinteger)
+	    (#e(:quant qmax idx (i k) (@ xvec idx)) . #trealxn)
+	    (#e(:quant qmin idx (i k) (@ xvec idx)) . #trealxn)
 	    (#e(:quant q@sum idx (i k) xvec :shape (n)) . #t(realxn 1))
 	    (#e(:quant q@sum idx (1 i) xmat :shape (n k)) . #t(realxn 2))
 	    (#e($* r xvec) . #t(realxn 1))
 	    (#e($* r xmat) . #t(realxn 2))
 	    (#e(:let (foo r) (* r r)) . #trealxn)
-	    (#e(:let (foo i) (* i i)) . #tinteger))
+	    (#e(:let (foo i) (* i i)) . #tinteger)
+	    (#e(if-then-else (= r s) 2.3 8.5) . #trealxn))
       do
       (assert-equalp typ (infer-type expr env))))
 

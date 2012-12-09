@@ -18,10 +18,11 @@
       (make-bare-type-int-map :return-type
 	(sexpr->bare-type (if (null (cdr rest)) (car rest) rest)))))
    (t
-    (destructuring-bind (typ n) se
-      (assert (is-base-type-name typ))
+    (destructuring-bind (typ-se n) se
       (assert (integerp n))
-      (make-bare-type-array :elem-type typ :num-dims n)))))
+      (make-bare-type-array
+        :elem-type (sexpr->bare-type typ-se)
+	:num-dims n)))))
 
 (defun xformer-sexpr->bare-type (stream subchar arg)
   (let ((se (read stream t)))
@@ -127,6 +128,7 @@
     (< (#tboolean #trealxn #trealxn))
     (= (#tboolean #tinteger #tinteger)
        (#tboolean #trealxn #trealxn))
+    (!= (#tboolean #tinteger #tinteger))
     (int (#tinteger #tboolean))
     (dot (#trealxn #t(realxn 1) #t(realxn 1))
 	 (#t(realxn 1) #t(realxn 2) #t(realxn 1))
@@ -140,7 +142,13 @@
     (^-1/2 (#trealxn #trealxn))
     (^2 (#trealxn #trealxn)
 	(#tinteger #tinteger))
+    (log (#trealxn #trealxn))
+    (exp (#trealxn #trealxn))
+    (tanh (#trealxn #trealxn))
+    (neg (#trealxn #trealxn)
+	 (#tinteger #tinteger))
     (real (#trealxn #tinteger))
+    (dmvnorm-density (#trealxn #t(realxn 1) #t(realxn 1) #t(realxn 2)))
     (is-integerp (#tboolean #tinteger))
     (is-realp (#tboolean #trealxn))
     (is-real (#tboolean #trealxn))
@@ -150,7 +158,9 @@
     (@ (#tinteger #t(integer 1) #tinteger)
        (#trealxn #t(realxn 1) #tinteger)
        (#tinteger #t(integer 2) #tinteger #tinteger)
-       (#trealxn #t(realxn 2) #tinteger #tinteger))
+       (#trealxn #t(realxn 2) #tinteger #tinteger)
+       (#t(realxn 1) #t((realxn 1) 1) #tinteger)
+       (#t(realxn 2) #t((realxn 2) 1) #tinteger))
     (vmax (#tinteger #t(integer 1)))
     (diag_mat (#t(realxn 2) #t(realxn 1))
 	      (#t(integer 2) #t(integer 1)))
@@ -161,13 +171,16 @@
     (inv-pd (#t(realxn 2) #t(realxn 2)))
     (real-zero-arr (#t(realxn 1) #tinteger)
 		   (#t(realxn 2) #tinteger #tinteger))
+    (sum (#trealxn #t(realxn 1)))
     (cons (#t(realxn 1) #trealxn #t(realxn 1)))
     (cons-col (#t(realxn 2) #t(realxn 1) #t(realxn 2)))
     (cons-row (#t(realxn 2) #t(realxn 1) #t(realxn 2)))
     (vec (#t(realxn 1) #trealxn)
          (#t(realxn 1) #trealxn #trealxn)
          (#t(realxn 1) #trealxn #trealxn #trealxn)
-         (#t(realxn 1) #trealxn #trealxn #trealxn #trealxn))
+         (#t(realxn 1) #trealxn #trealxn #trealxn #trealxn)
+	 (#t((realxn 1) 1) #t(realxn 1) #t(realxn 1) #t(realxn 1))
+	 (#t((realxn 2) 1) #t(realxn 2) #t(realxn 2) #t(realxn 2)))
     (qvec (#t(realxn 1)
            #tinteger #tinteger #t(int-map boolean) #t(int-map realxn)))
     (qsum (#tinteger
@@ -180,12 +193,21 @@
 	   #tinteger #tinteger #t(int-map boolean) #t(int-map boolean)))
     (qnum (#tinteger
 	   #tinteger #tinteger #t(int-map boolean) #t(int-map boolean)))
+    (qmax (#tinteger
+	   #tinteger #tinteger #t(int-map boolean) #t(int-map integer))
+	  (#trealxn
+	   #tinteger #tinteger #t(int-map boolean) #t(int-map realxn)))
+    (qmin (#tinteger
+	   #tinteger #tinteger #t(int-map boolean) #t(int-map integer))
+	  (#trealxn
+	   #tinteger #tinteger #t(int-map boolean) #t(int-map realxn)))
     (q@sum (#t(realxn 1)
             #tinteger #tinteger #t(int-map boolean) #t(int-map realxn 1)
             #tinteger)
 	   (#t(realxn 2)
             #tinteger #tinteger #t(int-map boolean) #t(int-map realxn 2)
             #tinteger #tinteger))
+    (if-then-else (#trealxn #tboolean #trealxn #trealxn))
 ))
 
 (defun operator-typing-function (fct types)
@@ -198,7 +220,10 @@
 (defconstant +operator-signatures+
   '((- #tinteger #trealxn)
     (+ #tinteger #trealxn)
-    (* #tinteger #trealxn)))
+    (* #tinteger #trealxn)
+    (and #tboolean)
+    (max #tinteger #trealxn)
+    (min #tinteger #trealxn)))
 
 (defun infer-slice-type (arg-types)
   (assert (<= 2 (length arg-types)))
@@ -222,14 +247,16 @@
 		       (= nargs (length arg-types)))
 		   (is-bare-type-array arg1-type)
                    (every (lambda (a) (equalp arg1-type a)) rest-arg-types)
-		   (member (bare-type-array-elem-type arg1-type) elem-types))
+		   (member (bare-type-array-elem-type arg1-type) elem-types
+			   :test #'equalp))
 	  (return-from self arg1-type))))
     (infer-type-error fct arg-types)))
 
 (defconstant +lifted-fcts+
-  '((@^-2 1 realxn)
-    (@^2 1 realxn)
-    (@^-1 1 realxn)
-    (@+ * realxn)
-    (@* * realxn)
-    (@- 2 realxn)))
+  '((@^-2 1 #trealxn)
+    (@^2 1 #trealxn)
+    (@^-1 1 #trealxn)
+    (@+ * #trealxn)
+    (@* * #trealxn)
+    (@- 2 #trealxn)
+    (@/ 2 #trealxn)))

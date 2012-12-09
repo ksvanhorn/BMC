@@ -66,6 +66,10 @@
     :i :k
     ))
 
+(defpackage variables
+  (:use :cl)
+  (:export :n-new-vars))
+
 (defpackage :utils
   (:use :cl)
   (:export :flet* :while :starts-with :assoc-lookup :zip :strcat :strcat-lines
@@ -73,7 +77,7 @@
 	   :has-duplicates :has-no-duplicates
 	   :list->pair-list :fn :dolist-inter
 	   :append-mapcar :fdebug :compound-symbol :bmc-symb
-	   :n-symbols-not-in :symbol-not-in
+	   :symbol-not-in
 	   :indent :fmt :fmt-blank-line
 	   :*indent-level* :*indent-amount* :*fmt-ostream*
 	   :alambda :self :rethrow-error))
@@ -180,7 +184,7 @@
   (:export :simplify-expr))
 
 (defpackage :compile
-  (:use :cl :mcimpl :model :expr :utils :adt :symbols :type-inference)
+  (:use :cl :mcimpl :model :variables :expr :utils :adt :symbols :type-inference)
   (:shadow :expr->string)
   (:export :compile-to-csharp :write-test-file :write-test-updates))
 
