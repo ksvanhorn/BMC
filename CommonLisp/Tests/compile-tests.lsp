@@ -63,17 +63,26 @@
 			     (~ z (dnorm (+ 3 aa) 1))
 			     (~ z (dgamma (* 4 bb) 1)))))))))
 
+  (with-genvar-counter 33
+    (assert-equal 'variables::__foo33 (variables:new-var "FOO"))
+    (assert-equal 34 variables::*genvar-counter*))
 
-  (let ((variables::*genvar-counter* 100))
-    (assert-equal
-      '(variables::|__i100| variables::|__i101|) (variables:n-new-vars 2 "i"))
+  (with-genvar-counter 12
+    (assert-equal 'variables::__foo12 (variables:new-var 'foo))
+    (assert-equal 13 variables::*genvar-counter*))
+
+  (with-genvar-counter 100
+    (assert-equal '(variables::|__i100| variables::|__i101|)
+		  (variables:n-new-vars 2 "i"))
     (assert-equal 102 variables::*genvar-counter*))
 
-  (let ((variables::*genvar-counter* 57))
-    (assert-equal
-      '(variables::|__k57|)
-      (variables:n-new-vars 1 "k"))
+  (with-genvar-counter 57
+    (assert-equal '(variables::|__k57|) (variables:n-new-vars 1 "k"))
     (assert-equal 58 variables::*genvar-counter*))
+
+  (with-genvar-counter 23
+    (assert-equal '(variables::__foo23 variables::__foo24)
+		  (variables:n-new-vars 2 'foo)))
 
   (assert-equalp
     #e(:quant qand i (1 (+ n 2))

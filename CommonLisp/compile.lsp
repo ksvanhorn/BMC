@@ -11,7 +11,7 @@
 
 ;;; New scheme:
 ;;; - Temp vars with fixed names have form _<ident>, where <ident> does not
-;;;   start with "_".
+;;;   
 ;;; - Generated temp vars have form __<ident><num>
 ;;; - Temp vars, generated vars, and vars appearing in model or impl
 ;;;   are all in same package.
@@ -818,8 +818,7 @@
 	    (int-range 1 (length dims)) dims)))
 
 (defun array-element-checks (var-sym etype-sym dims)
-  (let* ((excluded (cons var-sym (vars-in-expr-list dims)))
-	 (idxvar-symbols (n-symbols-not-in (length dims) excluded))
+  (let* ((idxvar-symbols (n-new-vars (length dims) "i"))
 	 (idxvars (mapcar #'expr-var idxvar-symbols))
 	 (var (expr-var var-sym))
 	 (checks (scalar-type-checks
@@ -1167,7 +1166,7 @@
 
 (defun write-csharp-log-joint-density (mdl)
   (let* ((excluded (vars-in-model mdl))
-	 (accum-var (symbol-not-in excluded "ljd")))
+	 (accum-var (new-var "ljd")))
     (fmt "public double LogJointDensity()")
     (bracket
       (fmt "double ~a = 0.0;" accum-var)

@@ -1,6 +1,6 @@
 (defpackage :testing-utilities
   (:use :cl :compile :utils)
-  (:export :ppstr :cppstr))
+  (:export :ppstr :with-genvar-counter))
 
 (in-package :testing-utilities)
 
@@ -14,3 +14,8 @@
 	     (*indent-amount* ,indent-amount)
 	     (*fmt-ostream* ,s))
 	 ,expr))))
+
+(defmacro with-genvar-counter (n &body body)
+  `(let ((variables::*genvar-counter* ,n))
+     ,@body))
+

@@ -4,43 +4,57 @@
 
 (define-test subst-expr-tests
   (assert-equalp
-    (sexpr->expr 5)
-    (prove::subst-expr 'x (sexpr->expr '(+ 3 z)) (sexpr->expr 5)))
+    #e5
+    (prove::subst-expr 'x #e(+ 3 z) #e5))
+
   (assert-equalp
-    (sexpr->expr 'true)
-    (prove::subst-expr 'x (sexpr->expr '(+ 3 z)) (sexpr->expr 'true)))
+    #etrue
+    (prove::subst-expr 'x #e(+ 3 z) #etrue))
+
   (assert-equalp
-    (sexpr->expr 'false)
-    (prove::subst-expr 'x (sexpr->expr '(+ 3 z)) (sexpr->expr 'false)))
+    #efalse
+    (prove::subst-expr 'x #e(+ 3 z) #efalse))
+
   (assert-equalp
-    (sexpr->expr '(+ 3 z))
-    (prove::subst-expr 'x (sexpr->expr '(+ 3 z)) (sexpr->expr 'x)))
+    #e(+ 3 z)
+    (prove::subst-expr 'x #e(+ 3 z) #e x))
+
   (assert-equalp
-    (sexpr->expr '(* 4 (+ 3 z)))
-    (prove::subst-expr 'v (sexpr->expr '(+ 3 z)) (sexpr->expr '(* 4 v))))
+    #e(* 4 (+ 3 z))
+    (prove::subst-expr 'v #e(+ 3 z) #e(* 4 v)))
+
   (assert-equalp
-    (sexpr->expr '(* (+ 3 z) 4))
-    (prove::subst-expr 'v (sexpr->expr '(+ 3 z)) (sexpr->expr '(* v 4))))
+    #e(* (+ 3 z) 4)
+    (prove::subst-expr 'v #e(+ 3 z) #e(* v 4)))
 
   ; lambda expressions
-  (assert-equalp
-    (expr-lam 'x (sexpr->expr '(+ x (* y z))))
-    (prove::subst-expr
-      'v (sexpr->expr '(* y z)) (expr-lam 'x (sexpr->expr '(+ x v)))))
-  (assert-equalp
-    (expr-lam 'y1 (sexpr->expr '(+ (* y z) y1)))
-    (prove::subst-expr
-      'x (sexpr->expr '(* y z)) (expr-lam 'y (sexpr->expr '(+ x y)))))
-  (let ((e0 (expr-lam 'x (sexpr->expr '(+ x y))))
-	(e1 (expr-lam 'x (sexpr->expr '(+ x y)))))
+  (with-genvar-counter 16
     (assert-equalp
-      e1 (prove::subst-expr 'x (sexpr->expr '(^ y 2)) e0)))
+     #e(:lambda vars::_x16 (+ vars::_x16 (* y z)))
+     (prove::subst-expr
+      'v #e(* y z) #e(:lambda x (+ x v)))))
+
+  (with-genvar-counter 82
+    (assert-equalp
+     (:lambda vars::_y82 (+ (* y z) vars::_y82))
+     (prove::subst-expr
+      'x #e(* y z) (:lambda y (+ x y)))))
+
+  (let ((e0 (:lambda x (+ x y)))
+	(e1 (:lambda x (+ x y))))
+    (assert-equalp
+      e1 (prove::subst-expr 'x #e(^ y 2) e0)))
+
+  (let ((e0 #e(:let (y (* y y)) (+ a y)))
+	(e1 #e(:let (y (* 2 2)) (+ a y))))
+    (assert-equalp
+      e1 (prove::subst-expr 'y #e2 e0)))
 
   ; Regression test
-  (let ((e0 (sexpr->expr '(:let (a 37) (+ y a))))
-	(e1 (sexpr->expr '(:let (a 37) (+ y a)))))
+  (let ((e0 #e(:let (a 37) (+ y a)))
+	(e1 #e(:let (a 37) (+ y a))))
     (assert-equalp
-      e1 (prove::subst-expr 'a (sexpr->expr '(^2 foo)) e0)))
+      e1 (prove::subst-expr 'a #e(^2 foo) e0)))
 )
 
 (define-test pat-match-tests
@@ -230,73 +244,82 @@
     (prove::expand-densities
       (sexpr->expr '(dinterval-density v (+ x a) c))))
 
-  (assert-equalp
-    (sexpr->expr
-     '(*
-	(:quant qand i (1 (length p)) (< 0 (@ p i)))
+  (with-genvar-counter 38
+    (assert-equalp
+     (sexpr->expr
+      '(*
+	(:quant qand vars::_i38 (1 (length p)) (< 0 (@ p vars::_i38)))
 	(= 1 (sum p))
 	(/ (gamma-fct (sum alpha))
-	   (:quant qprod i (1 (length alpha)) (gamma-fct (@ alpha i))))
-	(:quant qprod i (1 (length alpha)) (^ (@ p i) (- (@ alpha i) 1)))))
-    (prove::expand-densities
-      (sexpr->expr '(ddirch-density p alpha))))
-     
-  (assert-equalp
-    (sexpr->expr
-     '(*
-	(:quant qand i1 (1 (length i)) (< 0 (@ i i1)))
+	   (:quant qprod vars::_i39 (1 (length alpha))
+		   (gamma-fct (@ alpha vars::_i39))))
+	(:quant qprod vars::_i40 (1 (length alpha))
+		(^ (@ p vars::_i40) (- (@ alpha vars::_i40) 1)))))
+     (prove::expand-densities
+      (sexpr->expr '(ddirch-density p alpha)))))
+    
+  (with-genvar-counter 19
+    (assert-equalp
+     (sexpr->expr
+      '(*
+	(:quant qand vars::_i19 (1 (length i)) (< 0 (@ i vars::_i19)))
 	(= 1 (sum i))
 	(/ (gamma-fct (sum alpha))
-	   ; the renaming of i to i1 in the next factor is unnecessary but legit
-	  (:quant qprod i1 (1 (length alpha)) (gamma-fct (@ alpha i1))))
-	(:quant qprod i1 (1 (length alpha)) (^ (@ i i1) (- (@ alpha i1) 1)))))
-    (prove::expand-densities
-      (sexpr->expr '(ddirch-density i alpha))))
+	   (:quant qprod vars::_i20 (1 (length alpha))
+		   (gamma-fct (@ alpha vars::_i20))))
+	(:quant qprod vars::_i21 (1 (length alpha))
+		(^ (@ i vars::_i21) (- (@ alpha vars::_i21) 1)))))
+     (prove::expand-densities
+      (sexpr->expr '(ddirch-density i alpha)))))
 
-  (assert-equalp
-    (sexpr->expr 
+  (with-genvar-counter 53
+    (assert-equalp
+     (sexpr->expr 
       '(* (is-symm-pd Lambda)
-	  (:let (k (array-length 1 V))
-	    (* (^ 2 (* -1/2 nu k))
-	       (^ (abs-det V) (* -1/2 nu))
-	       (/ 1 (mv-gamma-fct k (* 1/2 nu)))
-	       (^ (abs-det Lambda) (* 1/2 (- nu k 1)))
-	       (exp (* -1/2 (trace (dot (inv V) Lambda))))))))
-    (prove::expand-densities
-      (sexpr->expr '(dwishart-density Lambda nu V))))
+	  (:let (vars::_k53 (array-length 1 V))
+		(* (^ 2 (* -1/2 nu vars::_k53))
+		   (^ (abs-det V) (* -1/2 nu))
+		   (/ 1 (mv-gamma-fct vars::_k53 (* 1/2 nu)))
+		   (^ (abs-det Lambda) (* 1/2 (- nu vars::_k53 1)))
+		   (exp (* -1/2 (trace (dot (inv V) Lambda))))))))
+     (prove::expand-densities
+      (sexpr->expr '(dwishart-density Lambda nu V)))))
 
-  (assert-equalp
-    (sexpr->expr 
+  (with-genvar-counter 44
+    (assert-equalp
+     (sexpr->expr 
       '(* (is-symm-pd Lambda)
-	  (:let (k1 (array-length 1 V))
-	    (* (^ 2 (* -1/2 k k1))
-	       (^ (abs-det V) (* -1/2 k))
-	       (/ 1 (mv-gamma-fct k1 (* 1/2 k)))
-	       (^ (abs-det Lambda) (* 1/2 (- k k1 1)))
-	       (exp (* -1/2 (trace (dot (inv V) Lambda))))))))
-    (prove::expand-densities
-      (sexpr->expr '(dwishart-density Lambda k V))))
+	  (:let (vars::_k44 (array-length 1 V))
+		(* (^ 2 (* -1/2 k vars::_k44))
+		   (^ (abs-det V) (* -1/2 k))
+		   (/ 1 (mv-gamma-fct vars::_k44 (* 1/2 k)))
+		   (^ (abs-det Lambda) (* 1/2 (- k vars::_k44 1)))
+		   (exp (* -1/2 (trace (dot (inv V) Lambda))))))))
+     (prove::expand-densities
+      (sexpr->expr '(dwishart-density Lambda k V)))))
 
-  (assert-equalp
-   (sexpr->expr
-     '(:let (k (array-length 1 Sigma))
-	(* (^ (* 2 %pi) (* -1/2 k))
-	   (^ (abs-det Sigma) -1/2)
-	   (exp (* -1/2 (quad (inv Sigma) (@- v mu)))))))
-   (prove::expand-densities
-     (sexpr->expr '(dmvnorm-density v mu Sigma))))
+  (with-genvar-counter 26
+    (assert-equalp
+     (sexpr->expr
+      '(:let (vars::_k26 (array-length 1 Sigma))
+	     (* (^ (* 2 %pi) (* -1/2 vars::_k26))
+		(^ (abs-det Sigma) -1/2)
+		(exp (* -1/2 (quad (inv Sigma) (@- v mu)))))))
+     (prove::expand-densities
+      (sexpr->expr '(dmvnorm-density v mu Sigma)))))
 
-  (assert-equalp
-    (sexpr->expr
+  (with-genvar-counter 15
+    (assert-equalp
+     (sexpr->expr
       '(* (:quant qprod j (1 n)
 		  (* (/ 1 (* (^1/2 (* 2 %pi)) (^ lambda -1/2)))
 		     (exp (* -1/2 (^2 (- (@ x j) m))))))
 	  (* (< 0 lambda) (/ (^ beta alpha) (gamma-fct alpha))
 	     (^ lambda (- alpha 1)) (exp (* -1 beta lambda)))))
-    (prove::expand-densities
+     (prove::expand-densities
       (sexpr->expr
-        '(* (:quant qprod j (1 n) (dnorm-density (@ x j) m (^ lambda -1/2)))
-	    (dgamma-density lambda alpha beta)))))
+       '(* (:quant qprod j (1 n) (dnorm-density (@ x j) m (^ lambda -1/2)))
+	   (dgamma-density lambda alpha beta))))))
 )
 
 (define-test expand-products-tests
@@ -314,34 +337,39 @@
       (sexpr->expr '(^ (* a b c) n))))
 
   (assert-equalp
-    (sexpr->expr '(* (:quant qprod k (1 n) (@ x k))
-		     (:quant qprod k (1 n) (@ y k))))
-    (prove::expand-products
-      (sexpr->expr '(:quant qprod k (1 n) (* (@ x k) (@ y k))))))
+   (sexpr->expr '(* (:quant qprod k (1 n) (@ x k))
+		    (:quant qprod k (1 n) (@ y k))))
+   (prove::expand-products
+    (sexpr->expr '(:quant qprod k (1 n) (* (@ x k) (@ y k))))))
 
-  (assert-equalp
-    (sexpr->expr
-      '(:quant qprod k (1 n) (^ (@ x i) n)))
-    (prove::expand-products
-      (sexpr->expr '(^ (:quant qprod k (1 n ) (@ x i)) n))))
+  (with-genvar-counter 42
+    (assert-equalp
+     (sexpr->expr
+      '(:quant qprod vars::_k42 (1 n) (^ (@ x vars::_k42) n)))
+     (prove::expand-products
+      (sexpr->expr '(^ (:quant qprod k (1 n ) (@ x k)) n)))))
 
   (assert-equalp
     (sexpr->expr '(* (^ a1 (* b c)) (^ a2 (* b c))))
     (prove::expand-products
       (sexpr->expr '(^ (^ (* a1 a2) b) c))))
 
-  (assert-equalp
-    (sexpr->expr '(* (:quant qprod k (1 m) (^ (@ x i) n))
-		     (:quant qprod k (1 m) (^ (@ y i) n))))
-    (prove::expand-products
-      (sexpr->expr '(^ (:quant qprod k (1 m) (* (@ x i) (@ y i))) n))))
+  (with-genvar-counter 28
+    (assert-equalp
+     (sexpr->expr '(* (:quant qprod vars::_k28 (1 m) (^ (@ x vars::_k28) n))
+		      (:quant qprod vars::_k28 (1 m) (^ (@ y vars::_k28) n))))
+     (prove::expand-products
+      (sexpr->expr '(^ (:quant qprod k (1 m) (* (@ x k) (@ y k))) n)))))
 
-  (assert-equalp
-    (sexpr->expr '(* (:quant qprod i1 (lo hi) (^ (^1/2 (@ x i1)) (@ n i)))
-		     (:quant qprod i1 (lo hi) (^ (@ y i1) (@ n i)))))
-    (prove::expand-products
+  (with-genvar-counter 14
+    (assert-equalp
+     (sexpr->expr '(* (:quant qprod vars::_i14 (lo hi)
+			      (^ (^1/2 (@ x vars::_i14)) (@ n i)))
+		      (:quant qprod vars::_i14 (lo hi)
+			      (^ (@ y vars::_i14) (@ n i)))))
+     (prove::expand-products
       (sexpr->expr '(^ (:quant qprod i (lo hi) (* (^1/2 (@ x i)) (@ y i)))
-		       (@ n i)))))
+		       (@ n i))))))
 
   (assert-equalp
     (sexpr->expr '(* (^ a d) (^ b (* c d))))
@@ -378,16 +406,17 @@
       (sexpr->expr '(* a (+ b c)))))
 |#
 
-  (assert-equalp
-    (sexpr->expr
+  (with-genvar-counter 5
+    (assert-equalp
+     (sexpr->expr
       '(* x (+ a b) (^ c n) (^ d n) (^ e n)
 	  (:quant qprod i ((* m n) (* m k)) (@ y i))
 	  (:quant qprod i ((* m n) (* m k)) (@ z i))))
-    (prove::expand-products
+     (prove::expand-products
       (sexpr->expr
-        '(* x (* (+ a b) (^ (* c d e) n))
-	    (:quant qprod i ((* m n) (* m k))
-		    (* (@ y i) (@ z i)))))))
+       '(* x (* (+ a b) (^ (* c d e) n))
+	   (:quant qprod i ((* m n) (* m k))
+		   (* (@ y i) (@ z i))))))))
 )
 
 (define-test simplify-lengths-tests

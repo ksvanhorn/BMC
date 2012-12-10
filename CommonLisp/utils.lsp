@@ -78,18 +78,6 @@
 (defun compound-symbol (x y)
   (intern (format nil "~a-~a" x y)))
 
-(defun symbol-not-in (excluded &optional (prefix "i"))
-  (first (n-symbols-not-in 1 excluded prefix)))
-
-(defun next-symbol (excluded prefix)
-  (let ((suffix 0))
-    (lambda ()
-      (loop
-        (incf suffix)
-	(let ((sym (intern (strcat prefix (write-to-string suffix)))))
-	  (unless (member sym excluded)
-	    (return sym)))))))
-
 ; Indented output utils
 
 (defmacro indent (&rest body)

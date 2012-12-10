@@ -61,14 +61,12 @@
 
     ;; model symbols
     :~
-
-    ;; symbols used in quantifiers in prove package
-    :i :k
     ))
 
 (defpackage variables
+  (:nicknames :vars)
   (:use :cl)
-  (:export :n-new-vars))
+  (:export :new-var :n-new-vars))
 
 (defpackage :utils
   (:use :cl)
@@ -77,7 +75,6 @@
 	   :has-duplicates :has-no-duplicates
 	   :list->pair-list :fn :dolist-inter
 	   :append-mapcar :fdebug :compound-symbol :bmc-symb
-	   :symbol-not-in
 	   :indent :fmt :fmt-blank-line
 	   :*indent-level* :*indent-amount* :*fmt-ostream*
 	   :alambda :self :rethrow-error))
@@ -168,7 +165,7 @@
    :is-array-slice-index-all :make-array-slice-index-all))
 
 (defpackage :prove
-  (:use :cl :adt :expr :utils :symbols)
+  (:use :cl :adt :expr :utils :variables :symbols)
   (:export :is-provable :also-assume :*prover* :can-prove :assuming
 	   :assuming-se :subst-expr))
 

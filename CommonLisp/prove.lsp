@@ -60,7 +60,7 @@
 		  ((not (member var freev))
 		   (expr-lam var (subst-expr-1 body)))
 		  (t
-		   (let* ((new-var (symbol-not-in freev (symbol-name var)))
+		   (let* ((new-var (new-var var))
 		          (new-body (subst-expr var (expr-var new-var) body)))
 		     (expr-lam new-var (subst-expr-1 new-body)))))))))
       (subst-expr-1 e))))
@@ -142,7 +142,7 @@
     (lambda (e)
       (destructuring-bind (is-match . subs) (pat-match e pattern)
 	(if is-match
-	  (multi-subst-expr subs replacement)
+	  (multi-subst-expr subs (rename-lambda-vars replacement))
 	  e)))))
 
 (defun se-pattern-xform (se)
@@ -178,8 +178,19 @@
 (defun expand-densities (e)
   (funcall +expand-densities-fct+ e))
 
+(defun rename-lambda-vars (e)
+  (adt-case expr e
+    ((const) e)
+    ((variable) e)
+    ((apply fct args)
+     (expr-app fct (mapcar #'rename-lambda-vars args)))
+    ((lambda var body)
+     (let* ((v (new-var var))
+	    (b (rename-var var v body)))
+       (expr-lam v b)))))
+
 (defconstant +expand-density-patterns+
-  '(((dnorm-density ?x ?mu ?sigma) .
+  `(((dnorm-density ?x ?mu ?sigma) .
      (* (/ 1 (* (^1/2 (* 2 %pi)) ?sigma))
         (exp (* -1/2 (^2 (- ?x ?mu))))))
 
@@ -332,14 +343,11 @@
 (defun expand-power-qprod-to-factors (lo hi filter f e2)
   (adt-case expr f
     ((lambda var body)
-     (let ((excluded (free-vars-in-expr e2)))
-       (when (member var excluded)
-	 (let ((new-var (symbol-not-in excluded (symbol-name var))))
-	   (setf body (subst-expr var (expr-var new-var) body))
-	   (setf var new-var)))
+     (let* ((new-var (new-var var))
+	    (new-body (rename-var var new-var body)))
        (expand-to-factors
 	 (expr-call 'qprod lo hi filter
-		    (expr-lam var (expr-call '^ body e2))))))))
+		    (expr-lam new-var (expr-call '^ new-body e2))))))))
 
 (defun expand-quadratic (e)
   (let ((terms (expand-quadratic-terms e)))
