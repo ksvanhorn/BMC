@@ -13,6 +13,7 @@
        (load ,pkg-path)
        (lisp-unit:run-all-tests ,pkg-name))))
 
+(runtests variables)
 (runtests adt)
 (runtests utils)
 (runtests lazy)

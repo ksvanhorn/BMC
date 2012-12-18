@@ -11,6 +11,7 @@
 
     ;; constants
     :@-all :true :false :%pi :%e :%undef :%infty+ :%infty- :%true-pred
+    :%min-int :%max-int
 
     ;; scalar types
     :boolean
@@ -63,11 +64,6 @@
     :~
     ))
 
-(defpackage variables
-  (:nicknames :vars)
-  (:use :cl)
-  (:export :new-var :n-new-vars))
-
 (defpackage :utils
   (:use :cl)
   (:export :flet* :while :starts-with :assoc-lookup :zip :strcat :strcat-lines
@@ -79,6 +75,11 @@
 	   :*indent-level* :*indent-amount* :*fmt-ostream*
 	   :alambda :self :rethrow-error))
 
+(defpackage variables
+  (:nicknames :vars)
+  (:use :cl :utils)
+  (:export :vars-symbol :special-var :new-var :n-new-vars))
+
 (defpackage :adt
   (:use :cl :utils)
   (:export :defadt :defadt1 :adt-case :match-adt1))
@@ -88,7 +89,7 @@
   (:export :lcdr :lcar :lcons :lappend :list->lazy :lazy->list))
 
 (defpackage :expr
-  (:use :cl :symbols :adt :utils)
+  (:use :cl :symbols :adt :utils :variables)
   (:export
    :free-vars-in-expr :occurs-free :rename-var
    :sexpr->expr :expr->string :is-scalar-index :is-slice-all :is-slice-range
@@ -114,7 +115,7 @@
 	   :var-type :no-var-types :add-var-type :assocs->env))
 
 (defpackage :model
-  (:use :cl :symbols :adt :utils :expr)
+  (:use :cl :symbols :adt :utils :expr :variables)
   (:export
    :read-model :sexpr->model :raw-sexpr->model
    :sexpr->vtype :sexpr->decl :sexpr->decls :sexpr->distr
@@ -181,7 +182,7 @@
   (:export :simplify-expr))
 
 (defpackage :compile
-  (:use :cl :mcimpl :model :variables :expr :utils :adt :symbols :type-inference)
+  (:use :cl :mcimpl :model :variables :variables :expr :utils :adt :symbols :type-inference)
   (:shadow :expr->string)
   (:export :compile-to-csharp :write-test-file :write-test-updates))
 

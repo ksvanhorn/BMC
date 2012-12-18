@@ -1,19 +1,56 @@
 (in-package :variables)
 
-;;; Scheme for variables:
-;;; - The names of generated temporary variables have form _<ident><number>,
-;;;   where <ident> does not start with '_'.
-;;; - The names of generated variables used in all models have form
-;;;   _<ident>, where <ident> does not end in a digit.
-;;; - <ident> matches the regular expression [_A-Za-z0-9]+.
-;;; - <number> matches [0-9]+.
+;;; Scheme for variable names:
+;;; model-ident: <simple-ident>
+;;; newly-generated-var: _[0-9]+<simple-ident>
+;;; special-var: _[a-zA-Z]+(_<simple-ident>)?
+;;; simple-ident: [a-zA-Z][a-zA-Z0-9_]*
+
+(defconstant +vars-package+ (find-package :variables))
+
+(defun vars-symbol (s)
+  (if (eq +vars-package+ (symbol-package s))
+    s
+    (intern (symbol-name s) +vars-package+)))
+
+(defun ensure-string (x)
+  (if (symbolp x)
+    (symbol-name x)
+    x))
+
+(defun is-special-name (s)
+  (every #'alpha-char-p s))
+
+(defun special-var (name &optional var)
+  (setf name (ensure-string name))
+  (assert (is-special-name name))
+  (let ((suffix (if (null var) "" (format nil "_~a" var))))
+    (intern (strcat "_" name suffix) +vars-package+)))
 
 (defvar *genvar-counter* 0)
 
-(defun new-var (prefix)
+(defun new-var (root)
+  (setf root (normalize-root (ensure-string root)))
   (prog1
-    (intern (format nil "_~a~d" prefix *genvar-counter*) 'variables)
+    (intern (format nil "_~d~a" *genvar-counter* root) +vars-package+)
     (incf *genvar-counter*)))
+
+;;; Strip off any prefix of form _[0-9]+.
+;;; REQUIRE: If s begins with #\_ then this is followed by a digit.
+;;;
+(defun normalize-root (s)
+  (let ((beg 0)
+	(len (length s)))
+    (cond
+      ((or (zerop len) (char/= #\_ (char s 0)))
+       s)
+      (t
+       (incf beg) ; skip past initial underscore
+       (while (and (< beg len) (digit-char-p (char s beg)))
+	 (incf beg))
+       (when (= 1 beg) ; digit does not follow #\_
+	 (error "Invalid name passed to new-var: ~a." s))
+       (subseq s beg)))))
 
 (defun n-new-vars (n prefix)
   (let ((vars nil))

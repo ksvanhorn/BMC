@@ -12,8 +12,8 @@
   (assert-equalp (make-expr-const :name '@-all)
 		 (sexpr->expr '@-all))
 
-  (assert-equalp (make-expr-variable :symbol 'bee)
-                 (sexpr->expr 'bee))
+  (assert-equalp (make-expr-variable :symbol 'vars::bee)
+                 (sexpr->expr 'expr-tests::bee))
 
   (assert-equalp (make-expr-apply
                    :fct '+ 
@@ -29,39 +29,41 @@
 	     (make-expr-const :name 4)
 	     (make-expr-const :name '%true-pred)
 	     (make-expr-lambda
-	       :var 'i
+	       :var 'vars::i
 	       :body (make-expr-apply
 		       :fct '@
-		       :args (list (make-expr-variable :symbol 'x)
-				   (make-expr-variable :symbol 'i))))))
+		       :args (list (make-expr-variable :symbol 'vars::x)
+				   (make-expr-variable :symbol 'vars::i))))))
     (sexpr->expr '(:quant qand i (1 4) (@ x i))))
 
   (assert-equalp
-    (expr-call 'qand (expr-const 1) (expr-var 'n)
-	       (expr-lam 'k (expr-call 'is-even (expr-var 'k)))
-	       (expr-lam 'k (expr-call '@ (expr-var 'x) (expr-var 'k))))
+    (expr-call 'qand
+      (expr-const 1) (expr-var 'vars::n)
+      (expr-lam 'vars::k (expr-call 'is-even (expr-var 'vars::k)))
+      (expr-lam 'vars::k
+        (expr-call '@ (expr-var 'vars::x) (expr-var 'vars::k))))
     (sexpr->expr '(:quant qand k (1 n) (is-even k) (@ x k))))
 
   (assert-equalp
     (make-expr-apply
       :fct '@-slice
       :args (list
-	      (make-expr-variable :symbol 'v)
+	      (make-expr-variable :symbol 'vars::v)
 	      (make-expr-apply
 	        :fct '@-idx
-		:args (list (make-expr-variable :symbol 'j)))
+		:args (list (make-expr-variable :symbol 'vars::j)))
 	      (make-expr-const :name '@-all)
 	      (make-expr-apply
 	        :fct '@-rng
 		:args (list (make-expr-const :name 1)
-			    (make-expr-variable :symbol 'k)))))
+			    (make-expr-variable :symbol 'vars::k)))))
     (sexpr->expr '(@ v j :all (:range 1 k))))
   
   (assert-equalp
-    (make-expr-lambda :var 'x
+    (make-expr-lambda :var 'vars::x
 		      :body (make-expr-apply
 			      :fct '+
-			      :args (list (make-expr-variable :symbol 'x)
+			      :args (list (make-expr-variable :symbol 'vars::x)
 					  (make-expr-const :name 3))))
     (sexpr->expr '(:lambda x (+ x 3))))
 
@@ -70,14 +72,14 @@
       :fct '!
       :args (list
 	      (make-expr-lambda
-	        :var 'x
+	        :var 'vars::x
 		:body (make-expr-apply
 		        :fct '*
-			:args (list (make-expr-variable :symbol 'x)
-				    (make-expr-variable :symbol 'x))))
+			:args (list (make-expr-variable :symbol 'vars::x)
+				    (make-expr-variable :symbol 'vars::x))))
 	      (make-expr-apply
 	        :fct '+
-		:args (list (make-expr-variable :symbol 'v)
+		:args (list (make-expr-variable :symbol 'vars::v)
 			    (make-expr-const :name 1)))))
     (sexpr->expr
       '(:let (x (+ v 1))
@@ -85,13 +87,14 @@
 
   ;; recursive structure
 
-  (assert-equalp (make-expr-apply
-                   :fct 'exp
-                   :args (list (make-expr-apply
-                                 :fct '@
-                                 :args (list (make-expr-variable :symbol 'nu)
-                                             (make-expr-const :name 1)))))
-                 (sexpr->expr '(exp (@ nu 1))))
+  (assert-equalp
+    (make-expr-apply
+     :fct 'exp
+     :args (list (make-expr-apply
+		  :fct '@
+		  :args (list (make-expr-variable :symbol 'vars::nu)
+			      (make-expr-const :name 1)))))
+    (sexpr->expr '(exp (@ nu 1))))
 
   (assert-equalp
     (make-expr-apply
@@ -99,34 +102,34 @@
       :args (list
 	      (make-expr-apply
 	        :fct '-
-		:args (list (make-expr-variable :symbol 'v)
+		:args (list (make-expr-variable :symbol 'vars::v)
 			    (make-expr-const :name 2)))
 	      (make-expr-apply
 	        :fct '*
 		:args (list (make-expr-const :name 4)
-			    (make-expr-variable :symbol 'w)))
+			    (make-expr-variable :symbol 'vars::w)))
 	      (make-expr-const :name '%true-pred)
 	      (make-expr-lambda
-	        :var 'j
-		:body (make-expr-variable :symbol 'j))))
+	        :var 'vars::j
+		:body (make-expr-variable :symbol 'vars::j))))
     (sexpr->expr '(:quant qsum j ((- v 2) (* 4 w)) j)))
 
   (assert-equalp
     (make-expr-apply
       :fct 'q@sum
       :args (list
-              (expr-var 'm)
-	      (expr-var 'n)
-	      (expr-lam 'j
+              (expr-var 'vars::m)
+	      (expr-var 'vars::n)
+	      (expr-lam 'vars::j
 		(expr-call '=
                   (expr-const 2)
-		  (expr-call '@ (expr-var 's) (expr-var 'j))))
-	      (expr-lam 'j
+		  (expr-call '@ (expr-var 'vars::s) (expr-var 'vars::j))))
+	      (expr-lam 'vars::j
 		(expr-call '@-slice
-		  (expr-var 'x)
+		  (expr-var 'vars::x)
 		  (expr-const '@-all)
-		  (expr-call '@-idx (expr-var 'j))))
-	      (expr-call '- (expr-var 'nv) (expr-const 1))))
+		  (expr-call '@-idx (expr-var 'vars::j))))
+	      (expr-call '- (expr-var 'vars::nv) (expr-const 1))))
     (sexpr->expr
      '(:quant q@sum j (m n) (= 2 (@ s j)) (@ x :all j) :shape ((- nv 1)))))
 
@@ -134,20 +137,20 @@
     (make-expr-apply
       :fct 'q@sum
       :args (list
-              (expr-var 'm)
-	      (expr-var 'n)
-	      (expr-lam 'j
+              (expr-var 'vars::m)
+	      (expr-var 'vars::n)
+	      (expr-lam 'vars::j
 		(expr-call '=
                   (expr-const 2)
-		  (expr-call '@ (expr-var 's) (expr-var 'j))))
-	      (expr-lam 'j
+		  (expr-call '@ (expr-var 'vars::s) (expr-var 'vars::j))))
+	      (expr-lam 'vars::j
 		(expr-call '@-slice
-		  (expr-var 'x)
+		  (expr-var 'vars::x)
 		  (expr-const '@-all)
-		  (expr-call '@-idx (expr-var 'j))
+		  (expr-call '@-idx (expr-var 'vars::j))
 		  (expr-const '@-all)))
-	      (expr-call '- (expr-var 'nv) (expr-const 1))
-	      (expr-call '- (expr-var 'b) (expr-var 'a))))
+	      (expr-call '- (expr-var 'vars::nv) (expr-const 1))
+	      (expr-call '- (expr-var 'vars::b) (expr-var 'vars::a))))
     (sexpr->expr
      '(:quant q@sum j (m n) (= 2 (@ s j))
 	      (@ x :all j :all)
@@ -158,23 +161,23 @@
       :fct '@-slice
       :args
         (list
-          (make-expr-variable :symbol 'x)
+          (make-expr-variable :symbol 'vars::x)
           (make-expr-apply
             :fct '@-idx
             :args (list (make-expr-apply
                           :fct '/
-                          :args (list (make-expr-variable :symbol 's)
+                          :args (list (make-expr-variable :symbol 'vars::s)
                                       (make-expr-const :name 3)))))
           (make-expr-apply
             :fct '@-rng
             :args (list (make-expr-apply
                           :fct '-
-                          :args (list (make-expr-variable :symbol 'n)
+                          :args (list (make-expr-variable :symbol 'vars::n)
                                       (make-expr-const :name 1)))
                         (make-expr-apply
                           :fct '+
-                          :args (list (make-expr-variable :symbol 'm)
-                                      (make-expr-variable :symbol 'k)))))))
+                          :args (list (make-expr-variable :symbol 'vars::m)
+                                      (make-expr-variable :symbol 'vars::k)))))))
     (sexpr->expr '(@ x (/ s 3) (:range (- n 1) (+ m k)))))
 
   ;; errors
@@ -198,6 +201,25 @@
   (assert-error 'error (sexpr->expr '(:let (v x 2) (+ v 1))))
   (assert-error 'error (sexpr->expr '(:let ((+ x 2) y) (+ x y))))
   (assert-error 'error (sexpr->expr '(:let (true 12) (* true true))))
+)
+
+(define-test is-quant-expr-tests
+  (assert-equalp nil (is-quant-expr #e1))
+  (assert-equalp nil (is-quant-expr #e%pi))
+  (assert-equalp nil (is-quant-expr #ex))
+  (assert-equalp nil (is-quant-expr #(+ x 1)))
+  (assert-equalp
+    '(qsum #e(+ m 1) #e(- n 1) #e(:lambda i (< (@ x i) 0))
+	   #e(:lambda i (@ z i)))
+    (is-quant-expr #e(:quant qsum i ((+ m 1) (- n 1)) (< (@ x i) 0) (@ z i))))
+  (assert-equalp
+    '(q@sum #em #en #e(:lambda j (= 2 (@ v j))) #e(:lambda j (@ z j)) #ek)
+    (is-quant-expr
+      #e(:quant q@sum j (m n) (= 2 (@ v j)) (@ z j) :shape (k))))
+  (assert-equalp
+    '(q@sum #em #en #e(:lambda j (@ p j)) #e(:lambda j (@ z j)) #ek #er)
+    (is-quant-expr
+      #e(:quant q@sum j (m n) (@ p j) (@ z j) :shape (k r))))
 )
 
 (define-test expr->string-tests
@@ -433,19 +455,19 @@
     '()
     (free-vars-in-expr (sexpr->expr 5)))
   (assert-equalp
-    '(v)
+    '(vars::v)
     (free-vars-in-expr (sexpr->expr 'v)))
   (assert-equalp
-    '(x y)
+    '(vars::x vars::y)
     (free-vars-in-expr (sexpr->expr '(+ x y 3))))
   (assert-equalp
-    '(a b)
+    '(vars::a vars::b)
     (free-vars-in-expr (sexpr->expr '(+ a (:quant qsum i (1 4) (* 3 b))))))
   (assert-equalp
-    '(y z x)
+    '(vars::y vars::z vars::x)
     (free-vars-in-expr (sexpr->expr '(:let (w (* 3 x)) (^ (+ y z) w)))))
   (assert-equalp
-    '(m n x)
+    '(vars::m vars::n vars::x)
     (free-vars-in-expr
       (sexpr->expr
         '(:quant qand j (m n) (:let (y (@ x j)) (* y y))))))
@@ -465,53 +487,53 @@
 	      (:quant qand i (1 n) (* w 7))
 	      (:quant qand v (1 n) (* v 7)))))
     (dolist (e (mapcar #'sexpr->expr yes))
-      (assert-true (occurs-free 'v e)))
+      (assert-true (occurs-free 'vars::v e)))
     (dolist (e (mapcar #'sexpr->expr no))
-      (assert-false (occurs-free 'v e)))))
+      (assert-false (occurs-free 'vars::v e)))))
 
 (define-test rename-var-tests
   (assert-equalp
     #e1
-    (rename-var 'x 'y #e1))
+    (rename-var 'vars::x 'vars::y #e1))
 
   (assert-equalp
     #e z
-    (rename-var 'x 'y #e z))
+    (rename-var 'vars::x 'vars::y #e z))
 
   (assert-equalp
     #e y
-    (rename-var 'x 'y #e x))
+    (rename-var 'vars::x 'vars::y #e x))
 
   (assert-equalp
     #e(+ a b)
-    (rename-var 'x 'y #e(+ a b)))
+    (rename-var 'vars::x 'vars::y #e(+ a b)))
 
   (assert-equalp
     #e(+ a xn)
-    (rename-var 'xo 'xn #e(+ a xo)))
+    (rename-var 'vars::xo 'vars::xn #e(+ a xo)))
 
   (assert-equalp
     #e(+ xn b)
-    (rename-var 'xo 'xn #e(+ xo b)))
+    (rename-var 'vars::xo 'vars::xn #e(+ xo b)))
 
   (assert-equalp
     #e(:lambda v (* v v))
-    (rename-var 'a 'b #e(:lambda v (* v v))))
+    (rename-var 'vars::a 'vars::b #e(:lambda v (* v v))))
     
   (assert-equalp
     #e(:lambda a (* a x))
-    (rename-var 'a 'b #e(:lambda a (* a x))))
+    (rename-var 'vars::a 'vars::b #e(:lambda a (* a x))))
     
   (assert-equalp
     #e(:lambda a (* a y))
-    (rename-var 'x 'y #e(:lambda a (* a x))))
+    (rename-var 'vars::x 'vars::y #e(:lambda a (* a x))))
 
   (assert-equalp
     #e(+ x (* y (^2 x)))
-    (rename-var 'x 'x #e(+ x (* y (^2 x)))))
+    (rename-var 'vars::x 'vars::x #e(+ x (* y (^2 x)))))
 
   (assert-equalp
     #e(+ (* 3 y) (:quant qsum i (m (* 2 y)) (@ a y i)))
-    (rename-var 'x 'y
+    (rename-var 'vars::x 'vars::y
       #e(+ (* 3 x) (:quant qsum i (m (* 2 x)) (@ a x i)))))
 )

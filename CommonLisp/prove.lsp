@@ -44,26 +44,22 @@
   e)
 
 (defun subst-expr (v replacement e)
-  (let ((freev (free-vars-in-expr replacement)))
-    (labels
-      ((subst-expr-1 (x)
-	 (adt-case expr x
-	   ((const name)
-	    x)
-	   ((variable symbol)
-	    (if (eq v symbol) replacement x))
-	   ((apply fct args)
-	    (expr-app fct (mapcar #'subst-expr-1 args)))
-	   ((lambda var body)
-	    (cond ((eq v var)
-		   x)
-		  ((not (member var freev))
-		   (expr-lam var (subst-expr-1 body)))
-		  (t
-		   (let* ((new-var (new-var var))
-		          (new-body (subst-expr var (expr-var new-var) body)))
-		     (expr-lam new-var (subst-expr-1 new-body)))))))))
-      (subst-expr-1 e))))
+  (labels
+   ((sub (x)
+      (adt-case expr x
+	((const name)
+	 x)
+	((variable symbol)
+	 (if (eq v symbol) replacement x))
+	((apply fct args)
+	 (expr-app fct (mapcar #'sub args)))
+	((lambda var body)
+	 (if (eq v var)
+	   x
+	   (let* ((new-var (new-var var))
+		  (new-body (rename-var var new-var body)))
+	     (expr-lam new-var (sub new-body))))))))
+   (sub e)))
 
 (defun is-pattern-var (symbol)
   (char= #\? (char (symbol-name symbol) 0)))
@@ -142,7 +138,7 @@
     (lambda (e)
       (destructuring-bind (is-match . subs) (pat-match e pattern)
 	(if is-match
-	  (multi-subst-expr subs (rename-lambda-vars replacement))
+	  (multi-subst-expr subs #|(rename-lambda-vars|# replacement);)
 	  e)))))
 
 (defun se-pattern-xform (se)

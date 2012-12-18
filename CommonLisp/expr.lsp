@@ -74,7 +74,7 @@
     ((is-const-symbol x)
      (make-expr-const :name x))
     ((symbolp x)
-     (make-expr-variable :symbol x))
+     (make-expr-variable :symbol (vars-symbol x)))
     ((consp x)
      (destructuring-bind (op . args) x
        (cond ((eq :quant op)
@@ -100,12 +100,13 @@
       (error "Invalid variable symbol in ~W." (cons :let args)))
     (make-expr-apply
       :fct '!
-      :args (list (make-expr-lambda :var var :body (sexpr->expr body))
+      :args (list (make-expr-lambda :var (vars-symbol var)
+				    :body (sexpr->expr body))
 		  (sexpr->expr val)))))
 
 (defun sexpr->expr-lambda (args)
   (destructuring-bind (var body) args
-    (make-expr-lambda :var var :body (sexpr->expr body))))
+    (make-expr-lambda :var (vars-symbol var) :body (sexpr->expr body))))
 
 (defun split-quant-args (args)
   (let ((args-rev nil)
@@ -136,14 +137,15 @@
     (unless (is-variable-symbol var)
       (error "Index var ~W of quantifier expression ~W ~
               is not a valid variable symbol" var (cons ':quant args)))
-    (let ((lo (sexpr->expr lo-x))
+    (let ((v (vars-symbol var))
+	  (lo (sexpr->expr lo-x))
 	  (hi (sexpr->expr hi-x))
 	  (filter-x (if maybe-body filter-or-body nil))
 	  (body-x (if maybe-body (car maybe-body) filter-or-body)))
       (let ((filter (if filter-x
-			(expr-lam var (sexpr->expr filter-x))
+			(expr-lam v (sexpr->expr filter-x))
 		      (expr-const '%true-pred)))
-	    (body (expr-lam var (sexpr->expr body-x)))
+	    (body (expr-lam v (sexpr->expr body-x)))
 	    (shape (mapcar #'sexpr->expr shape-sexp)))
         (expr-app op (list* lo hi filter body shape))))))
 
@@ -335,7 +337,7 @@
   (adt-case expr e
     ((apply fct args)
      (and (is-fquant-symbol fct)
-	  (<= 4 (length args) 5)
+	  (<= 4 (length args))
 	  (every #'is-expr-lambda (subseq args 2 4))
 	  (cons fct args)))
     (otherwise nil)))

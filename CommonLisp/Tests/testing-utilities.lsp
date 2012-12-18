@@ -1,6 +1,6 @@
 (defpackage :testing-utilities
   (:use :cl :compile :utils)
-  (:export :ppstr :with-genvar-counter))
+  (:export :ppstr :with-genvar-counter :let-test-macros))
 
 (in-package :testing-utilities)
 
@@ -19,3 +19,28 @@
   `(let ((variables::*genvar-counter* ,n))
      ,@body))
 
+(defmacro let-test-macros (defs &body body)
+  (flet*
+    ((def->macro (def) (apply #'dm def))
+     (dm (name parameters &rest def-body)
+       (multiple-value-bind (expanded-params keyword-checks) (expand parameters)
+         `(,name (,@expanded-params) ,@keyword-checks ,@def-body)))
+     (expand (parameters)
+       (cond
+	 ((null parameters)
+	  (values nil nil))
+	 ((eq (intern "=>") (car parameters))
+	  (let ((arrow-key (intern "=>-KEY")))
+	    (values (cons arrow-key (cdr parameters))
+		    `((assert (eq (intern "=>") ,arrow-key))))))
+	 (t
+	   (destructuring-bind (parm1 . parms-rest) parameters
+	     (multiple-value-bind (expanded checks) (expand parms-rest)
+               (let* ((parm1-name (symbol-name parm1))
+		      (parm1-kw-parm (intern (strcat parm1-name "-KEY")))
+		      (parm1-keyword (intern parm1-name "KEYWORD")))
+		 (values (list* parm1-kw-parm parm1 expanded)
+			 (cons `(assert (eq ,parm1-keyword ,parm1-kw-parm))
+			       checks)))))))))
+    (let ((macro-defs (mapcar #'def->macro defs)))
+      `(macrolet ,macro-defs ,@body))))

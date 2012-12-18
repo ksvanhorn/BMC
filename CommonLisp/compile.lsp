@@ -11,44 +11,35 @@
 
 ;;; New scheme:
 ;;; - Temp vars with fixed names have form _<ident>, where <ident> does not
-;;;   
-;;; - Generated temp vars have form __<ident><num>
+;;;   end in a digit.
+;;; - Generated temp vars have form _<ident><num>
 ;;; - Temp vars, generated vars, and vars appearing in model or impl
 ;;;   are all in same package.
-; _omit_<varname>
-; _omit
 ; _N
 ; _expectations
-; _accepted
-; _accepted
-; _assigned_<varname>
-; _idx
-; _idx1
-; _idx2
-; _idx<num>
-; _idx<num>_lo
-; _idx<num>_hi
 ; _x
-; _lo_<varname>
-; _hi_<varname>
-; _if_<num>
-; _lpd
-; _lpd0
-; _lpd1
-; _tol
-; _ljd0
-; _ljd1
-; _old_<varname>
-; _new_<varname>
-; _lar
-; _buf
-; _save_<varname>
-; _tmp
 ; _dirpath
 ;_last_<varname>
 ;_first_<varname>
 
 ;;; Main function
+
+(defconstant lar-var (special-var "lar")) ; log acceptance ratio
+(defconstant ljd-var (special-var "ljd")) ; log joint density
+(defconstant ljd-old-var (special-var "ljdold"))
+(defconstant ljd-new-var (special-var "ljdnew"))
+(defconstant lpd-var (special-var "lpd")) ; log proposal density
+(defconstant lpd-old-var (special-var "lpdold"))
+(defconstant lpd-new-var (special-var "lpdnew"))
+(defconstant tol-var (special-var "tol")) ; tolerance
+(defconstant accepted-var (special-var "accepted")) ; M-H proposal accepted?
+(defconstant omit-param (special-var "omit"))
+(defun old-val-var (var) (special-var "old" var))
+(defun new-val-var (var) (special-var "new" var))
+(defun assigned-var (var) (special-var "assigned" var))
+(defun lo-var (var) (special-var "lo" var))
+(defun hi-var (var) (special-var "hi" var))
+(defun omit-var (var) (special-var "omit" var))
 
 (defun compile-to-csharp (csharp-name-space class-name mdl impl)
 #|
@@ -181,6 +172,8 @@
 	     ('%true-pred "(x => true)")
 	     ('%infty- "double.NegativeInfinity")
 	     ('%infty+ "double.PositiveInfinity")
+	     ('%min-int "Int32.MinValue")
+	     ('%max-int "Int32.MaxValue")
 	     (t (error "Unimplemented case in compile::const->string: ~a."
 		       x))))))
 
@@ -533,19 +526,18 @@
      ,@body))
 
 (defun prior-draw-wrd-stoch (lhs rhs)
-  (let ((lhs-var-str (variable->string (rellhs-main-var lhs))))
-    (fmt "if (!_omit_~a) {" lhs-var-str)
-    (bracket-end
-     (write-rel-draw-stoch lhs rhs))))
+  (fmt "if (!~a) {" (omit-var (rellhs-main-var lhs)))
+  (bracket-end
+   (write-rel-draw-stoch lhs rhs)))
 
 (defun write-prior-draw (model-vars gen-body)
   (fmt "public void Draw() { Draw(new string[0]); }")
   (fmt-blank-line)
-  (fmt "public void Draw(string[] _omit) {")
+  (fmt "public void Draw(string[] ~a) {" omit-param)
   (bracket-end
     (dolist (v model-vars)
-      (let ((vstr (variable->string v)))
-	(fmt "bool _omit_~a = Array.IndexOf(_omit, \"~a\") >= 0;" vstr vstr)))
+      (fmt "bool ~a = Array.IndexOf(~a, \"~a\") >= 0;"
+	   (omit-var v) omit-param v))
     (fmt-blank-line)
     (funcall gen-body)))
 
@@ -641,8 +633,8 @@
 	  (decls2strs (ds) (mapcar #'decl2str ds)))
     (dolist (x acceptmons)
       (destructuring-bind (name . decls) x
-	(fmt "protected virtual void AcceptanceMonitor~a(bool _accepted~{, ~a~}) { }"
-	     name (decls2strs decls))))))
+	(fmt "protected virtual void AcceptanceMonitor~a(bool ~a~{, ~a~}) { }"
+	     name accepted-var (decls2strs decls))))))
 
 (defun write-csharp-allocate-accums (decls)
   (fmt "public void AllocateAccumulators()")
@@ -873,7 +865,7 @@
 
 (defun write-assigned-test-rellhs-array-elt (var indices dim-fct)
   (let ((n (funcall dim-fct var))
-	(vstr (default-variable->string var))
+	(avar (assigned-var var))
 	(idxstr-list (mapcar #'index-expr->string indices)))
     (unless (= n (length indices))
       (error "Wrong number of indices in LHS of update: ~a."
@@ -881,39 +873,44 @@
     (case n
       (1
        (let ((idxstr (first idxstr-list)))
-         (fmt "Assert.IsFalse(_assigned_~a[~a], \"~a[{0}] assigned\", ~a);"
-	      vstr idxstr vstr idxstr)
-         (fmt "_assigned_~a[~a] = true;" vstr idxstr)))
+         (fmt "Assert.IsFalse(~a[~a], \"~a[{0}] assigned\", ~a);"
+	      avar idxstr var idxstr)
+         (fmt "~a[~a] = true;" avar idxstr)))
       (2
        (let ((idxstr1 (first idxstr-list))
 	     (idxstr2 (second idxstr-list)))
-	 (fmt "Assert.IsFalse(_assigned_~a[~a, ~a], \"~a[{0}, {1}] assigned\", ~a, ~a);"
-	      vstr idxstr1 idxstr2 vstr idxstr1 idxstr2)
-	 (fmt "_assigned_~a[~a, ~a] = true;" vstr idxstr1 idxstr2)))
+	 (fmt "Assert.IsFalse(~a[~a, ~a], \"~a[{0}, {1}] assigned\", ~a, ~a);"
+	      avar idxstr1 idxstr2 var idxstr1 idxstr2)
+	 (fmt "~a[~a, ~a] = true;" avar idxstr1 idxstr2)))
       (otherwise
        (error "Unimplemented case in write-assigned-test-rellhs-array-elt")))))
 
 (defun write-assigned-test-rellhs-simple (var dim-fct)
-  (let ((vstr (default-variable->string var)))
+  (let ((avar (assigned-var var)))
     (case (funcall dim-fct var)
       (0
-       (fmt "Assert.IsFalse(_assigned_~a, \"~a assigned\");" vstr vstr)
-       (fmt "_assigned_~a = true;" vstr))
+       (fmt "Assert.IsFalse(~a, \"~a assigned\");" avar var)
+       (fmt "~a = true;" avar))
       (1
-       (fmt "for (int _idx = 0; _idx < _assigned_~a.Length; ++_idx) {" vstr)
-       (bracket-end
-	(fmt "Assert.IsFalse(_assigned_~a[_idx], \"~a[{0}] assigned\", _idx);"
-	     vstr vstr)
-	(fmt "_assigned_~a[_idx] = true;" vstr)))
+       (let ((idxvar (new-var "idx")))
+         (fmt "for (int ~a = 0; ~a < ~a.Length; ++~a) {"
+	      idxvar idxvar avar idxvar)
+	 (bracket-end
+	  (fmt "Assert.IsFalse(~a[~a], \"~a[{0}] assigned\", ~a);"
+	       avar idxvar var idxvar)
+	  (fmt "~a[~a] = true;" avar idxvar))))
       (2
-       (fmt "for (int _idx1 = 0; _idx1 < _assigned_~a.NBRows; ++_idx1) {"
-	    vstr)
-       (bracket-end
-	(fmt "for (int _idx2 = 0; _idx2 < _assigned_~a.NBCols; ++_idx2) {"
-	     vstr)
-	(bracket-end
-	 (fmt "Assert.IsFalse(_assigned_~a[_idx1, _idx2], \"~a[{0}, {1}] assigned\", _idx1, _idx2);" vstr vstr)
-	 (fmt "_assigned_~a[_idx1, _idx2] = true;" vstr)))))))
+       (let ((idx1 (new-var "idx"))
+	     (idx2 (new-var "idx")))
+	 (fmt "for (int ~a = 0; ~a < ~a.NBRows; ++~a) {"
+	      idx1 idx1 avar idx1)
+	 (bracket-end
+	  (fmt "for (int ~a = 0; ~a < ~a.NBCols; ++~a) {"
+	       idx2 idx2 avar idx2)
+	  (bracket-end
+	   (fmt "Assert.IsFalse(~a[~a, ~a], \"~a[{0}, {1}] assigned\", ~a, ~a);"
+		avar idx1 idx2 var idx1 idx2)
+	   (fmt "~a[~a, ~a] = true;" avar idx1 idx2))))))))
 
 (defun write-test-file (class-name mdl impl)
   (let ((update-names (mapcar #'car (mcimpl-updates impl)))
@@ -996,40 +993,33 @@
 (defun write-test-is-valid-update-body
        (rel is-class-var dim-fct &optional
 	(write-mh #'write-test-is-valid-update-mh))
-  (let ((ifcnt 0))
-  (labels
+  (flet*
     ((write-tivu-body (rel rev-outer-lets)
        (adt-case relation rel
 	 ((let var val body)
 	  (if *env*
 	    (write-let-assignment var val *env*)
 	    (fmt "var ~a = ~a;"
-		 (variable->string var)
-		 (expr->string (assignable-expr val))))
+		 var (expr->string (assignable-expr val))))
 	  (extend-env var (infer-type val *env*)
 	    (write-tivu-body body (cons (cons var val) rev-outer-lets))))
 	 ((loop var lo hi body)
-	  (let* ((var-str (variable->string var))
-		 (lo-var-str (strcat "_lo_" var-str))
-		 (hi-var-str (strcat "_hi_" var-str))
-		 (lo-var (bmc-symb lo-var-str))
-		 (hi-var (bmc-symb hi-var-str)))
-	    (fmt "var ~a = ~a;" lo-var-str (expr->string lo))
-	    (fmt "var ~a = ~a;" hi-var-str (expr->string hi))
+	  (let* ((lo-var (lo-var var))
+		 (hi-var (hi-var var)))
+	    (fmt "var ~a = ~a;" lo-var (expr->string lo))
+	    (fmt "var ~a = ~a;" hi-var (expr->string hi))
 	    (fmt "for (int ~a = ~a; ~a <= ~a; ++~a) {"
-		 var-str lo-var-str var-str hi-var-str var-str)
+		 var lo-var var hi-var var)
 	    (bracket-end
 	      (extend-env var #tinteger
 		(write-tivu-body 
 		  body
 		  `((,hi-var . ,hi) (,lo-var . ,lo) ,@rev-outer-lets))))))
 	 ((if condition true-branch false-branch)
-	  (incf ifcnt)
-	  (let* ((ifcnt-str (format nil "_if_~d" ifcnt))
-		 (ifcnt-sym (bmc-symb ifcnt-str))
-		 (rol (cons (cons ifcnt-sym condition) rev-outer-lets)))
-	    (fmt "var ~a = ~a;" ifcnt-str (expr->string condition))
-	    (fmt "if (~a) {" ifcnt-str)
+	  (let* ((if-test-var (new-var "if"))
+		 (rol (cons (cons if-test-var condition) rev-outer-lets)))
+	    (fmt "var ~a = ~a;" if-test-var (expr->string condition))
+	    (fmt "if (~a) {" if-test-var)
 	    (bracket-end (write-tivu-body true-branch rol))
 	    (when (not (is-relation-skip false-branch))
 	      (fmt "else {")
@@ -1041,7 +1031,7 @@
 	 (otherwise
 	  (error "Unimplemented case in write-test-is-valid-update-body: ~a" rel)))))
     (let ((*variable->string* (var2str-cv "_x." is-class-var)))
-      (write-tivu-body rel '())))))
+      (write-tivu-body rel '()))))
 
 (defun remove-acceptmon (mh)
   (match-adt1 (relation-mh lets proposal-distribution log-acceptance-ratio) mh
@@ -1053,12 +1043,12 @@
 (defun write-test-is-valid-update-mh (outer-lets rel is-class-var dim-fct)
   (dolist (v (model-variables-assigned-in rel))
     (check-rel-var-is-class-var v is-class-var)
-    (let ((vstr (default-variable->string v)))
+    (let ((avar (assigned-var v)))
       (case (funcall dim-fct v)
-	(0 (fmt "bool _assigned_~a = false;" vstr))
-	(1 (fmt "bool [] _assigned_~a = new bool[_x.~a.Length];" vstr vstr))
-	(2 (fmt "BMatrix _assigned_~a = new BMatrix(_x.~a.NBRows, _x.~a.NBCols);"
-		  vstr vstr vstr)))))
+	(0 (fmt "bool ~a = false;" avar))
+	(1 (fmt "bool [] ~a = new bool[_x.~a.Length];" avar v))
+	(2 (fmt "BMatrix ~a = new BMatrix(_x.~a.NBRows, _x.~a.NBCols);"
+		avar v v)))))
   (let ((wrd-stoch (fn (lhs rhs)
 		       (write-assigned-test lhs dim-fct)
 		       (write-rel-draw-stoch lhs rhs)))
@@ -1088,7 +1078,7 @@
 	  (fn (lhs-str lhs)
 	    (fmt "~a = BMC.Copy(~a);"
 		 lhs-str (lhs-xformed->string lhs var-xform))))
-	(*ljd-accum* "_lpd"))
+	(*ljd-accum* lpd-var))
     (write-ljd-acc-rel rel t)))
 
 (defun lhs-var (lhs)
@@ -1112,7 +1102,8 @@
 (defun write-test-acceptance-ratio
        (class-name upd-name rel is-class-var dim-fct &optional
 	(write-body #'write-test-acceptance-ratio-body))
-  (fmt "private static void TestAcceptanceRatio_~a(~a _x, double _tol)" upd-name class-name)
+  (fmt "private static void TestAcceptanceRatio_~a(~a _x, double ~a)"
+       upd-name class-name tol-var)
   (bracket
     (fmt "_x = _x.Copy();")
       (funcall write-body rel is-class-var dim-fct)))
@@ -1121,70 +1112,74 @@
   ;; *** FIX: Need to rename write-test-is-valid-update-body ***
   (write-test-is-valid-update-body rel is-class-var dim-fct #'write-test-acceptance-ratio-mh))
 
-(defun var-xform-prefix (pfx)
-  (fn (v) (bmc-symb (strcat pfx (symbol-name v)))))
+(defun make-save-var-hash-table ()
+  (make-hash-table :test #'equalp))
+
+(defun save-var (lhs ht)
+  (or (gethash lhs ht)
+      (let ((name (strcat "save_" (symbol-name (rellhs-main-var lhs)))))
+	(setf (gethash lhs ht) (new-var name)))))
 
 (defun write-test-acceptance-ratio-mh (outer-lets rel is-class-var dim-fct)
-  (fmt "double _ljd0 = _x.LogJointDensity();")
+  (fmt "double ~a = _x.LogJointDensity();" ljd-old-var)
   (let*((var2str (var2str-cv "_x." is-class-var))
 	(wrd-stoch #'write-rel-draw-stoch)
 	(lar (relation-mh-log-acceptance-ratio rel))
-	(vxform-old (var-xform-prefix "_old_"))
-	(vxform-new (var-xform-prefix "_new_"))
 	(assigned-vars (model-variables-assigned-in rel))
 	(visitor-after-proposal
 	 (fn (prop-distr)
 	   (when (equalp (expr-const 0) lar)
-	     (fmt "double _lar = 0.0;"))
+	     (fmt "double ~a = 0.0;" lar-var))
 	   (dolist (v assigned-vars)
 	     (fmt "var ~a = BMC.Copy(~a);"
-		  (variable->string (funcall vxform-new v))
+		  (variable->string (new-val-var v))
 		  (variable->string v)))
-	   (fmt "double _ljd1 = _x.LogJointDensity();")
+	   (fmt "double ~a = _x.LogJointDensity();" ljd-new-var)
 	   ;; Compute proposal density from new state to old
-	   (fmt "double _lpd = 0.0;")
-	   (write-log-proposal-density vxform-old is-class-var prop-distr)
-	   (fmt "double _lpd1 = _lpd;")
+	   (fmt "double ~a = 0.0;" lpd-var)
+	   (write-log-proposal-density #'old-val-var is-class-var prop-distr)
+	   (fmt "double ~a = ~a;" lpd-new-var lpd-var)
 	   ;; Check that proposal is reversible
 	   (dolist (v assigned-vars)
 	     (let ((msg "Proposal must be reversible")
 		   (v-str (variable->string v))
-		   (vnew-str (variable->string (funcall vxform-old v))))
+		   (vnew-str (variable->string (old-val-var v))))
 	       (fmt "Assert.IsTrue(BMC.Equal(~a, ~a), \"~a\");"
 		    v-str vnew-str msg)))
 	   ;; Compute proposal density from old state to new
-	   (fmt "_lpd = 0.0;")
-	   (write-log-proposal-density vxform-new is-class-var prop-distr)
-	   (fmt "double _lpd0 = _lpd;")
-	   (fmt "Assert.AreEqual(_lar, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");"))))
+	   (fmt "~a = 0.0;" lpd-var)
+	   (write-log-proposal-density #'new-val-var is-class-var prop-distr)
+	   (fmt "double ~a = ~a;" lpd-old-var lpd-var)
+	   (let ((e (format nil "(~a - ~a) + (~a - ~a)"
+			    ljd-new-var ljd-old-var
+			    lpd-new-var lpd-old-var)))
+	     (fmt "Assert.AreEqual(~a, ~a, ~a, \"Log acceptance ratio\");"
+		lar-var e tol-var)))))
     (let ((*variable->string* var2str))
       (dolist (v assigned-vars)
 	(fmt "var ~a = BMC.Copy(~a);"
-	     (variable->string (funcall vxform-old v))
+	     (variable->string (old-val-var v))
 	     (variable->string v))))
     (write-rel-draw rel nil wrd-stoch visitor-after-proposal var2str)))
 
 (defun write-csharp-log-joint-density (mdl)
-  (let* ((excluded (vars-in-model mdl))
-	 (accum-var (new-var "ljd")))
-    (fmt "public double LogJointDensity()")
-    (bracket
-      (fmt "double ~a = 0.0;" accum-var)
-      (dolist (r (model-body mdl))
-	(write-ljd-accum-rel accum-var r t))
-      (fmt "return ~a;" accum-var))))
+  (fmt "public double LogJointDensity()")
+  (bracket
+   (fmt "double ~a = 0.0;" ljd-var)
+   (dolist (r (model-body mdl))
+     (write-ljd-accum-rel r))
+   (fmt "return ~a;" ljd-var)))
 
-(defun write-ljd-accum-rel
-       (accum rel &optional (let-needs-brackets nil)
-	                    (var2str #'default-variable->string))
-  (let ((*ljd-accum* accum)
-	(*variable->string* var2str))
-    (write-ljd-acc-rel rel let-needs-brackets)))
+(defun do-nothing (&rest args) nil)
 
-
+(defparameter *ljd-visitor-before* nil)
 (defparameter *ljd-accum* nil)
-(defun default-ljd-visitor-before (lhs-str lhs) nil)
-(defparameter *ljd-visitor-before* #'default-ljd-visitor-before)
+
+(defun write-ljd-accum-rel (rel)
+  (let ((*variable->string* #'default-variable->string)
+	(*ljd-visitor-before* #'do-nothing)
+	(*ljd-accum* ljd-var))
+    (write-ljd-acc-rel rel t)))
 
 (defun write-ljd-acc-rel (rel &optional (let-needs-brackets t))
   (adt-case relation rel
@@ -1351,32 +1346,33 @@
 (defun write-rel-draw-stoch-array-slice (lhs distr-name distr-args)
   (bracket
     (match-adt1 (rellhs-array-slice var indices) lhs
-      (let ((n 0)
-	    (xformed-idxs '()))
+      (let ((xformed-idxs '()))
 	(dolist (x indices)
-	  (incf n)
-	  (push (xform-slice-arg n x) xformed-idxs))
+	  (push (xform-slice-arg x) xformed-idxs))
 	(setf xformed-idxs (reverse xformed-idxs))
 	(let ((xformed-idx-strs
 	        (mapcar #'expr->string (mapcar #'slice-dec-expr xformed-idxs)))
-	      (var-str (variable->string var)))
-	  (fmt "var _buf = BMC.Buffer(~a~{, ~a~});" var-str xformed-idx-strs)
-	  (fmt "~a(_buf~{, ~a~});"
+	      (var-str (variable->string var))
+	      (buf (new-var "buf")))
+	  (fmt "var ~a = BMC.Buffer(~a~{, ~a~});" buf var-str xformed-idx-strs)
+	  (fmt "~a(~a~{, ~a~});"
 	       (csharp-distr-draw-name distr-name)
+	       buf
 	       (mapcar #'expr->string distr-args))
-	  (fmt "BMC.CopyInto(~a~{, ~a~}, _buf);" var-str xformed-idx-strs))))))
+	  (fmt "BMC.CopyInto(~a~{, ~a~}, ~a);"
+	       var-str xformed-idx-strs buf))))))
 
-(defun xform-slice-arg (n idx)
+(defun xform-slice-arg (idx)
   (adt-case array-slice-index idx
     ((scalar value)
-     (let ((v (intern (format nil "_idx~d" n))))
-       (fmt "var ~a = ~a;" (variable->string v) (expr->string value))
+     (let ((v (new-var "idx")))
+       (fmt "var ~a = ~a;" v (expr->string value))
        (expr-call '@-idx (expr-var v))))
     ((range lo hi)
-     (let ((v-lo (bmc-symb (format nil "_idx~d_lo" n)))
-	   (v-hi (bmc-symb (format nil "_idx~d_hi" n))))
-       (fmt "var ~a = ~a;" (variable->string v-lo) (expr->string lo))
-       (fmt "var ~a = ~a;" (variable->string v-hi) (expr->string hi))
+     (let ((v-lo (new-var "lo"))
+	   (v-hi (new-var "hi")))
+       (fmt "var ~a = ~a;" v-lo (expr->string lo))
+       (fmt "var ~a = ~a;" v-hi (expr->string hi))
        (expr-call '@-rng (expr-var v-lo) (expr-var v-hi))))
     ((all)
      (expr-const '@-all))))
@@ -1423,13 +1419,15 @@
 	    (fmt "var ~a = ~a;"
 		 (variable->string v)
 		 (expr->string (assignable-expr val))))))
-      (let ((*env* new-env))
+      (let ((*env* new-env)
+	    svht)
 	(if (equalp (expr-const 0) log-acc-ratio)
 	  (progn
 	    (write-rel-draw-main prop-distr t)
 	    (funcall *write-rel-draw-visitor-after-proposal* prop-distr))
 	  (progn
-	    (write-mh-saves prop-distr)
+	    (setf svht (make-save-var-hash-table))
+	    (write-mh-saves prop-distr svht)
 	    (fmt-blank-line)
 	    (write-rel-draw-main prop-distr t)
 	    (write-lar log-acc-ratio)
@@ -1442,44 +1440,45 @@
 			      (car acceptmon)
 			      accepted
 			      (mapcar #'expr->string (cdr acceptmon)))))
-		  (fmt "bool _accepted = BMC.Accept(_lar);")
-		  (fmt "if (_accepted) {")
+		  (fmt "bool ~a = BMC.Accept(~a);" accepted-var lar-var)
+		  (fmt "if (~a) {" accepted-var)
 		  (bracket-end
 		   (report "true"))
 		  (fmt "else {")
 		  (bracket-end
-		   (write-mh-restores prop-distr)
+		   (write-mh-restores prop-distr svht)
 		   (report "false"))))
 	      (progn
-		(fmt "if (!BMC.Accept(_lar)) {")
+		(fmt "if (!BMC.Accept(~a)) {" lar-var)
 		(bracket-end
-		 (write-mh-restores prop-distr))))))))))
+		 (write-mh-restores prop-distr svht))))))))))
 
 (defun write-lar (log-acc-ratio)
   (if *env*
-    (write-let-assignment (bmc-symb "_lar") log-acc-ratio *env*)
-    (fmt "double _lar = ~a;" (expr->string log-acc-ratio))))
+    (write-let-assignment lar-var log-acc-ratio *env*)
+    (fmt "double ~a = ~a;" lar-var (expr->string log-acc-ratio))))
 
-(defun write-mh-saves (prop-distr)
-  (flet ((f (lhs-str sav-str)
-	   (fmt "var ~a = BMC.Copy(~a);" sav-str lhs-str)))
+(defun write-mh-saves (prop-distr ht)
+  (flet ((f (lhs-str sav-var)
+	   (fmt "var ~a = BMC.Copy(~a);" sav-var lhs-str)))
     (write-mh-saves-restores
-      prop-distr (list "_save_" "write-mh-saves" #'f) '())))
+      prop-distr (list ht "write-mh-saves" #'f) '())))
 
-(defun write-mh-restores (prop-distr)
-  (flet ((f (lhs-str sav-str)
-	   (fmt "~a = ~a;" lhs-str sav-str)))
+(defun write-mh-restores (prop-distr ht)
+  (flet ((f (lhs-str sav-var)
+	   (fmt "~a = ~a;" lhs-str sav-var)))
     (write-mh-saves-restores
-      prop-distr (list "_save_" "write-mh-restores" #'f) '())))
+      prop-distr (list ht "write-mh-restores" #'f) '())))
 
 (defun write-mh-saves-restores (prop-distr x let-vars)
   (adt-case relation prop-distr
     ((stochastic lhs rhs)
-     (let ((fv (free-vars-in-rellhs lhs)))
-       (dolist (v let-vars)
-	 (when (member v fv)
-	   (error "Unimplemented (problematic) case in ~a" (second x)))))
-     (funcall (third x) (crellhs->string lhs) (lhs-name lhs (first x))))
+     (destructuring-bind (ht fct-name write-assignment-fct) x
+       (let ((fv (free-vars-in-rellhs lhs)))
+	 (dolist (v let-vars)
+	   (when (member v fv)
+	     (error "Unimplemented (problematic) case in ~a" fct-name))))
+       (funcall write-assignment-fct (crellhs->string lhs) (save-var lhs ht))))
     ((block members)
      (dolist (r members)
        (write-mh-saves-restores r x let-vars)))
@@ -1488,20 +1487,6 @@
     (otherwise
      (error "Unimplemented case in ~a; prop-distr: ~a."
 	    (second x) prop-distr))))
-
-(defun lhs-name (lhs pfx)
-  (flet ((encode-char (c)
-	   (if (alphanumericp c)
-	       (string c)
-	       (case c
-		 (#\[ "_lb")
-		 (#\] "_rb")
-		 (#\_ "__")
-		 (#\, "_cm")
-		 (#\Space "_sp")
-		 (otherwise (error "Unimplemented case in lhs-name"))))))
-    (let ((lhs-str (model:rellhs->string lhs)))
-      (apply #'strcat pfx (map 'list #'encode-char lhs-str)))))
 
 (defparameter *stoch-vars* nil)
 
@@ -1565,19 +1550,21 @@
       (match-adt1 (decl var typ) d
 	(adt-case vtype typ
 	  ((scalar stype)
-	   (fmt "_expectations.~a = 0.0;" (variable->string var)))
+	   (fmt "_expectations.~a = 0.0;" var))
 	  ((array elem-type dims)
-	   (write-zero-array-accum 0 (variable->string var) dims)))))))
+	   (write-zero-array-accum var dims '())))))))
 
-(defun write-zero-array-accum (depth var-str dims)
-  (if (null dims)
-      (fmt "_expectations.~a[~{_idx~a~^, ~}] = 0.0;" var-str (int-range 1 depth))
-    (progn
-      (incf depth)
-      (fmt "for (int _idx~a = 0; _idx~a < ~a; ++_idx~a) {"
-	   depth depth (expr->string (car dims)) depth)
+(defun write-zero-array-accum (var dims reverse-idx-list)
+  (cond
+   ((null dims)
+    (fmt "_expectations.~a[~{~a~^, ~}] = 0.0;"
+	 var (reverse reverse-idx-list)))
+    (t
+     (let ((idx (new-var "idx")))
+      (fmt "for (int ~a = 0; ~a < ~a; ++~a) {"
+	   idx idx (expr->string (car dims)) idx)
       (bracket-end
-        (write-zero-array-accum depth var-str (cdr dims))))))
+        (write-zero-array-accum var (cdr dims) (cons idx reverse-idx-list)))))))
 
 (defun write-csharp-accumulate (expectations)
   (fmt "public void Accumulate()")
@@ -1586,49 +1573,50 @@
     (dolist (e expectations)
       (destructuring-bind (decl . expr) e
 	(match-adt1 (decl var typ) decl
-	  (let ((var-str (variable->string var))
-		(expr-str (expr->string expr)))
+	  (let ((expr-str (expr->string expr)))
             (adt-case vtype typ
               ((scalar stype)
-               (fmt "_expectations.~a += ~a;" var-str expr-str))
+               (fmt "_expectations.~a += ~a;" var expr-str))
 	      ((array elem-type dims)
 	       (if (is-expr-variable expr)
-		   (write-csharp-accumulate-array var-str expr-str dims)
-		 (progn
+		   (write-csharp-accumulate-array var expr-str dims)
+		 (let ((tmpvar (new-var "tmp")))
 		   (bracket
-		     (fmt "var _tmp = ~a;" expr-str)
-		     (write-csharp-accumulate-array var-str "_tmp" dims))))))))))))
+		     (fmt "var ~a = ~a;" tmpvar expr-str)
+		     (write-csharp-accumulate-array
+		       var (symbol-name tmpvar) dims))))))))))))
 
-(defun write-csharp-accumulate-array (var-str expr-str dims)
-  (write-dim-check var-str expr-str (length dims))
-  (write-csharp-array-accumulate 0 var-str expr-str dims))
+(defun write-csharp-accumulate-array (var expr-str dims)
+  (write-dim-check var expr-str (length dims))
+  (write-csharp-array-accumulate var expr-str dims '()))
 
-(defun write-dim-check (var-str expr-str n)
+(defun write-dim-check (var expr-str n)
   (case n
-    (1 (fmt "BMC.Check(_expectations.~a.Length == ~a.Length,"
-	    var-str expr-str)
+    (1 (fmt "BMC.Check(_expectations.~a.Length == ~a.Length," var expr-str)
        (fmt "          \"_expectations.~a.Length == ~a.Length\");"
-	    var-str expr-str))
+	    var expr-str))
     (2 (dolist (prop '("NBRows" "NBCols"))
 	 (fmt "BMC.Check(_expectations.~a.~a == ~a.~a,"
-	       var-str prop expr-str prop)
+	       var prop expr-str prop)
 	 (fmt "          \"_expectations.~a.~a == ~a.~a\");"
-	      var-str prop expr-str prop)))
+	      var prop expr-str prop)))
     (otherwise
       (error "Unimplemented case in write-dim-check."))))
 
-(defun write-csharp-array-accumulate (depth var-str expr-str dims)
+(defun write-csharp-array-accumulate (var expr-str dims rev-idx-vars)
   ; Currently only implement case that expr-str is name of array
-  (if (null dims)
-      (let ((rng (int-range 1 depth)))
-	(fmt "_expectations.~a[~{_idx~a~^, ~}] += ~a[~{_idx~a~^, ~}];"
-	     var-str rng expr-str rng))
-    (progn
-      (incf depth)
-      (fmt "for (int _idx~a = 0; _idx~a < ~a; ++_idx~a) {"
-	   depth depth (expr->string (car dims)) depth)
+  (cond
+   ((null dims)
+    (let ((idx-vars (reverse rev-idx-vars)))
+      (fmt "_expectations.~a[~{~a~^, ~}] += ~a[~{~a~^, ~}];"
+	     var idx-vars expr-str idx-vars)))
+   (t
+    (let ((idx (new-var "idx")))
+      (fmt "for (int ~a = 0; ~a < ~a; ++~a) {"
+	   idx idx (expr->string (car dims)) idx)
       (bracket-end
-        (write-csharp-array-accumulate depth var-str expr-str (cdr dims))))))
+        (write-csharp-array-accumulate
+	  var expr-str (cdr dims) (cons idx rev-idx-vars)))))))
 
 (defun write-csharp-output-expectations (decls)
   (fmt "public void OutputExpectations(string _dirpath)")
@@ -1720,48 +1708,49 @@
 		  candidate))))
     (lambda (v) (find-new-var v v 1))))
 
-(defun rename-duplicate-vars (e)
-  (let ((new-var-fct (find-new-var (free-vars-in-expr e))))
-    (flet* ((rename (x)
-	     (adt-case expr x
-	       ((const name) x)
-	       ((variable symbol) x)
-	       ((apply fct args)
-		(rename-apply fct args x))
-	       ((lambda var body)
-		(rename-lambda var body))))
+(defun uniquely-rename-bound-vars (e)
+  (flet* ((rename (x)
+	    (adt-case expr x
+	      ((const name)
+	       x)
+	      ((variable symbol)
+	       x)
+	      ((apply fct args)
+	       (rename-apply fct args x))
+	      ((lambda var body)
+	       (rename-lambda var body))))
 
-	    (rename-lambda (var body)
-	      (let* ((new-var (funcall new-var-fct var))
-		     (new-body (rename-var var new-var body)))
-		(expr-lam new-var (rename new-body))))
+	  (rename-lambda (var body)
+	    (let* ((new-var (new-var var))
+		   (new-body (rename-var var new-var body)))
+	      (expr-lam new-var (rename new-body))))
 
-	    (rename-apply (fct args e)
-	      (if (is-quant-expr e)
-		(rename-quant fct args)
-		(rename-normal-apply fct args)))
+	  (rename-apply (fct args e)
+	    (if (is-quant-expr e)
+	      (rename-quant fct args)
+	      (rename-normal-apply fct args)))
 
-	    (rename-quant (fct args)
-	      (destructuring-bind (lo hi filter body . shape) args
-		(destructuring-bind (rn-filter rn-body) (rename2lam filter body)
-		  (destructuring-bind (rn-lo rn-hi . rn-shape)
-                                      (mapcar #'rename (list* lo hi shape))
+	  (rename-quant (fct args)
+	    (destructuring-bind (lo hi filter body . shape) args
+	      (destructuring-bind (rn-filter rn-body) (rename2lam filter body)
+		(destructuring-bind (rn-lo rn-hi . rn-shape)
+		                    (mapcar #'rename (list* lo hi shape))
 		  (expr-app fct
-		    (list* rn-lo rn-hi rn-filter rn-body rn-shape))))))
+			    (list* rn-lo rn-hi rn-filter rn-body rn-shape))))))
 
-	    (rename2lam (e1 e2)
-	      (let* ((e2-new (rename e2))
-		     (var-new (expr-lambda-var e2-new))
-		     (var1 (expr-lambda-var e1))
-		     (body1 (expr-lambda-body e1))
-		     (body1-new (rename (rename-var var1 var-new body1)))
-		     (e1-new (expr-lam var-new body1-new)))
-		(list e1-new e2-new)))
+	  (rename2lam (e1 e2)
+	    (let* ((e2-new (rename e2))
+		   (var-new (expr-lambda-var e2-new))
+		   (var1 (expr-lambda-var e1))
+		   (body1 (expr-lambda-body e1))
+		   (body1-new (rename (rename-var var1 var-new body1)))
+		   (e1-new (expr-lam var-new body1-new)))
+	      (list e1-new e2-new)))
 
-	    (rename-normal-apply (fct args)
-	      (expr-app fct (mapcar #'rename args))))
+	  (rename-normal-apply (fct args)
+	    (expr-app fct (mapcar #'rename args))))
 
-      (rename e))))
+    (rename e)))
 
 (defun lettify-quant (e &optional (is-rhs-let nil))
   (let ((quant-expansion (and (not is-rhs-let) (is-quant-expr e))))
@@ -1780,7 +1769,7 @@
 
 (defun lettify-quant-quant (quant-expansion)
   (destructuring-bind (fct . args) quant-expansion
-    (let ((q (bmc-symb "Q")))
+    (let ((q 'vars::q))
       (expr-call '! (expr-lam q (expr-var q)) (lettify-quant-apply fct args)))))
 
 (defun lettify-quant-let (let-expansion)
@@ -1799,7 +1788,7 @@
   (adt-case expr e
     ((const name)
      (if (eq '%true-pred name)
-       (expr-lam 'i (expr-const 'true))
+       (expr-lam 'vars::i (expr-const 'true))
        e))
      ((variable symbol)
       e)
@@ -1808,16 +1797,10 @@
      ((lambda var body)
       (expr-lam var (expand-true-pred body)))))
 
-(defun lift-let-and-quant (lhs e)
-  (let* ((lqe (lettify-quant (expand-true-pred e)))
-	 (lhs-rhs (rename-duplicate-vars (expr-call 'vec lhs lqe)))
-	 (rhs (adt-case expr lhs-rhs
-		((apply fct args)
-		 (assert (eq 'vec fct))
-		 (destructuring-bind (arg1 arg2) args
-		   (assert (equalp lhs arg1))
-		   arg2)))))
-    (lift-let rhs)))
+(defun lift-let-and-quant (e)
+  (let* ((e1 (lettify-quant (expand-true-pred e)))
+	 (e2 (uniquely-rename-bound-vars e1)))
+    (lift-let e2)))
 
 (defun bare-scalar-type-symbol->string (x)
   (case x
@@ -1847,9 +1830,9 @@
 (defun write-let-assignment (var expr env &optional (predeclared nil))
   (let* ((lhs (expr-var var))
 	 (lhs-str (expr->string lhs)))
-    (write-let-assignment-to-lhs lhs lhs-str expr env predeclared)))
+    (write-let-assignment-to-lhs lhs-str expr env predeclared)))
 
-(defun write-let-assignment-to-lhs (lhs lhs-str expr env predeclared)
+(defun write-let-assignment-to-lhs (lhs-str expr env predeclared)
   (flet
     ((write-assn (let-expansion e)
        (loop while let-expansion do
@@ -1860,7 +1843,7 @@
 	     (setf e body)
 	     (setf let-expansion (is-let-expr body)))))
        (fmt "~a = ~a;" lhs-str (expr->string e))))
-    (let* ((e (lift-let-and-quant lhs expr))
+    (let* ((e (lift-let-and-quant expr))
 	   (typ-str (bare-type->string (infer-type e env)))
 	   (let-expansion (is-let-expr e)))
       (if let-expansion
@@ -1897,9 +1880,8 @@
 ;;;
 (defun write-let-quant (val-type var fct args env)
   (destructuring-bind (lo hi filter body . maybe-shape) args
-    (let* ((var-str (variable->string var))
-	   (idx-var (expr-lambda-var filter))
-	   (idx-var-str (variable->string idx-var))
+    (let* ((idx-var (expr-lambda-var filter))
+	   (last-idx-var (new-var "last"))
 	   (filter-body (expr-lambda-body filter))
 	   (body-body (expr-lambda-body body))
 	   (tmp (reduction-params fct val-type))
@@ -1916,12 +1898,10 @@
 		    (lambda (x) (expr-call xform-fct x))
 		    #'identity)))
       (fmt "~a ~a = ~a;"
-	   (bare-type->string val-type) var-str (expr->string init-val))
-      (fmt "int _last_~a = ~a;" idx-var-str (expr->string hi))
-      (fmt "for (int ~a = ~a; ~a <= _last_~a; ++~a) {"
-	   idx-var-str (expr->string lo)
-	   idx-var-str idx-var-str
-	   idx-var-str)
+	   (bare-type->string val-type) var (expr->string init-val))
+      (fmt "int ~a = ~a;" last-idx-var (expr->string hi))
+      (fmt "for (int ~a = ~a; ~a <= ~a; ++~a) {"
+	   idx-var (expr->string lo) idx-var last-idx-var idx-var)
       (bracket-end
        (flet ((write-body ()
 		(write-let-assignment
@@ -1949,22 +1929,19 @@
   (assert (equalp #t(realxn 1) val-type))
   (destructuring-bind (lo hi filter body . maybe-shape) args
     (assert (is-always-true filter))
-    (let* ((var-str (variable->string var))
-	   (idx-var (expr-lambda-var filter))
-	   (idx-var-str (variable->string idx-var))
-	   (first-idx-var (bmc-symb (strcat "_first_" (symbol-name idx-var))))
+    (let* ((idx-var (expr-lambda-var filter))
+	   (first-idx-var (new-var "first"))
+	   (last-idx-var (new-var "last"))
 	   (body-body (expr-lambda-body body)))
-      (fmt "int _first_~a = ~a;" idx-var-str (expr->string lo))
-      (fmt "int _last_~a = ~a;" idx-var-str (expr->string hi))
-      (fmt "~a ~a = new double[_last_~a - _first_~a + 1];"
-	   (bare-type->string val-type) var-str idx-var-str idx-var-str)
-      (fmt "for (int ~a = _first_~a; ~a <= _last_~a; ++~a) {"
-	   idx-var-str idx-var-str idx-var-str idx-var-str idx-var-str)
+      (fmt "int ~a = ~a;" first-idx-var (expr->string lo))
+      (fmt "int ~a = ~a;" last-idx-var (expr->string hi))
+      (fmt "~a ~a = new double[~a - ~a + 1];"
+	   (bare-type->string val-type) var last-idx-var first-idx-var)
+      (fmt "for (int ~a = ~a; ~a <= ~a; ++~a) {"
+	   idx-var first-idx-var idx-var last-idx-var idx-var)
       (bracket-end
         (write-let-assignment-to-lhs
-	  (sexpr->expr `(@ ,var (+ (- ,idx-var ,first-idx-var) 1)))
-	  (format nil "~a[~a - ~a]"
-		  var-str idx-var-str (variable->string first-idx-var))
+	  (format nil "~a[~a - ~a]" var idx-var first-idx-var)
 	  body-body
 	  (add-var-type (add-var-type env var val-type)
 			idx-var #tinteger)
@@ -1992,7 +1969,12 @@
     ((qprod . #tinteger) . (* #e1))
     ((qprod . #trealxn) . (* #e1.0))
     ((qnum . #tinteger) . (+ #e0 . int))
-    ((q@sum . #t(realxn 1)). (@+ real-zero-arr))))
+    ((q@sum . #t(realxn 1)) . (@+ real-zero-arr))
+    ((q@sum . #t(realxn 2)) . (@+ real-zero-arr))
+    ((qmax . #tinteger) . (max #e%min-int))
+    ((qmax . #trealxn) . (max #e%infty-))
+    ((qmin . #tinteger) . (min #e%max-int))
+    ((qmin . #trealxn) . (min #e%infty+))))
 
 (defun initial-environment (mdl impl)
   (assocs->env (initial-environment-assocs mdl impl)))
@@ -2015,43 +1997,7 @@
 	   :elem-type (make-bare-type-scalar :stype (base-type elem-type))
 	   :num-dims (length dims)))))))
 
-#|
-(defun expr-dim (x var-dims)
-  (adt-case expr x
-    ((variable symbol)
-     (assoc-lookup symbol var-dims))
-    ((apply fct args)
-     (apply-dim fct args var-dims))
-    ((const name)
-     (cond
-      ((numberp name) '())
-      ((symbolp name) (assoc-lookup name var-dims))
-      (t (error "const name is neither number nor symbol"))))
-    ((lambda var body)
-     (error "Unimplemented"))))
-
-(defun apply-dim (fct-name args var-dims)
-  (case fct-name
-    ('o^2 (let ((d (expr-dim (first args) var-dims))) (append d d)))
-    ('$* (expr-dim (second args) var-dims))
-    ('- '())
-    ('@- (expr-dim (first args) var-dims))
-    ('@ '())
-    ('@-idx '())
-    ('@-rng (list (expr-call '+
-		    (expr-const 1)
-		    (expr-call '- (second args) (first args)))))
-    ('@-slice (apply #'append
-		(mapcar (lambda (n x) (slice-expr-dim n x var-dims))
-		  (assoc-lookup (expr-variable-symbol (first args)) var-dims)
-		  (rest args))))
-    (otherwise (error "Unimplemented case in apply-dim."))))
-
-(defun slice-expr-dim (n x var-dims)
-  (if (equalp x (expr-const '@-all))
-      (list n)
-    (expr-dim x var-dims)))
-|#
+;;; END
 
 #|
 (defun compile-to-csharp (csharp-name-space class-name mdl os)

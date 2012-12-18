@@ -4,9 +4,9 @@
 
 (define-test sexpr->parameters-tests
   (assert-equalp
-    (list (make-decl :var 'foo :typ (make-vtype-scalar :stype 'realp))
-	  (make-decl :var 'bar :typ (make-vtype-scalar :stype 'integerp))
-	  (make-decl :var 'baz :typ (make-vtype-scalar :stype 'realp)))
+    (list (make-decl :var 'vars::foo :typ (make-vtype-scalar :stype 'realp))
+	  (make-decl :var 'vars::bar :typ (make-vtype-scalar :stype 'integerp))
+	  (make-decl :var 'vars::baz :typ (make-vtype-scalar :stype 'realp)))
     (mcimpl::sexpr->parameters
       '(:parameters (foo realp) (bar integerp) (baz realp))))
 
@@ -42,40 +42,35 @@
 
   (assert-equalp
      `((a . ,(make-relation-stochastic
-              :lhs (make-rellhs-simple :var 'x)
+              :lhs (make-rellhs-simple :var 'vars::x)
 	      :rhs (make-distribution
 		    :name 'dnorm
-		    :args (list (expr-var 'm) (expr-var 'sig))))))
+		    :args '(#em #esig)))))
      (mcimpl::sexpr->updates '(:updates a (~ x (dnorm m sig)))))
 
   (assert-equalp
     `((foo .
        ,(make-relation-loop
-	 :var 'i
-	 :lo (expr-const 1)
-	 :hi (expr-var 'n)
+	 :var 'vars::i
+	 :lo #e1
+	 :hi #en
 	 :body
 	   (make-relation-stochastic
 	     :lhs (make-rellhs-array-elt
-		    :var 'y 
-		    :indices (list (expr-var 'i)))
+		    :var 'vars::y 
+		    :indices '(#ei))
 	     :rhs (make-distribution
 		    :name 'dgamma
-		    :args (list (expr-call '@ (expr-var 'alpha) (expr-var 'i))
-				(expr-var 'beta))))))
+		    :args '(#e(@ alpha i) #ebeta)))))
       (bar .
        ,(make-relation-let
-	  :var 'lambda
-	  :val (expr-call '+ (expr-var 'lambda0)
-			     (expr-call '* (expr-var 'n)
-					   (expr-var 'lambda_y)))
+	  :var 'vars::lambda
+	  :val #e(+ lambda0 (* n lambda_y))
 	  :body (make-relation-stochastic
-		  :lhs (make-rellhs-simple :var 'z)
+		  :lhs (make-rellhs-simple :var 'vars::z)
 		  :rhs (make-distribution
 			 :name 'dnorm
-			 :args (list (expr-var 'm)
-				     (expr-call '^-1/2
-						(expr-var 'lambda))))))))
+			 :args '(#em #e(^-1/2 lambda)))))))
     (mcimpl::sexpr->updates
       '(:updates
 	 foo
@@ -87,25 +82,24 @@
 
 (define-test sexpr->expectation-tests
   (assert-equalp
-    (cons (sexpr->decl '(foo real)) (expr-var 'foo))
+    `(,(sexpr->decl '(foo real)) . #efoo)
     (mcimpl::sexpr->expectation '(foo real foo)))
   (assert-equalp
-     (cons (sexpr->decl '(bar (real (- n 2))))
-	   (sexpr->expr '(@ bar (:range 3 n))))
+     `(,(sexpr->decl '(bar (real (- n 2)))) . #e(@ bar (:range 3 n)))
      (mcimpl::sexpr->expectation '(bar (real (- n 2)) (@ bar (:range 3 n)))))
   (assert-error 'error (mcimpl::sexpr->expectation '(v integer v)))
   (assert-error 'error (mcimpl::sexpr->expectation '(u (integer k) uu)))
 
   ; Should not throw exception
   (mcimpl::check-expectations
-    `((,(sexpr->decl '(a real)) . ,(sexpr->expr 'aa))
-      (,(sexpr->decl '(b (real 4))) . ,(sexpr->expr '(@ b (:range 2 5))))))
+    `((,(sexpr->decl '(a real)) . #eaa)
+      (,(sexpr->decl '(b (real 4))) . #e(@ b (:range 2 5)))))
 
   (assert-error 'error
     (mcimpl::check-expectations
-      `((,(sexpr->decl '(a real)) . ,(sexpr->expr 'aa))
-	(,(sexpr->decl '(b real)) . ,(sexpr->expr '(@ b 1)))
-	(,(sexpr->decl '(b (real 4))) . ,(sexpr->expr '(@ b (:range 2 5)))))))
+      `((,(sexpr->decl '(a real)) . #eaa)
+	(,(sexpr->decl '(b real)) . #e(@ b 1))
+	(,(sexpr->decl '(b (real 4))) . #e(@ b (:range 2 5))))))
 )
 
 (define-test sexpr->mcimpl-tests
@@ -114,17 +108,12 @@
 	(integer-typ (make-vtype-scalar :stype 'integer))
 	(real-n-3-typ
 	  (make-vtype-array :elem-type 'real
-			    :dims (list (expr-var 'n) (expr-const 3))))
-	(var-a (expr-var 'a))
-	(var-b (expr-var 'b))
-	(var-f (expr-var 'f))
-	(var-g (expr-var 'g))
-	(zero (expr-const 0)))
+			    :dims '(#en #e3))))
   (assert-equalp
     (make-mcimpl
      :parameters
-     (list (make-decl :var 'c :typ realp-typ)
-	   (make-decl :var 'a :typ integer-typ))
+     (list (make-decl :var 'vars::c :typ realp-typ)
+	   (make-decl :var 'vars::a :typ integer-typ))
 
      :acceptmons
      `((am2 ,(sexpr->decl '(i integer))
@@ -133,23 +122,23 @@
        (am1 ,(sexpr->decl '(k integer))))
 
      :expectations
-     (list (cons (make-decl :var 'g-exp :typ real-typ) var-g)
-	   (cons (make-decl :var 'a-exp :typ real-n-3-typ)
-		 (sexpr->expr '(@ a :all (:range 1 3)))))
+     (list (cons (make-decl :var 'vars::g-exp :typ real-typ) #eg)
+	   (cons (make-decl :var 'vars::a-exp :typ real-n-3-typ)
+		 #e(@ a :all (:range 1 3))))
 
      :updates
      `((wupd .
 	,(make-relation-stochastic
-	  :lhs (make-rellhs-simple :var 'w)
-	  :rhs (make-distribution :name 'dgamma :args (list var-a var-b))))
+	  :lhs (make-rellhs-simple :var 'vars::w)
+	  :rhs (make-distribution :name 'dgamma :args '(#ea #eb))))
        (another_upd .
 	,(make-relation-let
-	  :var 'f
-	  :val (expr-call '^2 var-g)
+	  :var 'vars::f
+	  :val #e(^2 g)
 	  :body
 	  (make-relation-stochastic
-	   :lhs (make-rellhs-simple :var 'v)
-	   :rhs (make-distribution :name 'dnorm :args (list zero var-f)))))))
+	   :lhs (make-rellhs-simple :var 'vars::v)
+	   :rhs (make-distribution :name 'dnorm :args '(#e0 #ef)))))))
 
     (sexpr->mcimpl
       '(:mcimpl
@@ -193,7 +182,7 @@
         '(:mcimpl (:parameters) (:acceptmons) (:expectations) (:updates)))))
 
   (assert-equal
-    '(a b)
+    '(vars::a vars::b)
     (params-names
       (sexpr->mcimpl '(:mcimpl
 		       (:parameters (a realp) (b integer))

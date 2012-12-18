@@ -1,5 +1,5 @@
 (defpackage :utils-tests
-  (:use :cl :lisp-unit :utils))
+  (:use :cl :lisp-unit :utils :testing-utilities))
 (in-package :utils-tests)
 
 (define-test utils-tests
@@ -73,16 +73,31 @@ baz
   (assert-equal '((a . 2)) (list->pair-list '(a 2)))
   (assert-equal '((a . b) (c . d) (5 . 3)) (list->pair-list '(a b c d 5 3)))
 
-  #+nil
-  (flet* ((leaf-every (pred x)
-	    (or (null x)
-		(and (atom x) (funcall pred x))
-		(and (consp x)
-		     (leaf-every pred (car x))
-		     (leaf-every pred (cdr x)))))
-	  (in-symbol-pkg (a) (eq (find-package 'symbols) (symbol-package a))))
-    (let ((x (with-input-from-string (is "(a (b c) ((d (e f)) g) h)")
-	       (utils::read-stream is))))
-      (assert-true (leaf-every #'in-symbol-pkg x)))
-    (assert-true (in-symbol-pkg (bmc-symb "not-predefined-anywhere"))))
+  (assert-equal
+    '(macrolet
+       ((expect1 (a-key a b-key b =>-key c)
+	  (assert (eq :a a-key))
+	  (assert (eq :b b-key))
+	  (assert (eq (intern "=>") =>-key))
+	  `(,a ,b ,c)))
+       (expect1 :a format :b t => "foo" )
+       (expect1 :a fmt :b "~a = 2" => 'bar))
+    (macroexpand-1
+      '(let-test-macros ((expect1 (a b => c) `(,a ,b ,c)))
+	 (expect1 :a format :b t => "foo")
+	 (expect1 :a fmt :b "~a = 2" => 'bar))))
+      
+  (assert-equal
+    '(macrolet
+       ((expect1 (a-key a b-key b =>-key &rest c)
+	  (assert (eq :a a-key))
+	  (assert (eq :b b-key))
+	  (assert (eq (intern "=>") =>-key))
+	  `(,a ,b ,@c)))
+       (expect1 :a format :b t => "foo" "fum")
+       (expect1 :a fmt :b "~a = 2" => 'bar 'baz))
+    (macroexpand-1
+      '(let-test-macros ((expect1 (a b => &rest c) `(,a ,b ,@c)))
+	 (expect1 :a format :b t => "foo" "fum")
+	 (expect1 :a fmt :b "~a = 2" => 'bar 'baz))))      
 )

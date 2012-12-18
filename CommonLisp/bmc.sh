@@ -4,6 +4,7 @@
 (load "symbols")
 (load "adt")
 (load "utils")
+(load "variables")
 (load "lazy")
 (load "type-inference")
 (load "expr")

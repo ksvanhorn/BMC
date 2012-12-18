@@ -13,25 +13,28 @@
   (assert-equalp (make-vtype-array
 		   :elem-type 'boolean
 		   :dims (list (make-expr-const :name 2)
-			       (make-expr-variable :symbol 'n)))
+			       (make-expr-variable :symbol 'vars::n)))
 		 (sexpr->vtype '(boolean 2 n)))
-  (assert-equalp (make-vtype-array
-		   :elem-type 'realp
-		   :dims (list (make-expr-apply
-				 :fct '+
-				 :args (list (make-expr-variable :symbol 'k)
-					     (make-expr-const :name 3)))))
-		 (sexpr->vtype '(realp (+ k 3))))
+  (assert-equalp
+    (make-vtype-array
+     :elem-type 'realp
+     :dims (list (make-expr-apply
+		  :fct '+
+		  :args (list (make-expr-variable :symbol 'vars::k)
+			      (make-expr-const :name 3)))))
+    (sexpr->vtype '(realp (+ k 3))))
   (assert-error 'error (sexpr->vtype '(integerp)))
 
   ;; sexpr->decl
-  (assert-equalp (make-decl :var 'A :typ (make-vtype-scalar :stype 'realxn))
+  (assert-equalp (make-decl
+		  :var 'vars::A
+		  :typ (make-vtype-scalar :stype 'realxn))
 		 (sexpr->decl '(a realxn)))
   (assert-equalp (make-decl
-		   :var 'f
+		   :var 'vars::f
 		   :typ (make-vtype-array
 			  :elem-type 'integer
-			  :dims (list (make-expr-variable :symbol 'm))))
+			  :dims (list (make-expr-variable :symbol 'vars::m))))
 		 (sexpr->decl '(f (integer m))))
   (assert-error 'error (sexpr->decl '((@ x i) real)))
   (assert-error 'error (sexpr->decl '(true boolean)))
@@ -41,27 +44,27 @@
   ;; distributions
   (assert-equalp (make-distribution
 		   :name 'dnorm
-		   :args (list (make-expr-variable :symbol 'mu)
-			       (make-expr-variable :symbol 'sigma)))
+		   :args (list (make-expr-variable :symbol 'vars::mu)
+			       (make-expr-variable :symbol 'vars::sigma)))
 		 (sexpr->distr '(dnorm mu sigma)))
   (assert-error 'error (sexpr->distr '(not-a-distribution mu sigma)))
 
   ;; LHS of stochastic relation
-  (assert-equalp (make-rellhs-simple :var 'x)
+  (assert-equalp (make-rellhs-simple :var 'vars::x)
 		 (sexpr->rellhs 'x))
   (assert-equalp
     (make-rellhs-array-elt
-      :var 'x
-      :indices (list (make-expr-variable :symbol 'i)))
+      :var 'vars::x
+      :indices (list (make-expr-variable :symbol 'vars::i)))
     (sexpr->rellhs '(@ x i)))
   (assert-equalp
     (make-rellhs-array-slice
-      :var 'y
+      :var 'vars::y
       :indices (list (make-array-slice-index-scalar
-		       :value (make-expr-variable :symbol 'i))
+		       :value (make-expr-variable :symbol 'vars::i))
 		     (make-array-slice-index-range
 		       :lo (make-expr-const :name 1)
-		       :hi (make-expr-variable :symbol 'n))
+		       :hi (make-expr-variable :symbol 'vars::n))
 		     (make-array-slice-index-all)))
     (sexpr->rellhs '(@ y i (:range 1 n) :all)))
 
@@ -71,7 +74,7 @@
   ;; relations
   (assert-equalp
     (make-relation-let
-      :var 'x
+      :var 'vars::x
       :val (sexpr->expr '(+ y z))
       :body (sexpr->rel '(~ v (dnorm x 1))))
     (sexpr->rel '(:let (x (+ y z)) (~ v (dnorm x 1)))))
@@ -126,7 +129,7 @@
 
   (assert-equalp
     (make-relation-loop
-      :var 'k
+      :var 'vars::k
       :lo (sexpr->expr 'm)
       :hi (sexpr->expr '(+ n 2))
       :body (sexpr->rel '(~ (@ x k) (dgamma a b))))
@@ -142,8 +145,8 @@
 
   (assert-equalp
     (make-relation-mh
-     :lets `((m . ,(sexpr->expr '(+ n 1)))
-	     (a . ,(sexpr->expr '(* x y))))
+     :lets `((vars::m . ,(sexpr->expr '(+ n 1)))
+	     (vars::a . ,(sexpr->expr '(* x y))))
      :proposal-distribution (sexpr->rel '(~ x (dnorm m s)))
      :acceptmon nil
      :log-acceptance-ratio (sexpr->expr '(+ x y)))
@@ -498,7 +501,7 @@ model {
 
 (define-test model-error-check-tests
   (assert-equal
-    '(c n e m k chi z)
+    '(vars::c vars::n vars::e vars::m vars::k vars::chi vars::z)
     (model::used-before-declared
       (raw-sexpr->model
         '(:model
@@ -519,7 +522,7 @@ model {
 	  (:body)))))
 
   (assert-equal
-    '(n m)
+    '(vars::n vars::m)
     (model::vars-used-in-dims
       (raw-sexpr->model
         '(:model
@@ -536,21 +539,21 @@ model {
 
 (define-test decl-dims-tests
   (assert-equalp
-    '(v . ())
+    '(vars::v)
     (decl-dims (sexpr->decl '(v integer))))
   (assert-equalp
-    (cons 'x (list (expr-var 'n)))
+    '(vars::x #evars::n)
     (decl-dims (sexpr->decl '(x (real n)))))
   (assert-equalp
-    (cons 'y (sexpr->exprs '(1 (* m n))))
+    '(vars::y #e1 #e(* m n))
     (decl-dims (sexpr->decl '(y (realp 1 (* m n))))))
 
   (assert-equalp
-    (list (cons 'x (sexpr->exprs '(5)))
-	  (cons 'n '())
-	  (cons 'y (sexpr->exprs '(n 2)))
-	  (cons 'z '())
-	  (cons 'w (sexpr->exprs '(3 n))))
+    '((vars::x #e5)
+      (vars::n)
+      (vars::y #en #e2)
+      (vars::z)
+      (vars::w #e3 #en))
     (args-vars-dims
       (raw-sexpr->model
         '(:model
@@ -564,7 +567,7 @@ model {
 
 (define-test misc-model-tests
   (assert-equalp
-    '(a b c d)
+    '(vars::a vars::b vars::c vars::d)
     (args-vars-names
       (raw-sexpr->model
         '(:body (:args (a integerp) (b (real 3 a)))

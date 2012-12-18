@@ -1,6 +1,6 @@
 (defpackage :compile-tests
-  (:use :cl :lisp-unit :compile :mcimpl :model :expr :symbols :type-inference
-	:utils :testing-utilities))
+  (:use :cl :lisp-unit :compile :mcimpl :model :variables :expr :symbols
+   :type-inference :utils :testing-utilities))
 (in-package :compile-tests)
 
 (defun sexpr->decls (decls) (mapcar #'model:sexpr->decl decls))
@@ -23,7 +23,7 @@
     '(a b c) (sort-unique '(b c b b a c c a)))
 
   (assert-equal
-    '(i4 k m n x)
+    '(vars::i4 vars::k vars::m vars::n vars::x)
     (sort-unique
       (compile::vars-in-expr-list
 	 '(#e(* (/ x 4) (+ k 3) (- m n))
@@ -32,13 +32,15 @@
 	   #efalse))))
 
   (assert-equal
-    '(a c x y z)
+    '(vars::a vars::c vars::x vars::y vars::z)
     (sort-unique
       (compile::vars-in-expr
         #e(+ a (:let (x (* y z)) (^ x c))))))
 
   (assert-equal
-    '(A AA ALPHA B BB FOO I II K M N UPPER-X V W X Z ZZ)
+    '(vars::A vars::AA vars::ALPHA vars::B vars::BB vars::FOO vars::I vars::II
+      vars::K vars::M vars::N vars::UPPER-X vars::V vars::W vars::X vars::Z
+      vars::ZZ)
     (sort-unique
       (compile::vars-in-model
         (sexpr->model '(:model
@@ -63,41 +65,20 @@
 			     (~ z (dnorm (+ 3 aa) 1))
 			     (~ z (dgamma (* 4 bb) 1)))))))))
 
-  (with-genvar-counter 33
-    (assert-equal 'variables::__foo33 (variables:new-var "FOO"))
-    (assert-equal 34 variables::*genvar-counter*))
-
-  (with-genvar-counter 12
-    (assert-equal 'variables::__foo12 (variables:new-var 'foo))
-    (assert-equal 13 variables::*genvar-counter*))
-
-  (with-genvar-counter 100
-    (assert-equal '(variables::|__i100| variables::|__i101|)
-		  (variables:n-new-vars 2 "i"))
-    (assert-equal 102 variables::*genvar-counter*))
-
-  (with-genvar-counter 57
-    (assert-equal '(variables::|__k57|) (variables:n-new-vars 1 "k"))
-    (assert-equal 58 variables::*genvar-counter*))
-
-  (with-genvar-counter 23
-    (assert-equal '(variables::__foo23 variables::__foo24)
-		  (variables:n-new-vars 2 'foo)))
-
   (assert-equalp
     #e(:quant qand i (1 (+ n 2))
 	      (:quant qand j (1 (- m 3)) (is-real (@ x i j))))
     (compile::array-element-check
       #e(is-real (@ x i j))
       '(#e(+ n 2) #e(- m 3))
-      '(i j)))
+      '(vars::i vars::j)))
 
   (assert-equalp
     #e(:quant qand i (1 (+ n 2)) (< 0 (@ x i)))
     (compile::array-element-check
       #e(< 0 (@ x i))
       (list #e(+ n 2))
-      '(i)))
+      '(vars::i)))
 
   (assert-equalp
     '()
@@ -119,37 +100,41 @@
     '(#e(is-real x))
     (compile::scalar-type-checks #ex 'real))
 
-  (assert-equalp
-    '(#e(:quant qand |i1| (1 n) (< 0 (@ x |i1|))))
-    (compile::array-element-checks 'x 'integerp '(#en)))
+  (with-genvar-counter 3
+    (assert-equalp
+     '(#e(:quant qand |_3i| (1 n) (< 0 (@ x |_3i|))))
+     (compile::array-element-checks 'vars::x 'integerp '(#e n))))
+
+  (with-genvar-counter 7
+    (assert-equalp
+     '(#e(:quant qand |_7i| (1 n)
+		 (:quant qand |_8i| (1 k)
+			 (is-realp0 (@ v |_7i| |_8i|)))))
+     (compile::array-element-checks 'vars::v 'realp0 '(#e n #e k))))
+
+  (with-genvar-counter 4
+    (assert-equalp
+     '(#e(:quant qand |_4i| (1 (+ n |i1|)) (is-real (@ y |_4i|))))
+     (compile::array-element-checks 'vars::y 'real '(#e(+ n |i1|)))))
+
+  (with-genvar-counter 9
+    (assert-equalp
+     '(#e(:quant qand |_9i| (1 n)
+		 (:quant qand |_10i| (1 k)
+			 (is-realx (@ |i2| |_9i| |_10i|)))))
+     (compile::array-element-checks 'vars::|i2| 'realx '(#e n #e k))))
 
   (assert-equalp
-    (list (sexpr->expr '(:quant qand |i1| (1 n)
-			      (:quant qand |i2| (1 k)
-				      (is-realp0 (@ v |i1| |i2|))))))
-    (compile::array-element-checks 'v 'realp0 (sexpr->exprs '(n k))))
+    '(#e(= (array-length 1 x) n))
+    (compile::array-length-checks 'vars::x '(#en)))
 
   (assert-equalp
-    (list (sexpr->expr '(:quant qand |i2| (1 (+ n |i1|)) (is-real (@ y |i2|)))))
-    (compile::array-element-checks 'y 'real (sexpr->exprs '((+ n |i1|)))))
+    '(#e(= (array-length 1 z) (+ n (* x y)))
+      #e(= (array-length 2 z) (- m 3)))
+    (compile::array-length-checks 'vars::z '(#e(+ n (* x y)) #e(- m 3))))
 
   (assert-equalp
-    (list (sexpr->expr '(:quant qand |i1| (1 n)
-			      (:quant qand |i3| (1 k)
-				      (is-realx (@ |i2| |i1| |i3|))))))
-    (compile::array-element-checks '|i2| 'realx (sexpr->exprs '(n k))))
-
-  (assert-equalp
-    (list (sexpr->expr '(= (array-length 1 x) n)))
-    (compile::array-length-checks 'x (sexpr->exprs '(n))))
-
-  (assert-equalp
-    (sexpr->exprs '((= (array-length 1 z) (+ n (* x y)))
-		    (= (array-length 2 z) (- m 3))))
-    (compile::array-length-checks 'z (sexpr->exprs '((+ n (* x y)) (- m 3)))))
-
-  (assert-equalp
-    (list (sexpr->expr '(is-realp x)))
+    '(#e(is-realp x))
     (compile::decl-checks (sexpr->decl '(x realp))))
 
   (assert-equalp
@@ -157,59 +142,62 @@
     (compile::decl-checks (sexpr->decl '(n integer))))
 
   (assert-equalp
-    (list (sexpr->expr '(= (array-length 1 A) (+ k 1))))
+    '(#e(= (array-length 1 A) (+ k 1)))
     (compile::decl-checks (sexpr->decl '(A (integer (+ k 1))))))
 
-  (assert-equalp
-    (sexpr->exprs '((= (array-length 1 A) (+ k 1))
-		    (:quant qand |i1| (1 (+ k 1)) (<= 0 (@ A |i1|)))))
-    (compile::decl-checks (sexpr->decl '(A (integerp0 (+ k 1))))))
+  (with-genvar-counter 14
+    (assert-equalp
+     '(#e(= (array-length 1 A) (+ k 1))
+	 #e(:quant qand vars::|_14i| (1 (+ k 1)) (<= 0 (@ A vars::|_14i|))))
+     (compile::decl-checks (sexpr->decl '(A (integerp0 (+ k 1)))))))
 
   (assert-equalp
-    (list (sexpr->expr '(= (array-length 1 x) n)))
+    '(#e(= (array-length 1 x) n))
     (compile::decl-checks (sexpr->decl '(x (realxn n)))))
 
-  (assert-equalp
-    (sexpr->exprs '((= (array-length 1 y) m)
-		    (= (array-length 2 y) (* k 3))
-		    (:quant qand |i1| (1 m)
-			  (:quant qand |i2| (1 (* k 3))
-				  (is-real (@ y |i1| |i2|))))))
-    (compile::decl-checks (sexpr->decl '(y (real m (* k 3))))))
+  (with-genvar-counter 8
+    (assert-equalp
+      '(#e(= (array-length 1 y) m)
+	  #e(= (array-length 2 y) (* k 3))
+	  #e(:quant qand |_8i| (1 m)
+		    (:quant qand |_9i| (1 (* k 3))
+			    (is-real (@ y |_8i| |_9i|)))))
+      (compile::decl-checks (sexpr->decl '(y (real m (* k 3)))))))
+
+  (with-genvar-counter 13
+    (assert-equalp
+      '(#e(< 0 n)
+	#e(<= 0 k)
+	#e(= (array-length 1 v) m)
+	#e(:quant qand |_13i| (1 m) (is-realp0 (@ v |_13i|)))
+	#e(= (array-length 1 w) n)
+	#e(= (array-length 1 x) n)
+	#e(= (array-length 2 x) m)
+	#e(:quant qand |_15i| (1 n)
+		    (:quant qand |_16i| (1 m) (is-realp (@ x |_15i| |_16i|))))
+	#e(= (array-length 1 y) m)
+	#e(= (array-length 2 y) n)
+	#e(< m n)
+	#e(:quant qand i (1 m) (< (@ v i) 100))
+	#e(is-integerp0 n))
+      (compile::args-checks
+       (sexpr->model '(:model
+		       (:args (n integerp)
+			      (m integer)
+			      (k integerp0)
+			      (v (realp0 m))
+			      (w (realxn n))
+			      (x (realp n m))
+			      (y (integer m n)))
+		       (:reqs (< m n)
+			      (:quant qand i (1 m) (< (@ v i) 100)))
+		       (:vars (foo integer)
+			      (bar (realp n)))
+		       (:invs (< 12 foo))
+		       (:body))))))
 
   (assert-equalp
-    (sexpr->exprs '((< 0 n)
-		    (<= 0 k)
-		    (= (array-length 1 v) m)
-		    (:quant qand |i1| (1 m) (is-realp0 (@ v |i1|)))
-		    (= (array-length 1 w) n)
-		    (= (array-length 1 x) n)
-		    (= (array-length 2 x) m)
-		    (:quant qand |i1| (1 n)
-			  (:quant qand |i2| (1 m) (is-realp (@ x |i1| |i2|))))
-		    (= (array-length 1 y) m)
-		    (= (array-length 2 y) n)
-		    (< m n)
-		    (:quant qand i (1 m) (< (@ v i) 100))
-		    (is-integerp0 n)))
-    (compile::args-checks
-      (sexpr->model '(:model
-		      (:args (n integerp)
-			     (m integer)
-			     (k integerp0)
-			     (v (realp0 m))
-			     (w (realxn n))
-			     (x (realp n m))
-			     (y (integer m n)))
-		      (:reqs (< m n)
-			     (:quant qand i (1 m) (< (@ v i) 100)))
-		      (:vars (foo integer)
-			     (bar (realp n)))
-		      (:invs (< 12 foo))
-		      (:body)))))
-
-  (assert-equalp
-    (sexpr->exprs '((is-integerp0 n)))
+    '(#e(is-integerp0 n))
     (compile::args-checks
       (sexpr->model '(:model
 		      (:args (n integer))
@@ -221,19 +209,19 @@
 		      (:invs)
 		      (:body)))))
 
-  (assert-equalp
-    (sexpr->exprs
-     '((is-realp x)
-       (< 0 y)
-       (= (array-length 1 z) n)
-       (:quant qand |i1| (1 n) (is-realp (@ z |i1|)))))
-    (compile::params-checks
-     (sexpr->mcimpl
-      '(:mcimpl
-	(:parameters (x realp) (y integerp) (z (realp n)))
-	(:acceptmons)
-	(:expectations)
-	(:updates)))))
+  (with-genvar-counter 27
+    (assert-equalp
+     '(#e(is-realp x)
+	 #e(< 0 y)
+	 #e(= (array-length 1 z) n)
+	 #e(:quant qand |_27i| (1 n) (is-realp (@ z |_27i|))))
+     (compile::params-checks
+      (sexpr->mcimpl
+       '(:mcimpl
+	 (:parameters (x realp) (y integerp) (z (realp n)))
+	 (:acceptmons)
+	 (:expectations)
+	 (:updates))))))
 
   (let* ((mdl
 	  (raw-sexpr->model
@@ -248,13 +236,13 @@
 	       (:invs)
 	       (:body))))
 	 (dim-fct (compile::model->dim-fct mdl)))
-    (assert-equal 2 (funcall dim-fct 'b))
-    (assert-equal 1 (funcall dim-fct 'c))
-    (assert-equal 0 (funcall dim-fct 'k))
-    (assert-error 'error (funcall dim-fct 'n))
-    (assert-error 'error (funcall dim-fct 'm))
-    (assert-error 'error (funcall dim-fct 'a))
-    (assert-error 'error (funcall dim-fct 'foo)))
+    (assert-equal 2 (funcall dim-fct 'vars::b))
+    (assert-equal 1 (funcall dim-fct 'vars::c))
+    (assert-equal 0 (funcall dim-fct 'vars::k))
+    (assert-error 'error (funcall dim-fct 'vars::n))
+    (assert-error 'error (funcall dim-fct 'vars::m))
+    (assert-error 'error (funcall dim-fct 'vars::a))
+    (assert-error 'error (funcall dim-fct 'vars::foo)))
 
   (let ((mdl (sexpr->model
 	      '(:model
@@ -273,9 +261,9 @@
 		  (:expectations)
 		  (:updates)))))
     (let ((is-class-var (compile::class-var-pred-from mdl impl)))
-      (dolist (x '(m r n a b c))
+      (dolist (x '(vars::m vars::r vars::n vars::a vars::b vars::c))
 	(assert-true (funcall is-class-var x)))
-      (dolist (x '(foo bar x z))
+      (dolist (x '(vars::foo vars::bar vars::x vars::z))
 	(assert-false (funcall is-class-var x)))))
 
   (assert-equalp
@@ -295,237 +283,155 @@
 		    :proposal-distribution (~ p (ddirch a))
 		    :log-acceptance-ratio (dot a v)))))
     (assert-equalp mh (compile::remove-acceptmon mh)))
-
-#|
-  ;; expr-dim
-  (let* ((cases
-	  '(((o^2 (@ x r (:range 2 nv))) .
-	     ((+ 1 (- nv 2)) (+ 1 (- nv 2))))
-	    (($* (- (@ x r 1) myf) (@ x r (:range 3 nv))) .
-	     ((+ 1 (- nv 3))))
-	    ((@ x (:range 3 nr) 3) .
-	     ((+ 1 (- nr 3))))
-	    ((o^2 (@- (@ x r (:range 2 nv)) mxf)) .
-	     ((+ 1 (- nv 2)) (+ 1 (- nv 2))))
-	    ((@ x r :all) .
-             (nv))))
-	 (sexpr->dims-assoc
-	   (lambda (se)
-	     (destructuring-bind (var-name . dims-se) se
-               (cons var-name (sexpr->exprs dims-se)))))
-	(var-dims
-	  (mapcar sexpr->dims-assoc
-	    '((x . (nr nv))
-	      (nv . ())
-	      (r . ())
-	      (myf . ())
-	      (mxf . ((- nv 1)))))))
-    (dolist (x cases)
-      (destructuring-bind (e . dims) x
-        (assert-equalp
-	  (sexpr->exprs dims)
-	  (compile::expr-dim (sexpr->expr e) var-dims)))))
-|#
 )
 
 (defun cexpr->string (e) (compile::expr->string e))
 
 (define-test compile-expression-test
-  (assert-equal "x" (cexpr->string (sexpr->expr '|x|)))
-  (assert-equal "5" (cexpr->string (sexpr->expr '5)))
-  (assert-equal "-3.25e+0" (cexpr->string (sexpr->expr -3.25)))
-  (assert-equal "true" (cexpr->string (sexpr->expr 'true)))
-  (assert-equal "false" (cexpr->string (sexpr->expr 'false)))
+  (assert-equal "x" (cexpr->string #e|x|))
+  (assert-equal "5" (cexpr->string #e5))
+  (assert-equal "-3.25e+0" (cexpr->string #e-3.25))
+  (assert-equal "true" (cexpr->string #etrue))
+  (assert-equal "false" (cexpr->string #efalse))
 
-  (assert-equal "x[i - 1]"
-		(cexpr->string (sexpr->expr '(@ |x| |i|))))
+  (assert-equal "x[i - 1]" (cexpr->string #e(@ |x| |i|)))
   (assert-equal "y[i + 2 - 1, j - 1 - 1]"
-		(cexpr->string (sexpr->expr '(@ |y| (+ |i| 2) (- |j| 1)))))
+		(cexpr->string #e(@ |y| (+ |i| 2) (- |j| 1))))
   (assert-equal
     "BMC.ArraySlice(x, i - 1, BMC.Range(lo - 1, hi), BMC.FullRange)"
-    (cexpr->string
-     (sexpr->expr '(@ |x| |i| (:range |lo| |hi|) :all))))
+    (cexpr->string #e(@ |x| |i| (:range |lo| |hi|) :all)))
 
-  (assert-equal "Math.Sqrt(x)"
-		(cexpr->string (sexpr->expr '(^1/2 |x|))))
-  (assert-equal "BMC.MatrixInverse(x)"
-		(cexpr->string (sexpr->expr '(inv |x|))))
-  (assert-equal "Math.Exp(x / 2)"
-		(cexpr->string (sexpr->expr '(exp (/ |x| 2)))))
-  (assert-equal "Math.Tanh(y)"
-		(cexpr->string (sexpr->expr '(tanh |y|))))
-  (assert-equal "BMC.Vec(x, y, 0.0e+0)"
-		(cexpr->string (sexpr->expr '(vec |x| |y| 0.0))))
-  (assert-equal "BMC.Vec(x, y)"
-		(cexpr->string (sexpr->expr '(vec |x| |y|))))
-  (assert-equal "x - y"
-		(cexpr->string (sexpr->expr '(- |x| |y|))))
-  (assert-equal "-(X) * Y + -(Z)"
-		(cexpr->string (sexpr->expr '(+ (* (neg x) y) (neg z)))))
+  (assert-equal "Math.Sqrt(x)" (cexpr->string #e(^1/2 |x|)))
+  (assert-equal "BMC.MatrixInverse(x)" (cexpr->string #e(inv |x|)))
+  (assert-equal "Math.Exp(x / 2)" (cexpr->string #e(exp (/ |x| 2))))
+  (assert-equal "Math.Tanh(y)" (cexpr->string #e(tanh |y|)))
+  (assert-equal "BMC.Vec(x, y, 0.0e+0)" (cexpr->string #e(vec |x| |y| 0.0)))
+  (assert-equal "BMC.Vec(x, y)"	(cexpr->string #e(vec |x| |y|)))
+  (assert-equal "x - y" (cexpr->string #e(- |x| |y|)))
+  (assert-equal "-(X) * Y + -(Z)" (cexpr->string #e(+ (* (neg x) y) (neg z))))
   (assert-equal "BMC.QSum(M, N, (I => X[I - 1]))"
-    (cexpr->string (sexpr->expr '(:quant qsum i (m n) (@ x i)))))
+    (cexpr->string #e(:quant qsum i (m n) (@ x i))))
   (assert-equal "BMC.QSum(M, N, (I => X[I - 1]))"
-    (cexpr->string (sexpr->expr '(:quant qsum i (m n) true (@ x i)))))
+    (cexpr->string #e(:quant qsum i (m n) true (@ x i))))
   (assert-equal "BMC.QSum(M, N, (I => W[I - 1] < X[I - 1]), (I => Y[I - 1]))"
-    (cexpr->string (sexpr->expr '(:quant qsum i (m n) (< (@ w i) (@ x i))
-					 (@ y i)))))
+    (cexpr->string #e(:quant qsum i (m n) (< (@ w i) (@ x i)) (@ y i))))
   (assert-equal "(x < y ? a + b : a * b)"
-    (cexpr->string (sexpr->expr '(if-then-else (< |x| |y|)
-					       (+ |a| |b|)
-					       (* |a| |b|)))))
-
+    (cexpr->string #e(if-then-else (< |x| |y|) (+ |a| |b|) (* |a| |b|))))
   (assert-equal "BMC.Let(y * y, (x => c * x))"
-    (cexpr->string (sexpr->expr '(:let (|x| (* |y| |y|))
-				   (* |c| |x|)))))
+    (cexpr->string #e(:let (|x| (* |y| |y|)) (* |c| |x|))))
 )
 
 (define-test compile-ljd-tests
-  (assert-equal
-    "ljd += BMC.LogDensityDirichlet(p, alpha_p);
-"
-    (ppstr (compile::write-ljd-accum-rel "ljd"
-	     (sexpr->rel '(~ |p| (ddirch |alpha_p|))))))
+  (let-test-macros
+      ((expect (rel => &rest result)
+         `(assert-equal
+	   (strcat-lines ,@result)
+	     (ppstr (compile::write-ljd-accum-rel ,(sexpr->rel rel))))))
 
-  (assert-equal
-    "ljd += BMC.LogDensityCat(x, p);
-"
-    (ppstr (compile::write-ljd-accum-rel '|ljd|
-	     (sexpr->rel '(~ |x| (dcat |p|))))))
+    (expect :rel (~ |p| (ddirch |alpha_p|)) =>
+            "_ljd += BMC.LogDensityDirichlet(p, alpha_p);")
 
-  (assert-equal
-    "ljd += BMC.LogDensityNorm(x[i - 1], MU, SIGMA);
-"
-    (ppstr (compile::write-ljd-accum-rel "ljd"
-	     (sexpr->rel '(~ (@ |x| |i|) (dnorm mu sigma))))))
+    (expect :rel (~ |x| (dcat |p|)) =>
+    	  "_ljd += BMC.LogDensityCat(x, p);")
 
-  (assert-equal
-    "ll += BMC.LogDensityGamma(x[i - 1], A * C, B / D);
-"
-    (ppstr (compile::write-ljd-accum-rel "ll"
-	     (sexpr->rel '(~ (@ |x| |i|) (dgamma (* a c) (/ b d)))))))
+    (expect :rel (~ (@ |x| |i|) (dnorm mu sigma)) =>
+            "_ljd += BMC.LogDensityNorm(x[i - 1], MU, SIGMA);")
 
-  (assert-equal
-    "ljd += BMC.LogDensityMVNorm(x, MU, SIGMA);
-"
-    (ppstr (compile::write-ljd-accum-rel "ljd"
-	     (sexpr->rel '(~ |x| (dmvnorm mu sigma))))))
+    (expect :rel (~ (@ |x| |i|) (dgamma (* a c) (/ b d))) =>
+            "_ljd += BMC.LogDensityGamma(x[i - 1], A * C, B / D);")
 
-  (assert-equal
-    "ljd += BMC.LogDensityWishart(Lambda, nu + 3, V);
-"
-    (ppstr (compile::write-ljd-accum-rel "ljd"
-	     (sexpr->rel '(~ |Lambda| (dwishart (+ |nu| 3) V))))))
+    (expect :rel (~ |x| (dmvnorm mu sigma)) =>
+            "_ljd += BMC.LogDensityMVNorm(x, MU, SIGMA);")
 
-  (assert-equal
-    "lp += BMC.LogDensityInterval(v, x, c);
-"
-    (ppstr (compile::write-ljd-accum-rel "lp"
-	      (sexpr->rel '(~ |v| (dinterval |x| |c|))))))
+    (expect :rel (~ |Lambda| (dwishart (+ |nu| 3) V)) =>
+            "_ljd += BMC.LogDensityWishart(Lambda, nu + 3, V);")
 
-  (assert-equal
-    (strcat-lines
-      "var sigma = 1 / Math.Sqrt(lambda);"
-      "lp += BMC.LogDensityNorm(X, 0, sigma);")
-    (ppstr (compile::write-ljd-accum-rel "lp"
-	    (sexpr->rel '(:let (|sigma| (/ 1 (^1/2 |lambda|)))
-			   (~ x (dnorm 0 |sigma|))))
-	    nil)))
+    (expect :rel (~ |v| (dinterval |x| |c|)) =>
+            "_ljd += BMC.LogDensityInterval(v, x, c);")
 
-  (assert-equal
-    (strcat-lines
+    (expect
+      :rel (:let (|sigma| (/ 1 (^1/2 |lambda|)))
+    	     (~ x (dnorm 0 |sigma|)))
+      =>
       "{"
       "    var sigma = 1 / Math.Sqrt(lambda);"
-      "    lp += BMC.LogDensityNorm(X, 0, sigma);"
+      "    _ljd += BMC.LogDensityNorm(X, 0, sigma);"
       "}")
-    (ppstr (compile::write-ljd-accum-rel "lp"
-	    (sexpr->rel '(:let (|sigma| (/ 1 (^1/2 |lambda|)))
-			   (~ x (dnorm 0 |sigma|))))
-	    t)))
 
-  (assert-equal
-    (strcat-lines "lp += BMC.LogDensityCat(Y, P);"
-		  "lp += BMC.LogDensityNorm(X, 0, SIGMA[Y - 1]);")
-    (ppstr (compile::write-ljd-accum-rel "lp"
-	     (sexpr->rel '(:block
-			    (~ y (dcat p))
-			    (~ x (dnorm 0 (@ sigma y))))))))
+    (expect
+      :rel (:block (~ y (dcat p))
+		   (~ x (dnorm 0 (@ sigma y))))
+      =>
+      "_ljd += BMC.LogDensityCat(Y, P);"
+      "_ljd += BMC.LogDensityNorm(X, 0, SIGMA[Y - 1]);")
 
-  (assert-equal
-    (strcat-lines
-	    "if (X[I - 1] == 1) {"
-	    "    acc += BMC.LogDensityNorm(Y[I - 1], A, B);"
-            "}")
-    (ppstr (compile::write-ljd-accum-rel "acc"
-	     (sexpr->rel '(:if (= (@ x i) 1)
-			    (~ (@ y i) (dnorm a b)))))))
+    (expect
+      :rel (:if (= (@ x i) 1)
+    	     (~ (@ y i) (dnorm a b)))
+      =>
+      "if (X[I - 1] == 1) {"
+      "    _ljd += BMC.LogDensityNorm(Y[I - 1], A, B);"
+      "}")
 
-  (assert-equal
-    (strcat-lines
-	    "if (V[I - 1] < 4) {"
-	    "    acc += BMC.LogDensityNorm(Z[I - 1], M, S);"
-            "}"
-	    "else {"
-	    "    acc += BMC.LogDensityCat(W[I - 1], P);"
-	    "}")
-    (ppstr (compile::write-ljd-accum-rel "acc"
-	     (sexpr->rel '(:if (< (@ v i) 4)
-			    (~ (@ z i) (dnorm m s))
-			    (~ (@ w i) (dcat p)))))))
+    (expect
+      :rel (:if (< (@ v i) 4)
+    	     (~ (@ z i) (dnorm m s))
+    	     (~ (@ w i) (dcat p)))
+      =>
+      "if (V[I - 1] < 4) {"
+      "    _ljd += BMC.LogDensityNorm(Z[I - 1], M, S);"
+      "}"
+      "else {"
+      "    _ljd += BMC.LogDensityCat(W[I - 1], P);"
+      "}")
 
-  (assert-equal
-    (strcat-lines
+    (expect
+      :rel (:for |i| ((- m 1) (+ n 2))
+             (~ (@ x |i|) (dgamma (^1/2 (@ y |i|)) 1)))
+      =>
       "for (int i = M - 1; i <= N + 2; ++i) {"
-      "    lp += BMC.LogDensityGamma(X[i - 1], Math.Sqrt(Y[i - 1]), 1);"
+      "    _ljd += BMC.LogDensityGamma(X[i - 1], Math.Sqrt(Y[i - 1]), 1);"
       "}")
-    (ppstr (compile::write-ljd-accum-rel "lp"
-	     (sexpr->rel '(:for |i| ((- m 1) (+ n 2))
-                            (~ (@ x |i|) (dgamma (^1/2 (@ y |i|)) 1)))))))
 
-  (assert-equal
-    ""
-    (ppstr (compile::write-ljd-accum-rel "lp" (make-relation-skip))))
-
-  ; Test that brackets placed around "let" only when necessary.
-  (assert-equal
+    ;; Test that brackets placed around "let" only when necessary.
+    (expect
+      :rel (:block
+    	    (:let (a 1)
+                (:let (b 2)
+                  (~ x (dgamma a b))))
+    	    (:for i (m n)
+                (:let (a 1)
+                  (:let (b 2)
+                    (~ (@ y i) (dgamma a b)))))
+    	    (:if (< m n)
+                (:let (a 1)
+                  (:let (b 2)
+                    (~ z (dgamma a b))))
+    	    (:let (a 1)
+    	      (:let (b 2)
+                  (~ w (dgamma a b))))))
+      =>
 "{
     var A = 1;
     var B = 2;
-    lp += BMC.LogDensityGamma(X, A, B);
+    _ljd += BMC.LogDensityGamma(X, A, B);
 }
 for (int I = M; I <= N; ++I) {
     var A = 1;
     var B = 2;
-    lp += BMC.LogDensityGamma(Y[I - 1], A, B);
+    _ljd += BMC.LogDensityGamma(Y[I - 1], A, B);
 }
 if (M < N) {
     var A = 1;
     var B = 2;
-    lp += BMC.LogDensityGamma(Z, A, B);
+    _ljd += BMC.LogDensityGamma(Z, A, B);
 }
 else {
     var A = 1;
     var B = 2;
-    lp += BMC.LogDensityGamma(W, A, B);
-}
-"
-    (ppstr (compile::write-ljd-accum-rel "lp"
-	     (sexpr->rel
-	       '(:block
-		  (:let (a 1)
-                  (:let (b 2)
-                    (~ x (dgamma a b))))
-		  (:for i (m n)
-                    (:let (a 1)
-                    (:let (b 2)
-                      (~ (@ y i) (dgamma a b)))))
-		  (:if (< m n)
-                    (:let (a 1)
-                    (:let (b 2)
-                      (~ z (dgamma a b))))
-		    (:let (a 1)
-		    (:let (b 2)
-                      (~ w (dgamma a b))))))))))
-)
+    _ljd += BMC.LogDensityGamma(W, A, B);
+}")
+))
 
 (define-test compile-test-acceptance-ratio-tests
   (let* ((rel 'rel-stub)
@@ -547,221 +453,252 @@ else {
        (compile::write-test-acceptance-ratio
 	 "TheClass" 'phi rel is-class-var-stub dim-fct-stub write-body))))
 
-  (flet
-   ((write-log-proposal-density-test (expected &key rel xform class-vars)
-      (let ((rel1 (sexpr->rel rel))
-	    (is-class-var (fn (v) (member v class-vars)))
-	    (var-xform (fn (v) (intern (strcat xform (symbol-name v))))))
-	(assert-equal
-	  expected
-	  (ppstr
-	    (compile::write-log-proposal-density
-	      var-xform is-class-var rel1))))))
+  (let-test-macros
+    ((expect (rel xform-pfx class-vars genvar-counter => &rest lines)
+       (let ((var-xform (case xform-pfx
+			      (new #'compile::new-val-var)
+			      (old #'compile::old-val-var)
+			      (otherwise (error "Unknown variable xform")))))
+	 `(let* ((rel1 (sexpr->rel ',rel))
+		 (cv (mapcar #'vars-symbol ',class-vars))
+		 (is-class-var (fn (v) (member v cv))))
+	    (with-genvar-counter ,genvar-counter
+	      (assert-equal
+	       (strcat-lines ,@lines)
+	       (ppstr
+		(compile::write-log-proposal-density
+		 ,var-xform is-class-var rel1))))))))
 
-   (write-log-proposal-density-test
-"_x.P = BMC.Copy(new_P);
-_lpd += BMC.LogDensityDirichlet(_x.P, _x.A);
-"
-     :rel '(~ p (ddirch a))
-     :xform "new_"
-     :class-vars '(a p))
+    (expect 
+      :rel (~ p (ddirch a))
+      :xform-pfx new
+      :class-vars (a p)
+      :genvar-counter 34
+       =>
+       "_x.P = BMC.Copy(_new_P);"
+       "_lpd += BMC.LogDensityDirichlet(_x.P, _x.A);")
 
-   (write-log-proposal-density-test
-"_x.Y = BMC.Copy(old_Y);
-_lpd += BMC.LogDensityCat(_x.Y, P);
-"
-     :rel '(~ y (dcat p))
-     :xform "old_"
-     :class-vars '(y))
+    (expect
+      :rel (~ y (dcat p))
+      :xform-pfx old
+      :class-vars (y)
+      :genvar-counter 11
+      =>
+      "_x.Y = BMC.Copy(_old_Y);"
+      "_lpd += BMC.LogDensityCat(_x.Y, P);")
 
-   (write-log-proposal-density-test
-"_x.Y[I - 1] = BMC.Copy(_new_Y[I - 1]);
-_lpd += BMC.LogDensityNorm(_x.Y[I - 1], _x.MU, SIGMA);
-"
-     :rel '(~ (@ y i) (dnorm mu sigma))
-     :xform "_new_"
-     :class-vars '(y mu))
+    (expect
+      :rel (~ (@ y i) (dnorm mu sigma))
+      :xform-pfx new
+      :class-vars (y mu)
+      :genvar-counter 7
+      =>
+      "_x.Y[I - 1] = BMC.Copy(_new_Y[I - 1]);"
+      "_lpd += BMC.LogDensityNorm(_x.Y[I - 1], _x.MU, SIGMA);")
 
-   (write-log-proposal-density-test
-"_x.Z[R - 1] = BMC.Copy(_old_Z[R - 1]);
-_lpd += BMC.LogDensityGamma(_x.Z[R - 1], A * _x.C, _x.B / D);
-"
-     :rel '(~ (@ z r) (dgamma (* a c) (/ b d)))
-     :xform "_old_"
-     :class-vars '(z c b))
+    (expect
+      :rel (~ (@ z r) (dgamma (* a c) (/ b d)))
+      :xform-pfx old
+      :class-vars (z c b)
+      :genvar-counter 9
+      =>
+      "_x.Z[R - 1] = BMC.Copy(_old_Z[R - 1]);"
+      "_lpd += BMC.LogDensityGamma(_x.Z[R - 1], A * _x.C, _x.B / D);")
 
-   (write-log-proposal-density-test
-"_x.V = BMC.Copy(new_V);
-_lpd += BMC.LogDensityMVNorm(_x.V, MU, _x.SIGMA);
-"
-     :rel '(~ v (dmvnorm mu sigma))
-     :xform "new_"
-     :class-vars '(v sigma))
+    (expect
+      :rel (~ v (dmvnorm mu sigma))
+      :xform-pfx new
+      :class-vars (v sigma)
+      :genvar-counter 6
+      =>
+      "_x.V = BMC.Copy(_new_V);"
+      "_lpd += BMC.LogDensityMVNorm(_x.V, MU, _x.SIGMA);")
 
-   (write-log-proposal-density-test
-"_x.Lambda = BMC.Copy(old_Lambda);
-_lpd += BMC.LogDensityWishart(_x.Lambda, NU + 3, W);
-"
-     :rel '(~ |Lambda| (dwishart (+ nu 3) W))
-     :xform "old_"
-     :class-vars '(|Lambda|))
+    (expect
+      :rel (~ |Lambda| (dwishart (+ nu 3) W))
+      :xform-pfx old
+      :class-vars (|Lambda|)
+      :genvar-counter 24
+      =>
+      "_x.Lambda = BMC.Copy(_old_Lambda);"
+      "_lpd += BMC.LogDensityWishart(_x.Lambda, NU + 3, W);")
 
-   (write-log-proposal-density-test
-"_x.U = BMC.Copy(new_U);
-_lpd += BMC.LogDensityInterval(_x.U, _x.Y, C);
-"
-     :rel '(~ u (dinterval y c))
-     :xform "new_"
-     :class-vars '(u y))
+    (expect
+      :rel (~ u (dinterval y c))
+      :xform-pfx new
+      :class-vars (u y)
+      :genvar-counter 6
+      =>
+      "_x.U = BMC.Copy(_new_U);"
+      "_lpd += BMC.LogDensityInterval(_x.U, _x.Y, C);")
 
-   (write-log-proposal-density-test
-"{
-    var SIGMA = 1 / Math.Sqrt(_x.LAMBDA);
-    _x.Y = BMC.Copy(old_Y);
-    _lpd += BMC.LogDensityNorm(_x.Y, 0, SIGMA);
-}
-"
-     :rel '(:let (sigma (/ 1 (^1/2 lambda)))
+    (expect
+      :rel (:let (sigma (/ 1 (^1/2 lambda)))
              (~ y (dnorm 0 sigma)))
-     :xform "old_"
-     :class-vars '(y lambda))
+      :xform-pfx old
+      :class-vars (y lambda)
+      :genvar-counter 85
+      =>
+      "{"
+      "    var SIGMA = 1 / Math.Sqrt(_x.LAMBDA);"
+      "    _x.Y = BMC.Copy(_old_Y);"
+      "    _lpd += BMC.LogDensityNorm(_x.Y, 0, SIGMA);"
+      "}")
 
-   (write-log-proposal-density-test
-"{
-    var X0 = BMC.Copy(_x.X);
-    _x.X = BMC.Copy(old_X);
-    _lpd += BMC.LogDensityNorm(_x.X, X0, _x.SIGMA);
-}
-"
-     :rel '(:let (x0 x) (~ x (dnorm x0 sigma)))
-     :xform "old_"
-     :class-vars '(x sigma))
+    (expect
+      :rel (:let (x0 x) (~ x (dnorm x0 sigma)))
+      :xform-pfx old
+      :class-vars (x sigma)
+      :genvar-counter 91
+      =>
+      "{"
+      "    var X0 = BMC.Copy(_x.X);"
+      "    _x.X = BMC.Copy(_old_X);"
+      "    _lpd += BMC.LogDensityNorm(_x.X, X0, _x.SIGMA);"
+      "}")
 
-   (write-log-proposal-density-test
-"_x.Y = BMC.Copy(new_Y);
-_lpd += BMC.LogDensityCat(_x.Y, P);
-_x.Z = BMC.Copy(new_Z);
-_lpd += BMC.LogDensityNorm(_x.Z, 0, _x.SIGMA[_x.Y - 1]);
-"
-     :rel '(:block
-	    (~ y (dcat p))
-	    (~ z (dnorm 0 (@ sigma y))))
-     :xform "new_"
-     :class-vars '(y z sigma))
+    (expect
+      :rel (:block
+	     (~ y (dcat p))
+	     (~ z (dnorm 0 (@ sigma y))))
+      :xform-pfx new
+      :class-vars (y z sigma)
+      :genvar-counter 28
+      =>
+      "_x.Y = BMC.Copy(_new_Y);"
+      "_lpd += BMC.LogDensityCat(_x.Y, P);"
+      "_x.Z = BMC.Copy(_new_Z);"
+      "_lpd += BMC.LogDensityNorm(_x.Z, 0, _x.SIGMA[_x.Y - 1]);")
 
-   (write-log-proposal-density-test
-"{
-    var A = BMC.Sqr(G);
-    var B = BMC.Sqr(_x.H);
-    _x.Y = BMC.Copy(old_Y);
-    _lpd += BMC.LogDensityGamma(_x.Y, A, B);
-}
-_x.U = BMC.Copy(old_U);
-_lpd += BMC.LogDensityNorm(_x.U, M, _x.Y);
-"
-     :rel '(:block
+    (expect
+      :rel (:block
 	     (:let (a (^2 g))
-             (:let (b (^2 h))
-               (~ y (dgamma a b))))
+               (:let (b (^2 h))
+                 (~ y (dgamma a b))))
 	     (~ u (dnorm m y)))
-     :xform "old_"
-     :class-vars '(y u h))
+      :xform-pfx old
+      :class-vars (y u h)
+      :genvar-counter 13
+      =>
+      "{"
+      "    var A = BMC.Sqr(G);"
+      "    var B = BMC.Sqr(_x.H);"
+      "    _x.Y = BMC.Copy(_old_Y);"
+      "    _lpd += BMC.LogDensityGamma(_x.Y, A, B);"
+      "}"
+      "_x.U = BMC.Copy(_old_U);"
+      "_lpd += BMC.LogDensityNorm(_x.U, M, _x.Y);")
   )
 
-  (flet
-   ((write-tar-mh-test (expected &key outer-lets rel class-vars)
-      (let ((outer-lets-1 (sexpr->named-expr-list outer-lets))
-	    (rel1 (sexpr->rel rel))
-	    (is-class-var (fn (v) (member v class-vars)))
-	    (dim-fct (fn (v) nil)))
-	(assert-equal
-	  expected
-	  (ppstr
-	    (compile::write-test-acceptance-ratio-mh
-	      outer-lets-1 rel1 is-class-var dim-fct))))))
+  (let-test-macros
+    ((expect (outer-lets rel class-vars genvar-counter => &rest lines)
+       `(let* ((outer-lets-1 (sexpr->named-expr-list ',outer-lets))
+	      (rel1 (sexpr->rel ',rel))
+	      (cv (mapcar #'vars-symbol ',class-vars))
+	      (is-class-var (fn (v) (member v cv)))
+	      (dim-fct (fn (v) nil)))
+	  (assert-equal
+	    (strcat-lines ,@lines)
+	    (ppstr
+	      (with-genvar-counter ,genvar-counter
+	        (compile::write-test-acceptance-ratio-mh
+	          outer-lets-1 rel1 is-class-var dim-fct)))))))
 
-   (write-tar-mh-test
-"double _ljd0 = _x.LogJointDensity();
+   (expect
+     :outer-lets ()
+     :rel (:metropolis-hastings
+	    :lets ()
+	    :proposal-distribution (~ p (ddirch a))
+	    :log-acceptance-ratio 0.0)
+     :class-vars (p a)
+     :genvar-counter 13
+     =>
+"double _ljdold = _x.LogJointDensity();
 var _old_P = BMC.Copy(_x.P);
 BMC.DrawDirichlet(_x.P, _x.A);
 double _lar = 0.0;
 var _new_P = BMC.Copy(_x.P);
-double _ljd1 = _x.LogJointDensity();
+double _ljdnew = _x.LogJointDensity();
 double _lpd = 0.0;
 _x.P = BMC.Copy(_old_P);
 _lpd += BMC.LogDensityDirichlet(_x.P, _x.A);
-double _lpd1 = _lpd;
+double _lpdnew = _lpd;
 Assert.IsTrue(BMC.Equal(_x.P, _old_P), \"Proposal must be reversible\");
 _lpd = 0.0;
 _x.P = BMC.Copy(_new_P);
 _lpd += BMC.LogDensityDirichlet(_x.P, _x.A);
-double _lpd0 = _lpd;
-Assert.AreEqual(_lar, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
-"
-     :outer-lets '()
-     :rel '(:metropolis-hastings
-	    :lets ()
-	    :proposal-distribution (~ p (ddirch a))
-	    :log-acceptance-ratio 0.0)
-     :class-vars '(p a))
+double _lpdold = _lpd;
+Assert.AreEqual(_lar, (_ljdnew - _ljdold) + (_lpdnew - _lpdold), _tol, \"Log acceptance ratio\");")
 
-   (write-tar-mh-test
-"double _ljd0 = _x.LogJointDensity();
+   (expect
+     :outer-lets ()
+     :rel (:metropolis-hastings
+	    :lets ()
+	    :proposal-distribution (~ (@ y i j) (dnorm mu sigma))
+	    :log-acceptance-ratio 0.0)
+     :class-vars (y mu)
+     :genvar-counter 17
+     =>
+"double _ljdold = _x.LogJointDensity();
 var _old_Y = BMC.Copy(_x.Y);
 _x.Y[I - 1, J - 1] = BMC.DrawNorm(_x.MU, SIGMA);
 double _lar = 0.0;
 var _new_Y = BMC.Copy(_x.Y);
-double _ljd1 = _x.LogJointDensity();
+double _ljdnew = _x.LogJointDensity();
 double _lpd = 0.0;
 _x.Y[I - 1, J - 1] = BMC.Copy(_old_Y[I - 1, J - 1]);
 _lpd += BMC.LogDensityNorm(_x.Y[I - 1, J - 1], _x.MU, SIGMA);
-double _lpd1 = _lpd;
+double _lpdnew = _lpd;
 Assert.IsTrue(BMC.Equal(_x.Y, _old_Y), \"Proposal must be reversible\");
 _lpd = 0.0;
 _x.Y[I - 1, J - 1] = BMC.Copy(_new_Y[I - 1, J - 1]);
 _lpd += BMC.LogDensityNorm(_x.Y[I - 1, J - 1], _x.MU, SIGMA);
-double _lpd0 = _lpd;
-Assert.AreEqual(_lar, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
-"
-     :outer-lets '()
-     :rel '(:metropolis-hastings
-	    :lets ()
-	    :proposal-distribution (~ (@ y i j) (dnorm mu sigma))
-	    :log-acceptance-ratio 0.0)
-     :class-vars '(y mu))
+double _lpdold = _lpd;
+Assert.AreEqual(_lar, (_ljdnew - _ljdold) + (_lpdnew - _lpdold), _tol, \"Log acceptance ratio\");")
 
-  (write-tar-mh-test
-"double _ljd0 = _x.LogJointDensity();
+  (expect
+    :outer-lets ()
+    :rel (:metropolis-hastings
+	   :lets ((a (^1/2 z)))
+	   :proposal-distribution (~ z (dnorm m s))
+	   :log-acceptance-ratio 0.0)
+    :class-vars (z m s)
+    :genvar-counter 22
+    =>
+"double _ljdold = _x.LogJointDensity();
 var _old_Z = BMC.Copy(_x.Z);
 var A = Math.Sqrt(_x.Z);
 _x.Z = BMC.DrawNorm(_x.M, _x.S);
 double _lar = 0.0;
 var _new_Z = BMC.Copy(_x.Z);
-double _ljd1 = _x.LogJointDensity();
+double _ljdnew = _x.LogJointDensity();
 double _lpd = 0.0;
 _x.Z = BMC.Copy(_old_Z);
 _lpd += BMC.LogDensityNorm(_x.Z, _x.M, _x.S);
-double _lpd1 = _lpd;
+double _lpdnew = _lpd;
 Assert.IsTrue(BMC.Equal(_x.Z, _old_Z), \"Proposal must be reversible\");
 _lpd = 0.0;
 _x.Z = BMC.Copy(_new_Z);
 _lpd += BMC.LogDensityNorm(_x.Z, _x.M, _x.S);
-double _lpd0 = _lpd;
-Assert.AreEqual(_lar, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
-"
-    :outer-lets '()
-    :rel '(:metropolis-hastings
-	   :lets ((a (^1/2 z)))
-	   :proposal-distribution (~ z (dnorm m s))
-	   :log-acceptance-ratio 0.0)
-    :class-vars '(z m s))
+double _lpdold = _lpd;
+Assert.AreEqual(_lar, (_ljdnew - _ljdold) + (_lpdnew - _lpdold), _tol, \"Log acceptance ratio\");")
 
   ;; Check that the scope of a local variable (sigma) defined in the proposal
   ;; distribution is appropriately limited, for a general M-H update.
-  (write-tar-mh-test
-"double _ljd0 = _x.LogJointDensity();
+  (expect
+    :outer-lets ()
+    :rel (:metropolis-hastings
+	   :lets ()
+	   :proposal-distribution
+	     (:let (sigma (/ alpha (^1/2 lambda)))
+               (~ y (dnorm 0 sigma)))
+	   :log-acceptance-ratio (^2 (/ y sigma)))
+    :class-vars (y alpha)
+    :genvar-counter 34
+    =>
+"double _ljdold = _x.LogJointDensity();
 var _old_Y = BMC.Copy(_x.Y);
-var _save_Y = BMC.Copy(_x.Y);
+var _34save_Y = BMC.Copy(_x.Y);
 
 {
     var SIGMA = _x.ALPHA / Math.Sqrt(LAMBDA);
@@ -769,14 +706,14 @@ var _save_Y = BMC.Copy(_x.Y);
 }
 double _lar = BMC.Sqr(_x.Y / SIGMA);
 var _new_Y = BMC.Copy(_x.Y);
-double _ljd1 = _x.LogJointDensity();
+double _ljdnew = _x.LogJointDensity();
 double _lpd = 0.0;
 {
     var SIGMA = _x.ALPHA / Math.Sqrt(LAMBDA);
     _x.Y = BMC.Copy(_old_Y);
     _lpd += BMC.LogDensityNorm(_x.Y, 0, SIGMA);
 }
-double _lpd1 = _lpd;
+double _lpdnew = _lpd;
 Assert.IsTrue(BMC.Equal(_x.Y, _old_Y), \"Proposal must be reversible\");
 _lpd = 0.0;
 {
@@ -784,26 +721,27 @@ _lpd = 0.0;
     _x.Y = BMC.Copy(_new_Y);
     _lpd += BMC.LogDensityNorm(_x.Y, 0, SIGMA);
 }
-double _lpd0 = _lpd;
-Assert.AreEqual(_lar, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
+double _lpdold = _lpd;
+Assert.AreEqual(_lar, (_ljdnew - _ljdold) + (_lpdnew - _lpdold), _tol, \"Log acceptance ratio\");
 
 if (!BMC.Accept(_lar)) {
-    _x.Y = _save_Y;
-}
-"
-     :outer-lets '()
-     :rel '(:metropolis-hastings
-	    :lets ()
-	    :proposal-distribution
-	      (:let (sigma (/ alpha (^1/2 lambda)))
-                (~ y (dnorm 0 sigma)))
-	    :log-acceptance-ratio (^2 (/ y sigma)))
-     :class-vars '(y alpha))
+    _x.Y = _34save_Y;
+}")
 
   ;; Check that the scope of a local variable (sigma) defined in the proposal
   ;; distribution is appropriately limited, for a Gibbs update.
-  (write-tar-mh-test
-"double _ljd0 = _x.LogJointDensity();
+  (expect
+    :outer-lets ()
+    :rel (:metropolis-hastings
+	   :lets ()
+	   :proposal-distribution
+	     (:let (sigma (/ alpha (^1/2 lambda)))
+               (~ y (dnorm 0 sigma)))
+	   :log-acceptance-ratio 0.0)
+    :class-vars (y alpha)
+    :genvar-counter 6
+    =>
+"double _ljdold = _x.LogJointDensity();
 var _old_Y = BMC.Copy(_x.Y);
 {
     var SIGMA = _x.ALPHA / Math.Sqrt(LAMBDA);
@@ -811,14 +749,14 @@ var _old_Y = BMC.Copy(_x.Y);
 }
 double _lar = 0.0;
 var _new_Y = BMC.Copy(_x.Y);
-double _ljd1 = _x.LogJointDensity();
+double _ljdnew = _x.LogJointDensity();
 double _lpd = 0.0;
 {
     var SIGMA = _x.ALPHA / Math.Sqrt(LAMBDA);
     _x.Y = BMC.Copy(_old_Y);
     _lpd += BMC.LogDensityNorm(_x.Y, 0, SIGMA);
 }
-double _lpd1 = _lpd;
+double _lpdnew = _lpd;
 Assert.IsTrue(BMC.Equal(_x.Y, _old_Y), \"Proposal must be reversible\");
 _lpd = 0.0;
 {
@@ -826,20 +764,23 @@ _lpd = 0.0;
     _x.Y = BMC.Copy(_new_Y);
     _lpd += BMC.LogDensityNorm(_x.Y, 0, SIGMA);
 }
-double _lpd0 = _lpd;
-Assert.AreEqual(_lar, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
-"
-     :outer-lets '()
-     :rel '(:metropolis-hastings
-	    :lets ()
-	    :proposal-distribution
-	      (:let (sigma (/ alpha (^1/2 lambda)))
-                (~ y (dnorm 0 sigma)))
-	    :log-acceptance-ratio 0.0)
-     :class-vars '(y alpha))
+double _lpdold = _lpd;
+Assert.AreEqual(_lar, (_ljdnew - _ljdold) + (_lpdnew - _lpdold), _tol, \"Log acceptance ratio\");")
 
-  (write-tar-mh-test
-"double _ljd0 = _x.LogJointDensity();
+  (expect
+    :outer-lets ((bar . (vec a b c)))
+    :rel (:metropolis-hastings
+	   :lets ()
+	   :proposal-distribution
+	     (:block
+	       (:let (pvec (@+ foo bar))
+		 (~ y (dcat pvec)))
+	       (~ z (dgamma a b)))
+	   :log-acceptance-ratio 0.0)
+    :class-vars (y z foo b)
+    :genvar-counter 11
+    =>
+"double _ljdold = _x.LogJointDensity();
 var _old_Y = BMC.Copy(_x.Y);
 var _old_Z = BMC.Copy(_x.Z);
 {
@@ -850,7 +791,7 @@ _x.Z = BMC.DrawGamma(A, _x.B);
 double _lar = 0.0;
 var _new_Y = BMC.Copy(_x.Y);
 var _new_Z = BMC.Copy(_x.Z);
-double _ljd1 = _x.LogJointDensity();
+double _ljdnew = _x.LogJointDensity();
 double _lpd = 0.0;
 {
     var PVEC = BMC.ArrPlus(_x.FOO, BAR);
@@ -859,7 +800,7 @@ double _lpd = 0.0;
 }
 _x.Z = BMC.Copy(_old_Z);
 _lpd += BMC.LogDensityGamma(_x.Z, A, _x.B);
-double _lpd1 = _lpd;
+double _lpdnew = _lpd;
 Assert.IsTrue(BMC.Equal(_x.Y, _old_Y), \"Proposal must be reversible\");
 Assert.IsTrue(BMC.Equal(_x.Z, _old_Z), \"Proposal must be reversible\");
 _lpd = 0.0;
@@ -870,72 +811,73 @@ _lpd = 0.0;
 }
 _x.Z = BMC.Copy(_new_Z);
 _lpd += BMC.LogDensityGamma(_x.Z, A, _x.B);
-double _lpd0 = _lpd;
-Assert.AreEqual(_lar, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
-"
-    :outer-lets '((bar . (vec a b c)))
-    :rel '(:metropolis-hastings
-	   :lets ()
-	   :proposal-distribution
-	     (:block
-	       (:let (pvec (@+ foo bar))
-		 (~ y (dcat pvec)))
-	       (~ z (dgamma a b)))
-	   :log-acceptance-ratio 0.0)
-    :class-vars '(y z foo b))
+double _lpdold = _lpd;
+Assert.AreEqual(_lar, (_ljdnew - _ljdold) + (_lpdnew - _lpdold), _tol, \"Log acceptance ratio\");")
 
-  (write-tar-mh-test
-"double _ljd0 = _x.LogJointDensity();
+  (expect
+    :outer-lets ()
+    :rel (:metropolis-hastings
+	  :lets ()
+	  :proposal-distribution (~ u (dnorm mu sigma))
+	  :log-acceptance-ratio (* sigma (- u mu)))
+    :class-vars (u sigma)
+    :genvar-counter 20
+    =>
+"double _ljdold = _x.LogJointDensity();
 var _old_U = BMC.Copy(_x.U);
-var _save_U = BMC.Copy(_x.U);
+var _20save_U = BMC.Copy(_x.U);
 
 _x.U = BMC.DrawNorm(MU, _x.SIGMA);
 double _lar = _x.SIGMA * (_x.U - MU);
 var _new_U = BMC.Copy(_x.U);
-double _ljd1 = _x.LogJointDensity();
+double _ljdnew = _x.LogJointDensity();
 double _lpd = 0.0;
 _x.U = BMC.Copy(_old_U);
 _lpd += BMC.LogDensityNorm(_x.U, MU, _x.SIGMA);
-double _lpd1 = _lpd;
+double _lpdnew = _lpd;
 Assert.IsTrue(BMC.Equal(_x.U, _old_U), \"Proposal must be reversible\");
 _lpd = 0.0;
 _x.U = BMC.Copy(_new_U);
 _lpd += BMC.LogDensityNorm(_x.U, MU, _x.SIGMA);
-double _lpd0 = _lpd;
-Assert.AreEqual(_lar, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
+double _lpdold = _lpd;
+Assert.AreEqual(_lar, (_ljdnew - _ljdold) + (_lpdnew - _lpdold), _tol, \"Log acceptance ratio\");
 
 if (!BMC.Accept(_lar)) {
-    _x.U = _save_U;
-}
-"
-    :outer-lets '()
-    :rel '(:metropolis-hastings
-        :lets ()
-        :proposal-distribution (~ u (dnorm mu sigma))
-        :log-acceptance-ratio (* sigma (- u mu)))
-    :class-vars '(u sigma))
+    _x.U = _20save_U;
+}")
 
-  (write-tar-mh-test
-"double _ljd0 = _x.LogJointDensity();
+  (expect
+    :outer-lets ()
+    :rel (:metropolis-hastings
+	   :lets ((f (@ z i)) (sigma2 (* f f)))
+	   :proposal-distribution
+	     (:block
+	       (~ (@ z i) (dnorm-trunc mu sigma a b))
+	       (~ w (dnorm (@ z i) 1)))
+	   :log-acceptance-ratio (+ (@ z i) sigma2))
+    :class-vars (z m y gamma v a b w)
+    :genvar-counter 42
+    =>
+"double _ljdold = _x.LogJointDensity();
 var _old_Z = BMC.Copy(_x.Z);
 var _old_W = BMC.Copy(_x.W);
 var F = _x.Z[I - 1];
 var SIGMA2 = F * F;
-var _save_Z_lbI_rb = BMC.Copy(_x.Z[I - 1]);
-var _save_W = BMC.Copy(_x.W);
+var _42save_Z = BMC.Copy(_x.Z[I - 1]);
+var _43save_W = BMC.Copy(_x.W);
 
 _x.Z[I - 1] = BMC.DrawNormTruncated(MU, SIGMA, _x.A, _x.B);
 _x.W = BMC.DrawNorm(_x.Z[I - 1], 1);
 double _lar = _x.Z[I - 1] + SIGMA2;
 var _new_Z = BMC.Copy(_x.Z);
 var _new_W = BMC.Copy(_x.W);
-double _ljd1 = _x.LogJointDensity();
+double _ljdnew = _x.LogJointDensity();
 double _lpd = 0.0;
 _x.Z[I - 1] = BMC.Copy(_old_Z[I - 1]);
 _lpd += BMC.LogDensityNormTruncated(_x.Z[I - 1], MU, SIGMA, _x.A, _x.B);
 _x.W = BMC.Copy(_old_W);
 _lpd += BMC.LogDensityNorm(_x.W, _x.Z[I - 1], 1);
-double _lpd1 = _lpd;
+double _lpdnew = _lpd;
 Assert.IsTrue(BMC.Equal(_x.Z, _old_Z), \"Proposal must be reversible\");
 Assert.IsTrue(BMC.Equal(_x.W, _old_W), \"Proposal must be reversible\");
 _lpd = 0.0;
@@ -943,57 +885,59 @@ _x.Z[I - 1] = BMC.Copy(_new_Z[I - 1]);
 _lpd += BMC.LogDensityNormTruncated(_x.Z[I - 1], MU, SIGMA, _x.A, _x.B);
 _x.W = BMC.Copy(_new_W);
 _lpd += BMC.LogDensityNorm(_x.W, _x.Z[I - 1], 1);
-double _lpd0 = _lpd;
-Assert.AreEqual(_lar, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
+double _lpdold = _lpd;
+Assert.AreEqual(_lar, (_ljdnew - _ljdold) + (_lpdnew - _lpdold), _tol, \"Log acceptance ratio\");
 
 if (!BMC.Accept(_lar)) {
-    _x.Z[I - 1] = _save_Z_lbI_rb;
-    _x.W = _save_W;
-}
-"
-    :outer-lets '()
-    :rel '(:metropolis-hastings
-	   :lets ((f (@ z i)) (sigma2 (* f f)))
-	   :proposal-distribution
-	     (:block
-	       (~ (@ z i) (dnorm-trunc mu sigma a b))
-	       (~ w (dnorm (@ z i) 1)))
-	   :log-acceptance-ratio (+ (@ z i) sigma2))
-    :class-vars '(z m y gamma v a b w))
+    _x.Z[I - 1] = _42save_Z;
+    _x.W = _43save_W;
+}")
 
-  (write-tar-mh-test
-"double _ljd0 = _x.LogJointDensity();
+  (expect
+    :outer-lets ((a . (^2 z))
+		 (b . (exp y)))
+    :rel (:metropolis-hastings
+	   :lets ()
+	   :proposal-distribution (~ z (dnorm m (* a b)))
+	   :log-acceptance-ratio 0.0)
+    :class-vars (y z m)
+    :genvar-counter 5
+    =>
+"double _ljdold = _x.LogJointDensity();
 var _old_Z = BMC.Copy(_x.Z);
 _x.Z = BMC.DrawNorm(_x.M, A * B);
 double _lar = 0.0;
 var _new_Z = BMC.Copy(_x.Z);
-double _ljd1 = _x.LogJointDensity();
+double _ljdnew = _x.LogJointDensity();
 double _lpd = 0.0;
 _x.Z = BMC.Copy(_old_Z);
 _lpd += BMC.LogDensityNorm(_x.Z, _x.M, A * B);
-double _lpd1 = _lpd;
+double _lpdnew = _lpd;
 Assert.IsTrue(BMC.Equal(_x.Z, _old_Z), \"Proposal must be reversible\");
 _lpd = 0.0;
 _x.Z = BMC.Copy(_new_Z);
 _lpd += BMC.LogDensityNorm(_x.Z, _x.M, A * B);
-double _lpd0 = _lpd;
-Assert.AreEqual(_lar, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
-"
-    :outer-lets '((a . (^2 z))
-		  (b . (exp y)))
-    :rel '(:metropolis-hastings
-	   :lets ()
-	   :proposal-distribution (~ z (dnorm m (* a b)))
-	   :log-acceptance-ratio 0.0)
-    :class-vars '(y z m))
+double _lpdold = _lpd;
+Assert.AreEqual(_lar, (_ljdnew - _ljdold) + (_lpdnew - _lpdold), _tol, \"Log acceptance ratio\");")
 
-  (write-tar-mh-test
-"double _ljd0 = _x.LogJointDensity();
+  (expect
+    :outer-lets ((Q0 . (@* A B)) (Q . ($* (^-1 (sum Q0)) Q0)))
+    :rel (:metropolis-hastings
+	   :lets ((s0 (@ s r)))
+	   :proposal-distribution (:block
+				    (~ (@ s r) (dcat Q))
+				    (:let (m (@ mu (@ s r)))
+				      (~ (@ x r) (dnorm m sigma))))
+	   :log-acceptance-ratio (- (@ p (@ s r)) (@ p s0)))
+    :class-vars (s x A B p mu)
+    :genvar-counter 53
+    =>
+"double _ljdold = _x.LogJointDensity();
 var _old_S = BMC.Copy(_x.S);
 var _old_X = BMC.Copy(_x.X);
 var S0 = _x.S[R - 1];
-var _save_S_lbR_rb = BMC.Copy(_x.S[R - 1]);
-var _save_X_lbR_rb = BMC.Copy(_x.X[R - 1]);
+var _53save_S = BMC.Copy(_x.S[R - 1]);
+var _54save_X = BMC.Copy(_x.X[R - 1]);
 
 _x.S[R - 1] = BMC.DrawCat(Q);
 {
@@ -1003,7 +947,7 @@ _x.S[R - 1] = BMC.DrawCat(Q);
 double _lar = _x.P[_x.S[R - 1] - 1] - _x.P[S0 - 1];
 var _new_S = BMC.Copy(_x.S);
 var _new_X = BMC.Copy(_x.X);
-double _ljd1 = _x.LogJointDensity();
+double _ljdnew = _x.LogJointDensity();
 double _lpd = 0.0;
 _x.S[R - 1] = BMC.Copy(_old_S[R - 1]);
 _lpd += BMC.LogDensityCat(_x.S[R - 1], Q);
@@ -1012,7 +956,7 @@ _lpd += BMC.LogDensityCat(_x.S[R - 1], Q);
     _x.X[R - 1] = BMC.Copy(_old_X[R - 1]);
     _lpd += BMC.LogDensityNorm(_x.X[R - 1], M, SIGMA);
 }
-double _lpd1 = _lpd;
+double _lpdnew = _lpd;
 Assert.IsTrue(BMC.Equal(_x.S, _old_S), \"Proposal must be reversible\");
 Assert.IsTrue(BMC.Equal(_x.X, _old_X), \"Proposal must be reversible\");
 _lpd = 0.0;
@@ -1023,26 +967,31 @@ _lpd += BMC.LogDensityCat(_x.S[R - 1], Q);
     _x.X[R - 1] = BMC.Copy(_new_X[R - 1]);
     _lpd += BMC.LogDensityNorm(_x.X[R - 1], M, SIGMA);
 }
-double _lpd0 = _lpd;
-Assert.AreEqual(_lar, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
+double _lpdold = _lpd;
+Assert.AreEqual(_lar, (_ljdnew - _ljdold) + (_lpdnew - _lpdold), _tol, \"Log acceptance ratio\");
 
 if (!BMC.Accept(_lar)) {
-    _x.S[R - 1] = _save_S_lbR_rb;
-    _x.X[R - 1] = _save_X_lbR_rb;
-}
-"
-    :outer-lets '((Q0 . (@* A B)) (Q . ($* (^-1 (sum Q0)) Q0)))
-    :rel '(:metropolis-hastings
-	   :lets ((s0 (@ s r)))
-	   :proposal-distribution (:block
-				    (~ (@ s r) (dcat Q))
-				    (:let (m (@ mu (@ s r)))
-				      (~ (@ x r) (dnorm m sigma))))
-	   :log-acceptance-ratio (- (@ p (@ s r)) (@ p s0)))
-    :class-vars '(s x A B p mu))
+    _x.S[R - 1] = _53save_S;
+    _x.X[R - 1] = _54save_X;
+}")
 
-  (write-tar-mh-test
-"double _ljd0 = _x.LogJointDensity();
+  (expect
+    :outer-lets ()
+    :rel
+     (:metropolis-hastings
+      :lets ()
+      :proposal-distribution
+      (:block 
+        (~ y (dmvnorm mu_y sigma_y))
+        (:for i (1 n)
+          (:if (= 1 (@ z i))
+            (:let (m (dot mu_v (@ u i :all)))
+              (~ (@ v i) (dnorm m sigma_v))))))
+      :log-acceptance-ratio 0.0)
+    :class-vars (y v mu_y sigma_y u mu_v sigma_v)
+    :genvar-counter 13
+    =>
+"double _ljdold = _x.LogJointDensity();
 var _old_Y = BMC.Copy(_x.Y);
 var _old_V = BMC.Copy(_x.V);
 BMC.DrawMVNorm(_x.Y, _x.MU_Y, _x.SIGMA_Y);
@@ -1055,7 +1004,7 @@ for (int I = 1; I <= N; ++I) {
 double _lar = 0.0;
 var _new_Y = BMC.Copy(_x.Y);
 var _new_V = BMC.Copy(_x.V);
-double _ljd1 = _x.LogJointDensity();
+double _ljdnew = _x.LogJointDensity();
 double _lpd = 0.0;
 _x.Y = BMC.Copy(_old_Y);
 _lpd += BMC.LogDensityMVNorm(_x.Y, _x.MU_Y, _x.SIGMA_Y);
@@ -1066,7 +1015,7 @@ for (int I = 1; I <= N; ++I) {
         _lpd += BMC.LogDensityNorm(_x.V[I - 1], M, _x.SIGMA_V);
     }
 }
-double _lpd1 = _lpd;
+double _lpdnew = _lpd;
 Assert.IsTrue(BMC.Equal(_x.Y, _old_Y), \"Proposal must be reversible\");
 Assert.IsTrue(BMC.Equal(_x.V, _old_V), \"Proposal must be reversible\");
 _lpd = 0.0;
@@ -1079,30 +1028,29 @@ for (int I = 1; I <= N; ++I) {
         _lpd += BMC.LogDensityNorm(_x.V[I - 1], M, _x.SIGMA_V);
     }
 }
-double _lpd0 = _lpd;
-Assert.AreEqual(_lar, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
-"
-    :outer-lets '()
-    :rel
-    '(:metropolis-hastings
-      :lets ()
-      :proposal-distribution
-      (:block 
-        (~ y (dmvnorm mu_y sigma_y))
-        (:for i (1 n)
-          (:if (= 1 (@ z i))
-            (:let (m (dot mu_v (@ u i :all)))
-              (~ (@ v i) (dnorm m sigma_v))))))
-      :log-acceptance-ratio 0.0)
-    :class-vars '(y v mu_y sigma_y u mu_v sigma_v))
+double _lpdold = _lpd;
+Assert.AreEqual(_lar, (_ljdnew - _ljdold) + (_lpdnew - _lpdold), _tol, \"Log acceptance ratio\");")
 
-  (write-tar-mh-test
-"double _ljd0 = _x.LogJointDensity();
+  (expect
+    :outer-lets ()
+    :rel
+    (:metropolis-hastings
+      :lets ((y0 y))
+      :proposal-distribution
+      (:let (w0 w)
+	(:block
+	  (~ y (dmvnorm m sigmay))
+	  (~ w (dmvnorm w0 sigmaw))))
+      :log-acceptance-ratio (dot y y0))
+    :class-vars (y w m)
+    :genvar-counter 61
+    =>
+"double _ljdold = _x.LogJointDensity();
 var _old_Y = BMC.Copy(_x.Y);
 var _old_W = BMC.Copy(_x.W);
 var Y0 = BMC.Copy(_x.Y);
-var _save_Y = BMC.Copy(_x.Y);
-var _save_W = BMC.Copy(_x.W);
+var _61save_Y = BMC.Copy(_x.Y);
+var _62save_W = BMC.Copy(_x.W);
 
 {
     var W0 = BMC.Copy(_x.W);
@@ -1112,7 +1060,7 @@ var _save_W = BMC.Copy(_x.W);
 double _lar = BMC.Dot(_x.Y, Y0);
 var _new_Y = BMC.Copy(_x.Y);
 var _new_W = BMC.Copy(_x.W);
-double _ljd1 = _x.LogJointDensity();
+double _ljdnew = _x.LogJointDensity();
 double _lpd = 0.0;
 {
     var W0 = BMC.Copy(_x.W);
@@ -1121,7 +1069,7 @@ double _lpd = 0.0;
     _x.W = BMC.Copy(_old_W);
     _lpd += BMC.LogDensityMVNorm(_x.W, W0, SIGMAW);
 }
-double _lpd1 = _lpd;
+double _lpdnew = _lpd;
 Assert.IsTrue(BMC.Equal(_x.Y, _old_Y), \"Proposal must be reversible\");
 Assert.IsTrue(BMC.Equal(_x.W, _old_W), \"Proposal must be reversible\");
 _lpd = 0.0;
@@ -1132,26 +1080,15 @@ _lpd = 0.0;
     _x.W = BMC.Copy(_new_W);
     _lpd += BMC.LogDensityMVNorm(_x.W, W0, SIGMAW);
 }
-double _lpd0 = _lpd;
-Assert.AreEqual(_lar, (_ljd1 - _ljd0) + (_lpd1 - _lpd0), _tol, \"Log acceptance ratio\");
+double _lpdold = _lpd;
+Assert.AreEqual(_lar, (_ljdnew - _ljdold) + (_lpdnew - _lpdold), _tol, \"Log acceptance ratio\");
 
 if (!BMC.Accept(_lar)) {
-    _x.Y = _save_Y;
-    _x.W = _save_W;
-}
-"
-    :outer-lets '()
-    :rel
-    '(:metropolis-hastings
-      :lets ((y0 y))
-      :proposal-distribution
-      (:let (w0 w)
-	(:block
-	  (~ y (dmvnorm m sigmay))
-	  (~ w (dmvnorm w0 sigmaw))))
-      :log-acceptance-ratio (dot y y0))
-    :class-vars '(y w m))
-   )
+    _x.Y = _61save_Y;
+    _x.W = _62save_W;
+}")
+  )
+
 )
 
 (defun cvar2str (s) (compile::variable->string s))
@@ -1159,46 +1096,46 @@ if (!BMC.Accept(_lar)) {
 (define-test compile-test-is-valid-update-tests
   ;; model-variables-assigned-in
   (assert-equalp
-    '(x)
+    '(vars::x)
     (compile::model-variables-assigned-in
       (sexpr->rel '(~ x (dnorm mu sigma)))))
   (assert-equalp
-    '(y)
+    '(vars::y)
     (compile::model-variables-assigned-in
       (sexpr->rel '(~ y (dnorm mu sigma)))))
   (assert-equalp
-    '(z)
+    '(vars::z)
     (compile::model-variables-assigned-in
       (sexpr->rel '(~ (@ z i j) (dgamma a b)))))
   (assert-equalp
-    '(w)
+    '(vars::w)
     (compile::model-variables-assigned-in
       (sexpr->rel '(~ (@ w :all (:range m n) j) (dgamma a b)))))
   (assert-equalp
-    '(x y)
+    '(vars::x vars::y)
     (compile::model-variables-assigned-in
       (sexpr->rel '(:block
 		     (~ x (dnorm 0 1))
 		     (~ y (dgamma 1 1))))))
   (assert-equalp
-    '(a b)
+    '(vars::a vars::b)
     (compile::model-variables-assigned-in
       (sexpr->rel '(:if (< (@ x i) y)
                      (~ a (dcat p))
 		     (~ b (dnorm-trunc 0 1))))))
   (assert-equalp
-    '(v)
+    '(vars::v)
     (compile::model-variables-assigned-in
       (sexpr->rel '(:for i (m n) (~ v (dwishart nu V))))))
   (assert-equalp
-    '(s)
+    '(vars::s)
     (compile::model-variables-assigned-in
       (sexpr->rel '(:let (a 1) (~ s (dcat q))))))
   (assert-equalp
     '()
     (compile::model-variables-assigned-in (make-relation-skip)))
   (assert-equalp
-    '(y)
+    '(vars::y)
     (compile::model-variables-assigned-in
       (sexpr->rel '(:metropolis-hastings
 		    :lets ((a (+ x y)) (b 3))
@@ -1207,46 +1144,44 @@ if (!BMC.Accept(_lar)) {
 
   ;; write-assigned-test
   (let ((dim-fct
-	  (fn (var) (case var ('x0 0) ('x1 1) ('x2 2))))
-	(compile::*variable->string* (compile::var2str-ext '(x0 x1 x2))))
+	  (fn (var) (case var ('vars::x0 0) ('vars::x1 1) ('vars::x2 2))))
+	(compile::*variable->string*
+	  (compile::var2str-ext '(vars::x0 vars::x1 vars::x2))))
+    (let-test-macros
+      ((expect (lhs gvc => &rest lines)
+	 `(assert-equal
+	    (strcat-lines ,@lines)
+	    (ppstr
+	      (with-genvar-counter ,gvc
+	        (compile::write-assigned-test
+		  (sexpr->rellhs ',lhs) dim-fct))))))
 
-    (assert-equal
-"Assert.IsFalse(_assigned_X0, \"X0 assigned\");
-_assigned_X0 = true;
-"
-      (ppstr (compile::write-assigned-test (sexpr->rellhs 'x0) dim-fct)))
+      (expect :lhs x0 :gvc 6 =>
+       "Assert.IsFalse(_assigned_X0, \"X0 assigned\");"
+       "_assigned_X0 = true;")
 
-    (assert-equal
-"for (int _idx = 0; _idx < _assigned_X1.Length; ++_idx) {
-    Assert.IsFalse(_assigned_X1[_idx], \"X1[{0}] assigned\", _idx);
-    _assigned_X1[_idx] = true;
-}
-"
-      (ppstr (compile::write-assigned-test (sexpr->rellhs 'x1) dim-fct)))
+      (expect :lhs x1 :gvc 12 =>
+       "for (int _12idx = 0; _12idx < _assigned_X1.Length; ++_12idx) {"
+       "    Assert.IsFalse(_assigned_X1[_12idx], \"X1[{0}] assigned\", _12idx);"
+       "    _assigned_X1[_12idx] = true;"
+       "}")
 
-    (assert-equal
-"for (int _idx1 = 0; _idx1 < _assigned_X2.NBRows; ++_idx1) {
-    for (int _idx2 = 0; _idx2 < _assigned_X2.NBCols; ++_idx2) {
-        Assert.IsFalse(_assigned_X2[_idx1, _idx2], \"X2[{0}, {1}] assigned\", _idx1, _idx2);
-        _assigned_X2[_idx1, _idx2] = true;
-    }
-}
-"
-      (ppstr (compile::write-assigned-test (sexpr->rellhs 'x2) dim-fct)))
+      (expect :lhs x2 :gvc 7 =>
+       "for (int _7idx = 0; _7idx < _assigned_X2.NBRows; ++_7idx) {"
+       "    for (int _8idx = 0; _8idx < _assigned_X2.NBCols; ++_8idx) {"
+       "        Assert.IsFalse(_assigned_X2[_7idx, _8idx], \"X2[{0}, {1}] assigned\", _7idx, _8idx);"
+       "        _assigned_X2[_7idx, _8idx] = true;"
+       "    }"
+       "}")
 
-    (assert-equal
-"Assert.IsFalse(_assigned_X1[K - 1], \"X1[{0}] assigned\", K - 1);
-_assigned_X1[K - 1] = true;
-"
-      (ppstr
-       (compile::write-assigned-test (sexpr->rellhs '(@ x1 k)) dim-fct)))
+      (expect :lhs (@ x1 k) :gvc 13 =>
+       "Assert.IsFalse(_assigned_X1[K - 1], \"X1[{0}] assigned\", K - 1);"
+       "_assigned_X1[K - 1] = true;")
 
-    (assert-equal
-"Assert.IsFalse(_assigned_X2[J - 1, K - 1], \"X2[{0}, {1}] assigned\", J - 1, K - 1);
-_assigned_X2[J - 1, K - 1] = true;
-"
-      (ppstr
-       (compile::write-assigned-test (sexpr->rellhs '(@ x2 j k)) dim-fct))))
+      (expect :lhs (@ x2 j k) :gvc 105 =>
+       "Assert.IsFalse(_assigned_X2[J - 1, K - 1], \"X2[{0}, {1}] assigned\", J - 1, K - 1);"
+       "_assigned_X2[J - 1, K - 1] = true;")
+    ))
 
   ;; Outer part (write-test-is-valid-update)
   (assert-equal
@@ -1281,18 +1216,20 @@ _assigned_X2[J - 1, K - 1] = true;
 				:log-acceptance-ratio %undef))
 			    '(0 1 2 3 4 5)))
 		(MHrels (mapcar #'sexpr->rel MH))
+		(cv (mapcar #'vars-symbol class-vars))
+		(not-cv (mapcar #'vars-symbol not-class-vars))
 		(is-class-var
-		 `(fn (,v) (member ,v ,class-vars))))
-	   `(let* ((,expected (apply #'strcat-lines ,lines))
+		 `(fn (,v) (member ,v ',cv))))
+	   `(let* ((,expected (apply #'strcat-lines ',lines))
 		   (MH ',MH)
 		   (update (sexpr->rel ,upd))
 		   (,dim-fct (fn (,v) 0))
 		   (,write-mh
 		    (fn (outer-lets mh is-cv df)
 		      (assert-eq ,dim-fct df)
-		      (dolist (,v ,class-vars)
+		      (dolist (,v ',cv)
 			(assert-true (funcall is-cv ,v)))
-		      (dolist (,v ,not-class-vars)
+		      (dolist (,v ',not-cv)
 			(assert-false (funcall is-cv ,v)))
 		      (fmt "// M-H: ~a" (position mh ',MHrels :test #'equalp))
 		      (dolist (x outer-lets)
@@ -1306,17 +1243,17 @@ _assigned_X2[J - 1, K - 1] = true;
 
     (write-tivu-body-test
      :upd (elt MH 0)
-     :class-vars '()
-     :not-class-vars '(a b c foo)
-     :lines '("// M-H: 0"))
+     :class-vars ()
+     :not-class-vars (a b c foo)
+     :lines ("// M-H: 0"))
 
     (write-tivu-body-test
      :upd `(:let (a (+ u v))
 	     (:for r (lo (- hi 1))
 	       ,(elt MH 1)))
-    :class-vars '(u hi)
-    :not-class-vars '(a r lo v foo)
-    :lines '("var A = _x.U + V;"
+    :class-vars (u hi)
+    :not-class-vars (a r lo v foo)
+    :lines  ("var A = _x.U + V;"
 	     "var _lo_R = LO;"
 	     "var _hi_R = _x.HI - 1;"
 	     "for (int R = _lo_R; R <= _hi_R; ++R) {"
@@ -1328,78 +1265,81 @@ _assigned_X2[J - 1, K - 1] = true;
 
     (write-tivu-body-test
      :upd `(:let (y0 y) ,(elt MH 2))
-     :class-vars '(y other)
-     :not-class-vars '()
-     :lines '("var Y0 = BMC.Copy(_x.Y);"
+     :class-vars (y other)
+     :not-class-vars ()
+     :lines  ("var Y0 = BMC.Copy(_x.Y);"
 	      "// M-H: 2"
 	      "// Y0 = _x.Y"))
 
+    (with-genvar-counter 15
     (write-tivu-body-test
      :upd `(:if (= 1 (@ seg r)) ,(elt MH 2))
-     :class-vars '(seg)
-     :not-class-vars '(r |_if_1|)
-     :lines '("var _if_1 = 1 == _x.SEG[R - 1];"
-	      "if (_if_1) {"
+     :class-vars (seg)
+     :not-class-vars (r |_15if|)
+     :lines  ("var _15if = 1 == _x.SEG[R - 1];"
+	      "if (_15if) {"
 	      "    // M-H: 2"
-	      "    // _if_1 = 1 == _x.SEG[R - 1]"
-              "}"))
+	      "    // _15if = 1 == _x.SEG[R - 1]"
+              "}")))
 
+    (with-genvar-counter 5
     (write-tivu-body-test
      :upd `(:if test_a (:if test_b (:if test_c ,(elt MH 1) ,(elt MH 5))
                                    ,(elt MH 4))
 		       (:if test_d ,(elt MH 3)))
-     :class-vars '(test_c test_a)
-     :not-class-vars '(test_b test_d)
-     :lines '("var _if_1 = _x.TEST_A;"
-	      "if (_if_1) {"
-              "    var _if_2 = TEST_B;"
-              "    if (_if_2) {"
-              "        var _if_3 = _x.TEST_C;"
-              "        if (_if_3) {"
+     :class-vars (test_c test_a)
+     :not-class-vars (test_b test_d)
+     :lines  ("var _5if = _x.TEST_A;"
+	      "if (_5if) {"
+              "    var _6if = TEST_B;"
+              "    if (_6if) {"
+              "        var _7if = _x.TEST_C;"
+              "        if (_7if) {"
               "            // M-H: 1"
-	      "            // _if_1 = _x.TEST_A"
-              "            // _if_2 = TEST_B"
-              "            // _if_3 = _x.TEST_C"
+	      "            // _5if = _x.TEST_A"
+              "            // _6if = TEST_B"
+              "            // _7if = _x.TEST_C"
               "        }"
               "        else {"
               "            // M-H: 5"
-	      "            // _if_1 = _x.TEST_A"
-              "            // _if_2 = TEST_B"
-              "            // _if_3 = _x.TEST_C"
+	      "            // _5if = _x.TEST_A"
+              "            // _6if = TEST_B"
+              "            // _7if = _x.TEST_C"
               "        }"
               "    }"
               "    else {"
               "        // M-H: 4"
-	      "        // _if_1 = _x.TEST_A"
-              "        // _if_2 = TEST_B"
+	      "        // _5if = _x.TEST_A"
+              "        // _6if = TEST_B"
               "    }"
 	      "}"
               "else {"
-              "    var _if_4 = TEST_D;"
-	      "    if (_if_4) {"
+              "    var _8if = TEST_D;"
+	      "    if (_8if) {"
 	      "        // M-H: 3"
-	      "        // _if_1 = _x.TEST_A"
-              "        // _if_4 = TEST_D"
+	      "        // _5if = _x.TEST_A"
+              "        // _8if = TEST_D"
               "    }"
-              "}"))
+              "}")))
 
+    (with-genvar-counter 61
     (write-tivu-body-test
      :upd `(:for s ((+ m 1) (- n 2))
 	     (:if (< (@ y s) thresh)
 	       (:let (b 28) ,(elt MH 3))
 	       (:let (a 37) ,(elt MH 4))))
-     :class-vars '(y m)
-     :not-class-vars '(s n a b thresh |_lo_S| |_hi_S| |_if_1|)
-     :lines '("var _lo_S = _x.M + 1;"
+     :class-vars (y m)
+     :not-class-vars (s n a b thresh |_lo_S| |_hi_S| |_61if|)
+     :lines  ("var _lo_S = _x.M + 1;"
 	      "var _hi_S = N - 2;"
 	      "for (int S = _lo_S; S <= _hi_S; ++S) {"
-	      "    var _if_1 = _x.Y[S - 1] < THRESH;"
-	      "    if (_if_1) {"
+	      "    var _61if = _x.Y[S - 1] < THRESH;"
+	      "    if (_61if) {"
 	      "        var B = 28;"
 	      "        // M-H: 3"
 	      "        // _lo_S = _x.M + 1"
 	      "        // _hi_S = N - 2"
-	      "        // _if_1 = _x.Y[S - 1] < THRESH"
+	      "        // _61if = _x.Y[S - 1] < THRESH"
 	      "        // B = 28"
 	      "    }"
 	      "    else {"
@@ -1407,10 +1347,10 @@ _assigned_X2[J - 1, K - 1] = true;
 	      "        // M-H: 4"
 	      "        // _lo_S = _x.M + 1"
 	      "        // _hi_S = N - 2"
-	      "        // _if_1 = _x.Y[S - 1] < THRESH"
+	      "        // _61if = _x.Y[S - 1] < THRESH"
 	      "        // A = 37"
 	      "    }"
-              "}")))
+              "}"))))
 
   (flet ((write-tivu-body-error (upd)
            (assert-error 'error
@@ -1440,21 +1380,27 @@ _assigned_X2[J - 1, K - 1] = true;
 
   ;; Inner part (write-test-is-valid-update-mh)
   (flet ((write-tivu-mh-test (expected &key outer-lets rel class-vars dims)
-	   (let ((outer-lets-1 (sexpr->named-expr-list outer-lets))
-		 (rel1 (sexpr->rel rel))
-		 (is-class-var (fn (v) (member v class-vars)))
-		 (dim-fct (fn (v) (assoc-lookup v dims))))
+	   (let* ((outer-lets-1 (sexpr->named-expr-list outer-lets))
+		  (rel1 (sexpr->rel rel))
+		  (cv (mapcar #'vars-symbol class-vars))
+		  (is-class-var (fn (v) (member v cv)))
+		  (xform-assoc
+		    (lambda (x) (destructuring-bind (symbol . ndims) x
+                                  (cons (vars-symbol symbol) ndims))))
+		  (d (mapcar xform-assoc dims))
+		  (dim-fct (fn (v) (assoc-lookup v d))))
 	     (assert-equal
 	       expected
 	       (ppstr
 		 (compile::write-test-is-valid-update-mh
 		   outer-lets-1 rel1 is-class-var dim-fct))))))
 
+    (with-genvar-counter 16
     (write-tivu-mh-test
 "bool [] _assigned_p = new bool[_x.p.Length];
-for (int _idx = 0; _idx < _assigned_p.Length; ++_idx) {
-    Assert.IsFalse(_assigned_p[_idx], \"p[{0}] assigned\", _idx);
-    _assigned_p[_idx] = true;
+for (int _16idx = 0; _16idx < _assigned_p.Length; ++_16idx) {
+    Assert.IsFalse(_assigned_p[_16idx], \"p[{0}] assigned\", _16idx);
+    _assigned_p[_16idx] = true;
 }
 BMC.DrawDirichlet(_x.p, _x.alpha_p);
 "
@@ -1464,7 +1410,7 @@ BMC.DrawDirichlet(_x.p, _x.alpha_p);
 	     :proposal-distribution (~ |p| (ddirch |alpha_p|))
 	     :log-acceptance-ratio 0)
       :class-vars '(|p| |alpha_p|)
-      :dims '((|p| . 1)))
+      :dims '((|p| . 1))))
 
     (write-tivu-mh-test
 "bool [] _assigned_x = new bool[_x.x.Length];
@@ -1508,11 +1454,12 @@ _x.X = BMC.DrawGamma(_x.A * C, B / _x.D);
     :class-vars '(x a d)
     :dims '((x . 0)))
 
-   (write-tivu-mh-test
+  (with-genvar-counter 9
+  (write-tivu-mh-test
 "bool [] _assigned_V = new bool[_x.V.Length];
-for (int _idx = 0; _idx < _assigned_V.Length; ++_idx) {
-    Assert.IsFalse(_assigned_V[_idx], \"V[{0}] assigned\", _idx);
-    _assigned_V[_idx] = true;
+for (int _9idx = 0; _9idx < _assigned_V.Length; ++_9idx) {
+    Assert.IsFalse(_assigned_V[_9idx], \"V[{0}] assigned\", _9idx);
+    _assigned_V[_9idx] = true;
 }
 BMC.DrawMVNorm(_x.V, MU, _x.SIGMA);
 "
@@ -1522,14 +1469,15 @@ BMC.DrawMVNorm(_x.V, MU, _x.SIGMA);
 	   :proposal-distribution (~ v (dmvnorm mu sigma))
 	   :log-acceptance-ratio 0)
     :class-vars '(v sigma)
-    :dims '((v . 1)))
+    :dims '((v . 1))))
 
+  (with-genvar-counter 34
   (write-tivu-mh-test
 "BMatrix _assigned_Lambda = new BMatrix(_x.Lambda.NBRows, _x.Lambda.NBCols);
-for (int _idx1 = 0; _idx1 < _assigned_Lambda.NBRows; ++_idx1) {
-    for (int _idx2 = 0; _idx2 < _assigned_Lambda.NBCols; ++_idx2) {
-        Assert.IsFalse(_assigned_Lambda[_idx1, _idx2], \"Lambda[{0}, {1}] assigned\", _idx1, _idx2);
-        _assigned_Lambda[_idx1, _idx2] = true;
+for (int _34idx = 0; _34idx < _assigned_Lambda.NBRows; ++_34idx) {
+    for (int _35idx = 0; _35idx < _assigned_Lambda.NBCols; ++_35idx) {
+        Assert.IsFalse(_assigned_Lambda[_34idx, _35idx], \"Lambda[{0}, {1}] assigned\", _34idx, _35idx);
+        _assigned_Lambda[_34idx, _35idx] = true;
     }
 }
 BMC.DrawWishart(_x.Lambda, _x.nu + 3, V);
@@ -1540,7 +1488,7 @@ BMC.DrawWishart(_x.Lambda, _x.nu + 3, V);
 	   :proposal-distribution (~ |Lambda| (dwishart (+ |nu| 3) V))
 	   :log-acceptance-ratio 0)
     :class-vars '(|Lambda| |nu|)
-    :dims '((|Lambda| . 2)))
+    :dims '((|Lambda| . 2))))
 
   (write-tivu-mh-test
 "bool [] _assigned_v = new bool[_x.v.Length];
@@ -1590,20 +1538,21 @@ _x.Z = BMC.DrawNorm(_x.M, _x.S);
     :class-vars '(|y| |alpha|)
     :dims '((|y| . 0)))
 
-(write-tivu-mh-test
+  (with-genvar-counter 12
+  (write-tivu-mh-test
 "bool [] _assigned_Z = new bool[_x.Z.Length];
 bool [] _assigned_Y = new bool[_x.Y.Length];
 var Z0 = BMC.Copy(_x.Z);
 {
     var Y0 = BMC.Copy(_x.Y);
-    for (int _idx = 0; _idx < _assigned_Z.Length; ++_idx) {
-        Assert.IsFalse(_assigned_Z[_idx], \"Z[{0}] assigned\", _idx);
-        _assigned_Z[_idx] = true;
+    for (int _12idx = 0; _12idx < _assigned_Z.Length; ++_12idx) {
+        Assert.IsFalse(_assigned_Z[_12idx], \"Z[{0}] assigned\", _12idx);
+        _assigned_Z[_12idx] = true;
     }
     BMC.DrawMVNorm(_x.Z, Z0, SIGMAZ);
-    for (int _idx = 0; _idx < _assigned_Y.Length; ++_idx) {
-        Assert.IsFalse(_assigned_Y[_idx], \"Y[{0}] assigned\", _idx);
-        _assigned_Y[_idx] = true;
+    for (int _13idx = 0; _13idx < _assigned_Y.Length; ++_13idx) {
+        Assert.IsFalse(_assigned_Y[_13idx], \"Y[{0}] assigned\", _13idx);
+        _assigned_Y[_13idx] = true;
     }
     BMC.DrawMVNorm(_x.Y, Y0, SIGMAY);
 }
@@ -1618,13 +1567,14 @@ var Z0 = BMC.Copy(_x.Z);
 		 (~ y (dmvnorm y0 sigmay))))
 	   :log-acceptance-ratio 0.0)
     :class-vars '(y z)
-    :dims '((y . 1) (z . 1)))
+    :dims '((y . 1) (z . 1))))
 
   ;; Check that the scope of a local variable (sigma) defined in the proposal
   ;; distribution does not include the computation of the acceptance ratio.
+  (with-genvar-counter 6
   (write-tivu-mh-test
 "bool _assigned_y = false;
-var _save_y = BMC.Copy(_x.y);
+var _6save_y = BMC.Copy(_x.y);
 
 {
     var sigma = _x.alpha / Math.Sqrt(lambda);
@@ -1635,7 +1585,7 @@ var _save_y = BMC.Copy(_x.y);
 double _lar = BMC.Sqr(_x.y / sigma);
 
 if (!BMC.Accept(_lar)) {
-    _x.y = _save_y;
+    _x.y = _6save_y;
 }
 "
     :outer-lets '()
@@ -1646,14 +1596,15 @@ if (!BMC.Accept(_lar)) {
 	       (~ |y| (dnorm 0 |sigma|)))
 	   :log-acceptance-ratio (^2 (/ |y| |sigma|)))
     :class-vars '(|y| |alpha|)
-    :dims '((|y| . 0)))
+    :dims '((|y| . 0))))
 
   ;; Check that the scope of a local variable (sigma) defined in the proposal
   ;; distribution does not include the computation of the acceptance ratio.
+  (with-genvar-counter 17
   (write-tivu-mh-test
 "bool _assigned_y = false;
 var m = -2;
-var _save_y = BMC.Copy(_x.y);
+var _17save_y = BMC.Copy(_x.y);
 
 {
     var sigma = _x.alpha / Math.Sqrt(lambda);
@@ -1665,7 +1616,7 @@ double _lar = BMC.Sqr((_x.y - m) / sigma);
 Assert.IsTrue(BMC.Equal(lambda, BMC.Sqr(_x.z)), \"lambda should not change\");
 
 if (!BMC.Accept(_lar)) {
-    _x.y = _save_y;
+    _x.y = _17save_y;
 }
 "
     :outer-lets '((|lambda| . (^2 |z|)))
@@ -1676,7 +1627,7 @@ if (!BMC.Accept(_lar)) {
 	       (~ |y| (dnorm |m| |sigma|)))
 	   :log-acceptance-ratio (^2 (/ (- |y| |m|) |sigma|)))
     :class-vars '(|y| |alpha| |z|)
-    :dims '((|y| . 0)))
+    :dims '((|y| . 0))))
 
   (write-tivu-mh-test
 "bool _assigned_Y = false;
@@ -1703,9 +1654,10 @@ _x.Z = BMC.DrawGamma(A, _x.B);
     :class-vars '(y z foo b)
     :dims '((z . 0) (y . 0)))
 
+  (with-genvar-counter 24
   (write-tivu-mh-test
 "bool _assigned_U = false;
-var _save_U = BMC.Copy(_x.U);
+var _24save_U = BMC.Copy(_x.U);
 
 Assert.IsFalse(_assigned_U, \"U assigned\");
 _assigned_U = true;
@@ -1713,7 +1665,7 @@ _x.U = BMC.DrawNorm(MU, _x.SIGMA);
 double _lar = _x.SIGMA * (_x.U - MU);
 
 if (!BMC.Accept(_lar)) {
-    _x.U = _save_U;
+    _x.U = _24save_U;
 }
 "
     :outer-lets '()
@@ -1722,12 +1674,13 @@ if (!BMC.Accept(_lar)) {
         :proposal-distribution (~ u (dnorm mu sigma))
         :log-acceptance-ratio (* sigma (- u mu)))
     :class-vars '(u sigma)
-    :dims '((u . 0)))
+    :dims '((u . 0))))
 
+  (with-genvar-counter 10
   (write-tivu-mh-test
 "bool _assigned_Z = false;
 var MU = 2 * _x.M;
-var _save_Z = BMC.Copy(_x.Z);
+var _10save_Z = BMC.Copy(_x.Z);
 
 Assert.IsFalse(_assigned_Z, \"Z assigned\");
 _assigned_Z = true;
@@ -1735,7 +1688,7 @@ _x.Z = BMC.DrawNorm(MU, _x.SIGMA);
 double _lar = _x.SIGMA * (_x.Z - MU);
 
 if (!BMC.Accept(_lar)) {
-    _x.Z = _save_Z;
+    _x.Z = _10save_Z;
 }
 "
    :outer-lets '()
@@ -1744,15 +1697,16 @@ if (!BMC.Accept(_lar)) {
 	  :proposal-distribution (~ z (dnorm mu sigma))
 	  :log-acceptance-ratio (* sigma (- z mu)))
    :class-vars '(z m sigma)
-   :dims '((z . 0)))
+   :dims '((z . 0))))
 
+  (with-genvar-counter 93
   (write-tivu-mh-test
 "bool [] _assigned_Z = new bool[_x.Z.Length];
 bool _assigned_W = false;
 var F = _x.Z[I - 1];
 var SIGMA2 = F * F;
-var _save_Z_lbI_rb = BMC.Copy(_x.Z[I - 1]);
-var _save_W = BMC.Copy(_x.W);
+var _93save_Z = BMC.Copy(_x.Z[I - 1]);
+var _94save_W = BMC.Copy(_x.W);
 
 Assert.IsFalse(_assigned_Z[I - 1], \"Z[{0}] assigned\", I - 1);
 _assigned_Z[I - 1] = true;
@@ -1763,8 +1717,8 @@ _x.W = BMC.DrawNorm(_x.Z[I - 1], 1);
 double _lar = _x.Z[I - 1] + SIGMA2;
 
 if (!BMC.Accept(_lar)) {
-    _x.Z[I - 1] = _save_Z_lbI_rb;
-    _x.W = _save_W;
+    _x.Z[I - 1] = _93save_Z;
+    _x.W = _94save_W;
 }
 "
     :outer-lets '()
@@ -1776,7 +1730,7 @@ if (!BMC.Accept(_lar)) {
 	       (~ w (dnorm (@ z i) 1)))
 	   :log-acceptance-ratio (+ (@ z i) sigma2))
     :class-vars '(z m y gamma v a b w)
-    :dims '((z . 1) (w . 0)))
+    :dims '((z . 1) (w . 0))))
 
   (write-tivu-mh-test
 "bool _assigned_Z = false;
@@ -1818,10 +1772,11 @@ Assert.IsTrue(BMC.Equal(B, Math.Exp(_x.Y)), \"B should not change\");
     :class-vars '(y z m u)
     :dims '((z . 0) (u . 0)))
 
+  (with-genvar-counter 74
   (write-tivu-mh-test
 "bool [] _assigned_S = new bool[_x.S.Length];
 var S0 = _x.S[R - 1];
-var _save_S_lbR_rb = BMC.Copy(_x.S[R - 1]);
+var _74save_S = BMC.Copy(_x.S[R - 1]);
 
 Assert.IsFalse(_assigned_S[R - 1], \"S[{0}] assigned\", R - 1);
 _assigned_S[R - 1] = true;
@@ -1831,7 +1786,7 @@ Assert.IsTrue(BMC.Equal(Q0, BMC.ArrTimes(_x.A, _x.B)), \"Q0 should not change\")
 Assert.IsTrue(BMC.Equal(Q, BMC.ScalarTimesArr(BMC.Inv(BMC.Sum(Q0)), Q0)), \"Q should not change\");
 
 if (!BMC.Accept(_lar)) {
-    _x.S[R - 1] = _save_S_lbR_rb;
+    _x.S[R - 1] = _74save_S;
 }
 "
     :outer-lets '((Q0 . (@* A B)) (Q . ($* (^-1 (sum Q0)) Q0)))
@@ -1840,7 +1795,7 @@ if (!BMC.Accept(_lar)) {
 	   :proposal-distribution (~ (@ s r) (dcat Q))
 	   :log-acceptance-ratio (- (@ p (@ s r)) (@ p s0)))
     :class-vars '(s A B p)
-    :dims '((S . 1)))
+    :dims '((S . 1))))
   )
 )
 
@@ -2054,27 +2009,27 @@ protected virtual void AcceptanceMonitorBAZ(bool _accepted) { }
   (assert-equal
 "public double LogJointDensity()
 {
-    double ljd1 = 0.0;
+    double _ljd = 0.0;
     {
         var ALPHA_P = BMC.Vec(1.5e+0, 2.0e+0, 1.0e+0);
-        ljd1 += BMC.LogDensityDirichlet(P, ALPHA_P);
+        _ljd += BMC.LogDensityDirichlet(P, ALPHA_P);
     }
     for (int i = 1; i <= N; ++i) {
-        ljd1 += BMC.LogDensityCat(X[i - 1], P);
+        _ljd += BMC.LogDensityCat(X[i - 1], P);
     }
-    ljd1 += BMC.LogDensityGamma(LAMBDA, A, B);
+    _ljd += BMC.LogDensityGamma(LAMBDA, A, B);
     {
         var SIGMA = 1 / Math.Sqrt(LAMBDA);
         for (int i = 1; i <= N; ++i) {
             if (X[i - 1] == 1) {
-                ljd1 += BMC.LogDensityNorm(Y[i - 1], 0, SIGMA);
+                _ljd += BMC.LogDensityNorm(Y[i - 1], 0, SIGMA);
             }
             else {
-                ljd1 += BMC.LogDensityGamma(Y[i - 1], B, A);
+                _ljd += BMC.LogDensityGamma(Y[i - 1], B, A);
             }
         }
     }
-    return ljd1;
+    return _ljd;
 }
 "
     (ppstr
@@ -2104,25 +2059,27 @@ protected virtual void AcceptanceMonitorBAZ(bool _accepted) { }
 		   (~ (@ y |i|) (dnorm 0 sigma))
 		   (~ (@ y |i|) (dgamma b a)))))))))))
 
+  (with-genvar-counter 18
   (assert-equalp
 "public void ZeroAccumulators()
 {
     _expectations._N = 0;
     _expectations.ALPHA = 0.0;
-    for (int _idx1 = 0; _idx1 < N; ++_idx1) {
-        _expectations.BETA[_idx1] = 0.0;
+    for (int _18idx = 0; _18idx < N; ++_18idx) {
+        _expectations.BETA[_18idx] = 0.0;
     }
-    for (int _idx1 = 0; _idx1 < M; ++_idx1) {
-        for (int _idx2 = 0; _idx2 < K; ++_idx2) {
-            _expectations.GAMMA[_idx1, _idx2] = 0.0;
+    for (int _19idx = 0; _19idx < M; ++_19idx) {
+        for (int _20idx = 0; _20idx < K; ++_20idx) {
+            _expectations.GAMMA[_19idx, _20idx] = 0.0;
         }
     }
 }
 "
     (ppstr
       (compile::write-csharp-zero-accum
-        (sexpr->decls '((alpha real) (beta (real n)) (gamma (real m k)))))))
+        (sexpr->decls '((alpha real) (beta (real n)) (gamma (real m k))))))))
 
+  (with-genvar-counter 3
   (assert-equalp
 "public void Accumulate()
 {
@@ -2130,16 +2087,16 @@ protected virtual void AcceptanceMonitorBAZ(bool _accepted) { }
     _expectations.ALPHA += A;
     BMC.Check(_expectations.DELTA.Length == DELTA.Length,
               \"_expectations.DELTA.Length == DELTA.Length\");
-    for (int _idx1 = 0; _idx1 < M; ++_idx1) {
-        _expectations.DELTA[_idx1] += DELTA[_idx1];
+    for (int _3idx = 0; _3idx < M; ++_3idx) {
+        _expectations.DELTA[_3idx] += DELTA[_3idx];
     }
     BMC.Check(_expectations.GAMMA.NBRows == G.NBRows,
               \"_expectations.GAMMA.NBRows == G.NBRows\");
     BMC.Check(_expectations.GAMMA.NBCols == G.NBCols,
               \"_expectations.GAMMA.NBCols == G.NBCols\");
-    for (int _idx1 = 0; _idx1 < N; ++_idx1) {
-        for (int _idx2 = 0; _idx2 < K; ++_idx2) {
-            _expectations.GAMMA[_idx1, _idx2] += G[_idx1, _idx2];
+    for (int _4idx = 0; _4idx < N; ++_4idx) {
+        for (int _5idx = 0; _5idx < K; ++_5idx) {
+            _expectations.GAMMA[_4idx, _5idx] += G[_4idx, _5idx];
         }
     }
 }
@@ -2150,31 +2107,32 @@ protected virtual void AcceptanceMonitorBAZ(bool _accepted) { }
           '(:expectations
              (alpha real a)
 	     (delta (real m) delta)
-	     (gamma (real n k) g))))))
+	     (gamma (real n k) g)))))))
 
+  (with-genvar-counter 28
   (assert-equalp
 "public void Accumulate()
 {
     _expectations._N += 1;
     _expectations.ALPHA += Math.Exp(A);
     {
-        var _tmp = BMC.MatrixInversePD(LAMBDA);
-        BMC.Check(_expectations.SIGMA.NBRows == _tmp.NBRows,
-                  \"_expectations.SIGMA.NBRows == _tmp.NBRows\");
-        BMC.Check(_expectations.SIGMA.NBCols == _tmp.NBCols,
-                  \"_expectations.SIGMA.NBCols == _tmp.NBCols\");
-        for (int _idx1 = 0; _idx1 < N; ++_idx1) {
-            for (int _idx2 = 0; _idx2 < N; ++_idx2) {
-                _expectations.SIGMA[_idx1, _idx2] += _tmp[_idx1, _idx2];
+        var _28tmp = BMC.MatrixInversePD(LAMBDA);
+        BMC.Check(_expectations.SIGMA.NBRows == _28tmp.NBRows,
+                  \"_expectations.SIGMA.NBRows == _28tmp.NBRows\");
+        BMC.Check(_expectations.SIGMA.NBCols == _28tmp.NBCols,
+                  \"_expectations.SIGMA.NBCols == _28tmp.NBCols\");
+        for (int _29idx = 0; _29idx < N; ++_29idx) {
+            for (int _30idx = 0; _30idx < N; ++_30idx) {
+                _expectations.SIGMA[_29idx, _30idx] += _28tmp[_29idx, _30idx];
             }
         }
     }
     {
-        var _tmp = BMC.QVec(1, M, (I => Math.Sqrt(M[I - 1])));
-        BMC.Check(_expectations.DELTA.Length == _tmp.Length,
-                  \"_expectations.DELTA.Length == _tmp.Length\");
-        for (int _idx1 = 0; _idx1 < M; ++_idx1) {
-            _expectations.DELTA[_idx1] += _tmp[_idx1];
+        var _31tmp = BMC.QVec(1, M, (I => Math.Sqrt(M[I - 1])));
+        BMC.Check(_expectations.DELTA.Length == _31tmp.Length,
+                  \"_expectations.DELTA.Length == _31tmp.Length\");
+        for (int _32idx = 0; _32idx < M; ++_32idx) {
+            _expectations.DELTA[_32idx] += _31tmp[_32idx];
         }
     }
 }
@@ -2185,7 +2143,7 @@ protected virtual void AcceptanceMonitorBAZ(bool _accepted) { }
           '(:expectations
              (alpha real (exp a))
 	     (Sigma (real n n) (inv-pd Lambda))
-	     (delta (real m) (:quant qvec i (1 m) (^1/2 (@ m i)))))))))
+	     (delta (real m) (:quant qvec i (1 m) (^1/2 (@ m i))))))))))
 )
 
 (define-test rel-draw-tests
@@ -2233,42 +2191,45 @@ protected virtual void AcceptanceMonitorBAZ(bool _accepted) { }
     (ppstr (compile::write-rel-draw
 	      (sexpr->rel '(~ (@ |v| |j|) (dinterval |x| |c|))))))
 
+  (with-genvar-counter 44
   (assert-equal
     (strcat-lines
       "{"
-      "    var _idx1_lo = M + 1;"
-      "    var _idx1_hi = 2 * N;"
-      "    var _buf = BMC.Buffer(V, BMC.Range(_idx1_lo - 1, _idx1_hi));"
-      "    BMC.DrawMVNorm(_buf, M, S);"
-      "    BMC.CopyInto(V, BMC.Range(_idx1_lo - 1, _idx1_hi), _buf);"
+      "    var _44lo = M + 1;"
+      "    var _45hi = 2 * N;"
+      "    var _46buf = BMC.Buffer(V, BMC.Range(_44lo - 1, _45hi));"
+      "    BMC.DrawMVNorm(_46buf, M, S);"
+      "    BMC.CopyInto(V, BMC.Range(_44lo - 1, _45hi), _46buf);"
       "}")
     (ppstr (compile::write-rel-draw
-	    (sexpr->rel '(~ (@ v (:range (+ m 1) (* 2 n))) (dmvnorm m s))))))
+	    (sexpr->rel '(~ (@ v (:range (+ m 1) (* 2 n))) (dmvnorm m s)))))))
 
+  (with-genvar-counter 7
   (assert-equal
     (strcat-lines
       "{"
-      "    var _idx1 = I;"
-      "    var _buf = BMC.Buffer(V, _idx1 - 1, BMC.FullRange);"
-      "    BMC.DrawMVNorm(_buf, M, S);"
-      "    BMC.CopyInto(V, _idx1 - 1, BMC.FullRange, _buf);"
+      "    var _7idx = I;"
+      "    var _8buf = BMC.Buffer(V, _7idx - 1, BMC.FullRange);"
+      "    BMC.DrawMVNorm(_8buf, M, S);"
+      "    BMC.CopyInto(V, _7idx - 1, BMC.FullRange, _8buf);"
       "}")
     (ppstr (compile::write-rel-draw
-	    (sexpr->rel '(~ (@ v i :all) (dmvnorm m s))))))
+	    (sexpr->rel '(~ (@ v i :all) (dmvnorm m s)))))))
 
+  (with-genvar-counter 14
   (assert-equal
     (strcat-lines
       "{"
-      "    var _idx2_lo = LO;"
-      "    var _idx2_hi = HI;"
-      "    var _buf = BMC.Buffer(X, BMC.FullRange, BMC.Range(_idx2_lo - 1, _idx2_hi));"
-      "    BMC.DrawWishart(_buf, NU, W);"
-      "    BMC.CopyInto(X, BMC.FullRange, BMC.Range(_idx2_lo - 1, _idx2_hi), _buf);"
+      "    var _14lo = LO;"
+      "    var _15hi = HI;"
+      "    var _16buf = BMC.Buffer(X, BMC.FullRange, BMC.Range(_14lo - 1, _15hi));"
+      "    BMC.DrawWishart(_16buf, NU, W);"
+      "    BMC.CopyInto(X, BMC.FullRange, BMC.Range(_14lo - 1, _15hi), _16buf);"
       "}")
     (ppstr (compile::write-rel-draw
-	     (sexpr->rel '(~ (@ x :all (:range lo hi)) (dwishart nu W))))))  
+	     (sexpr->rel '(~ (@ x :all (:range lo hi)) (dwishart nu W)))))))
 
-  (let ((compile::*env* (assocs->env '((|lambda| . #trealxn)))))
+  (let ((compile::*env* (assocs->env '((vars::|lambda| . #trealxn)))))
     (assert-equal
      (strcat-lines
       "{"
@@ -2367,7 +2328,7 @@ protected virtual void AcceptanceMonitorBAZ(bool _accepted) { }
 	     (sexpr->rel '(:for |i| ((- m 1) (+ n 2))
                             (~ (@ x |i|) (dnorm 0 (^1/2 (@ y |i|)))))))))
 
-  (let ((compile::*env* (assocs->env '((foo . #t(realxn 1))))))
+  (let ((compile::*env* (assocs->env '((vars::foo . #t(realxn 1))))))
     (assert-equal
      (strcat-lines
       "for (int i = M - 1; i <= N + 2; ++i) {"
@@ -2381,118 +2342,84 @@ protected virtual void AcceptanceMonitorBAZ(bool _accepted) { }
 		    (:let (mu (@ foo |j|))
 			  (~ (@ x |i|) (dnorm mu (^1/2 (@ y |i|))))))))))))
 
-  (flet ((lhs-name-se (se pfx) (compile::lhs-name (sexpr->rellhs se) pfx)))
-    (assert-equal "_foo_x" (lhs-name-se '|x| "_foo_"))
-    (assert-equal "_old_foo__bar" (lhs-name-se '|foo_bar| "_old_"))
-    (assert-equal "_new_Y_lbI_rb" (lhs-name-se '(@ y i) "_new_"))
-    (assert-equal "_u_z_lbi_cm_sp_rb" (lhs-name-se '(@ |z| |i| :all) "_u_")))
+  (let-test-macros
+    ((expect (rel gvc => save-lines restore-lines)
+       `(let ((ht (compile::make-save-var-hash-table))
+	      (rel (sexpr->rel ',rel)))
+	  (with-genvar-counter ,gvc
+	    (assert-equal
+	      (strcat-lines ,@save-lines)
+	      (ppstr (compile::write-mh-saves rel ht)))
+	    (assert-equal
+	      (strcat-lines ,@restore-lines)
+	      (ppstr (compile::write-mh-restores rel ht)))))))
 
+    (expect :rel (~ x (dnorm m s))
+	    :gvc 5
+	    =>
+	    ("var _5save_X = BMC.Copy(X);")
+	    ("X = _5save_X;"))
+
+    (expect :rel (:block (~ (@ y j) (dgamma a b)) (~ x (dnorm m s)))
+	    :gvc 2
+	    =>
+	    ("var _2save_Y = BMC.Copy(Y[J - 1]);"
+	     "var _3save_X = BMC.Copy(X);")
+	    ("Y[J - 1] = _2save_Y;"
+	     "X = _3save_X;"))
+
+    (expect :rel (:let (m emm) (:let (n 5) (~ v (dcat p))))
+	    :gvc 10
+	    =>
+	    ("var _10save_V = BMC.Copy(V);")
+	    ("V = _10save_V;"))
+
+    (expect :rel (:let (foo (+ bar 7))
+		   (:let (baz (* bin boop))
+		     (:block (~ (@ y i) (dnorm 0 1))
+			     (~ (@ w i j) (dgamma 1 1)))))
+	    :gvc 8
+	    =>
+	    ("var _8save_Y = BMC.Copy(Y[I - 1]);"
+	     "var _9save_W = BMC.Copy(W[I - 1, J - 1]);")
+	    ("Y[I - 1] = _8save_Y;"
+	     "W[I - 1, J - 1] = _9save_W;"))
+  )
+
+  (let-test-macros
+    ((expect-error (rel)
+       `(let ((ht (compile::make-save-var-hash-table))
+	      (rel (sexpr->rel ',rel)))
+	  (assert-error 'error
+	    (progn (ppstr (compile::write-mh-saves rel ht))
+		   (ppstr (compile::write-mh-restores rel ht)))))))
+
+    (expect-error :rel ; Until I figure out how to handle this case...
+      (:let (m j) (:let (n 5) (~ (@ v m n) (dcat p)))))
+
+    (expect-error :rel ; Until I figure out how to handle this case...
+      (:let (m j)
+	(:let (n 5)
+	  (:block (~ (@ v m n) (dcat p))
+		  (~ x (dcat q))))))
+
+    (expect-error :rel ; Until I figure out how to handle this case...
+      (:for j (k r) (~ (@ w j) (dnorm a b))))
+
+    (expect-error :rel ; Until I figure out how to handle this case...
+      (:if test
+	   (~ w (dnorm a b))
+	   (~ y (dgamma a b)))))
+
+  (with-genvar-counter 22
   (assert-equal
-   (strcat-lines
-    "var _save_X = BMC.Copy(X);")
-   (ppstr
-    (compile::write-mh-saves
-     (sexpr->rel '(~ x (dnorm m s))))))
-
-  (assert-equal
-   (strcat-lines
-    "X = _save_X;")
-   (ppstr
-    (compile::write-mh-restores
-     (sexpr->rel '(~ x (dnorm m s))))))
-
-  (assert-equal
-   (strcat-lines
-    "var _save_Y_lbJ_rb = BMC.Copy(Y[J - 1]);"
-    "var _save_X = BMC.Copy(X);")
-   (ppstr
-    (compile::write-mh-saves
-     (sexpr->rel '(:block (~ (@ y j) (dgamma a b)) (~ x (dnorm m s)))))))
-
-  (assert-equal
-   (strcat-lines
-    "Y[J - 1] = _save_Y_lbJ_rb;"
-    "X = _save_X;")
-   (ppstr
-    (compile::write-mh-restores
-     (sexpr->rel '(:block (~ (@ y j) (dgamma a b)) (~ x (dnorm m s)))))))
-
-  (assert-equal
-   (strcat-lines
-    "var _save_V = BMC.Copy(V);")
-   (ppstr
-    (compile::write-mh-saves
-     (sexpr->rel
-      '(:let (m emm) (:let (n 5) (~ v (dcat p))))))))
-
-  (assert-equal
-   (strcat-lines
-    "V = _save_V;")
-   (ppstr
-    (compile::write-mh-restores
-     (sexpr->rel
-      '(:let (m emm) (:let (n 5) (~ v (dcat p))))))))
-
-  (assert-equal
-    (strcat-lines
-     "var _save_Y_lbI_rb = BMC.Copy(Y[I - 1]);"
-     "var _save_W_lbI_cm_spJ_rb = BMC.Copy(W[I - 1, J - 1]);")
-    (ppstr
-      (compile::write-mh-saves
-        (sexpr->rel
-	  '(:let (foo (+ bar 7))
-	   (:let (baz (* bin boop))
-	     (:block (~ (@ y i) (dnorm 0 1))
-	             (~ (@ w i j) (dgamma 1 1)))))))))
-
-  (assert-equal
-    (strcat-lines
-     "Y[I - 1] = _save_Y_lbI_rb;"
-     "W[I - 1, J - 1] = _save_W_lbI_cm_spJ_rb;")
-    (ppstr
-      (compile::write-mh-restores
-        (sexpr->rel
-	  '(:let (foo (+ bar 7))
-	   (:let (baz (* bin boop))
-	     (:block (~ (@ y i) (dnorm 0 1))
-	             (~ (@ w i j) (dgamma 1 1)))))))))
-
-  (dolist (f '(#'compile::write-mh-saves #'compile::write-mh-restores))
-
-    (assert-error 'error   ; Until I figure out how to handle this case...
-      (ppstr
-       (funcall f
-        (sexpr->rel
-          '(:let (m j) (:let (n 5) (~ (@ v m n) (dcat p))))))))
-
-    (assert-error 'error   ; Until I figure out how to handle this case...
-      (ppstr
-       (funcall f
-        (sexpr->rel
-          '(:let (m j)
-           (:let (n 5)
-             (:block (~ (@ v m n) (dcat p))
-	             (~ x (dcat q)))))))))
-
-    (assert-error 'error   ; Until I figure out how to handle this case...
-      (ppstr
-       (funcall f
-        (sexpr->rel '(:for j (k r) (~ (@ w j) (dnorm a b)))))))
-
-    (assert-error 'error   ; Until I figure out how to handle this case...
-      (ppstr
-       (funcall f
-        (sexpr->rel '(:if test (~ w (dnorm a b))
-		               (~ y (dgamma a b))))))) )
-
-  (assert-equal
-"var _save_X = BMC.Copy(X);
+"var _22save_X = BMC.Copy(X);
 
 X = BMC.DrawNorm(MU, SIGMA);
 double _lar = SIGMA * (X - MU);
 
 if (!BMC.Accept(_lar)) {
-    X = _save_X;
+    X = _22save_X;
 }
 "
    (ppstr
@@ -2501,10 +2428,11 @@ if (!BMC.Accept(_lar)) {
 		   :lets ()
 		   :proposal-distribution (~ x (dnorm mu sigma))
 		   :log-acceptance-ratio (* sigma (- x mu))))
-     nil)))
+     nil))))
 
+  (with-genvar-counter 52
   (assert-equal
-"var _save_X = BMC.Copy(X);
+"var _52save_X = BMC.Copy(X);
 
 X = BMC.DrawNorm(MU, SIGMA);
 double _lar = SIGMA * (X - MU);
@@ -2514,7 +2442,7 @@ if (_accepted) {
     this.AcceptanceMonitorAM(true);
 }
 else {
-    X = _save_X;
+    X = _52save_X;
     this.AcceptanceMonitorAM(false);
 }
 "
@@ -2525,10 +2453,11 @@ else {
 		   :proposal-distribution (~ x (dnorm mu sigma))
 		   :acceptmon (am)
 		   :log-acceptance-ratio (* sigma (- x mu))))
-     nil)))
+     nil))))
 
+  (with-genvar-counter 4
   (assert-equal
-"var _save_X = BMC.Copy(X);
+"var _4save_X = BMC.Copy(X);
 
 X = BMC.DrawNorm(MU, SIGMA);
 double _lar = SIGMA * (X - MU);
@@ -2538,7 +2467,7 @@ if (_accepted) {
     this.AcceptanceMonitorAM(true, I, A * B);
 }
 else {
-    X = _save_X;
+    X = _4save_X;
     this.AcceptanceMonitorAM(false, I, A * B);
 }
 "
@@ -2549,7 +2478,7 @@ else {
 		   :proposal-distribution (~ x (dnorm mu sigma))
 		   :acceptmon (am i (* a b))
 		   :log-acceptance-ratio (* sigma (- x mu))))
-     nil)))
+     nil))))
 
   (assert-equal
 "X = BMC.DrawNorm(MU, SIGMA);
@@ -2563,16 +2492,19 @@ else {
      nil)))
 
   (let ((compile::*env*
-	  (assocs->env '((m . #trealxn) (sigma . #trealxn) (x . #trealxn)))))
+	  (assocs->env '((vars::m . #trealxn)
+			 (vars::sigma . #trealxn)
+			 (vars::x . #trealxn)))))
+  (with-genvar-counter 11
   (assert-equal
 "double MU = 2.0e+0 * M;
-var _save_X = BMC.Copy(X);
+var _11save_X = BMC.Copy(X);
 
 X = BMC.DrawNorm(MU, SIGMA);
 double _lar = SIGMA * (X - MU);
 
 if (!BMC.Accept(_lar)) {
-    X = _save_X;
+    X = _11save_X;
 }
 "
    (ppstr
@@ -2581,7 +2513,7 @@ if (!BMC.Accept(_lar)) {
 		   :lets ((mu (* 2.0 m)))
 		   :proposal-distribution (~ x (dnorm mu sigma))
 		   :log-acceptance-ratio (* sigma (- x mu))))
-     nil))))
+     nil)))))
 
   (assert-equal
 "var MU = 2 * M;
@@ -2614,10 +2546,11 @@ X = BMC.DrawNorm(MU, SIGMA);
 		    :log-acceptance-ratio 0.0))
       nil)))
 
+  (with-genvar-counter 29
   (assert-equal
 "var Y0 = BMC.Copy(Y);
-var _save_Y = BMC.Copy(Y);
-var _save_W = BMC.Copy(W);
+var _29save_Y = BMC.Copy(Y);
+var _30save_W = BMC.Copy(W);
 
 {
     var W0 = BMC.Copy(W);
@@ -2627,8 +2560,8 @@ var _save_W = BMC.Copy(W);
 double _lar = BMC.Dot(Y, Y0);
 
 if (!BMC.Accept(_lar)) {
-    Y = _save_Y;
-    W = _save_W;
+    Y = _29save_Y;
+    W = _30save_W;
 }
 "
     (ppstr
@@ -2640,21 +2573,22 @@ if (!BMC.Accept(_lar)) {
 		      (:block (~ y (dmvnorm y0 sigmay))
 			      (~ w (dmvnorm w0 sigmaw))))
 		    :log-acceptance-ratio (dot y y0)))
-      nil)))
+      nil))))
 
+  (with-genvar-counter 46
   (assert-equal
 "for (int I = M; I <= N; ++I) {
     var MU = BMC.Dot(Y, GAMMA);
     var SIGMA = Math.Exp(U * V[I - 1]);
     var F = Z[I - 1];
     var SIGMA2 = F * F;
-    var _save_Z_lbI_rb = BMC.Copy(Z[I - 1]);
+    var _46save_Z = BMC.Copy(Z[I - 1]);
 
     Z[I - 1] = BMC.DrawNormTruncated(MU, SIGMA, A, B);
     double _lar = Z[I - 1] + SIGMA2;
 
     if (!BMC.Accept(_lar)) {
-        Z[I - 1] = _save_Z_lbI_rb;
+        Z[I - 1] = _46save_Z;
     }
 }
 "
@@ -2666,7 +2600,7 @@ if (!BMC.Accept(_lar)) {
 		   :lets ((f (@ z i)) (sigma2 (* f f)))
 		   :proposal-distribution (~ (@ z i) (dnorm-trunc mu sigma a b))
 		   :log-acceptance-ratio (+ (@ z i) sigma2))))))))
-      (ppstr (compile::write-rel-draw r))))
+      (ppstr (compile::write-rel-draw r)))))
 
   (assert-equal
     ""
@@ -2685,13 +2619,13 @@ if (!BMC.Accept(_lar)) {
       "}")
     (ppstr (compile::write-prior-draw '(ALPHA BETA GAMMA) (fn () (fmt "<body>")))))
 
-  (assert-equal 'baz
+  (assert-equal 'vars::baz
     (compile::rellhs-main-var
       (sexpr->rellhs 'baz)))
-  (assert-equal 'bar
+  (assert-equal 'vars::bar
     (compile::rellhs-main-var
       (sexpr->rellhs '(@ bar (+ i 1) (* j 3)))))
-  (assert-equal 'bop
+  (assert-equal 'vars::bop
     (compile::rellhs-main-var
       (sexpr->rellhs '(@ bop :all (:range m n) k))))
 
@@ -2715,27 +2649,28 @@ if (!BMC.Accept(_lar)) {
         (sexpr->rellhs 'z)
 	(sexpr->distr '(dnorm mu a)))))
 
+  (with-genvar-counter 86
   (assert-equal
     (strcat-lines
       "if (!_omit_Y) {"
       "    {"
-      "        var _idx1 = I;"
-      "        var _buf = BMC.Buffer(Y, _idx1 - 1, BMC.FullRange);"
-      "        BMC.DrawMVNorm(_buf, MU, SIGMA);"
-      "        BMC.CopyInto(Y, _idx1 - 1, BMC.FullRange, _buf);"
+      "        var _86idx = I;"
+      "        var _87buf = BMC.Buffer(Y, _86idx - 1, BMC.FullRange);"
+      "        BMC.DrawMVNorm(_87buf, MU, SIGMA);"
+      "        BMC.CopyInto(Y, _86idx - 1, BMC.FullRange, _87buf);"
       "    }"
       "}")
     (ppstr
       (compile::prior-draw-wrd-stoch
        (sexpr->rellhs '(@ y i :all))
-       (sexpr->distr '(dmvnorm mu sigma)))))
+       (sexpr->distr '(dmvnorm mu sigma))))))
 )
 
 (defun sexpr->rels (se-list) (mapcar #'sexpr->rel se-list))
 
 (define-test var-type-tests
   (assert-equal
-    '(a d m e h k)
+    '(vars::a vars::d vars::m vars::e vars::h vars::k)
     (compile::stochastic-vars
       (sexpr->rels
         '((~ a (dcat p))
@@ -2934,11 +2869,11 @@ public void Update_BAZ()
 	      (:let (b (- a v 1))
 		(^ a b))))
 
-    (expect (:lambda (v)
+    (expect (:lambda v
 	      (:let (b (* a v))
                 (+ a (* b b))))
 	    :from
-	    (:lambda (v) (+ a (:let (b (* a v)) (* b b))))))
+	    (:lambda v (+ a (:let (b (* a v)) (* b b))))))
 
   ; x names two different bound let variables
   (assert-error 'error
@@ -2952,37 +2887,43 @@ public void Update_BAZ()
 
   (macrolet ((expect (result &key ((:from arg)))
 	       `(assert-equalp ,(sexpr->expr result)
-			       (compile::rename-duplicate-vars
+			       (compile::uniquely-rename-bound-vars
 				 ,(sexpr->expr arg)))))
     (expect x :from x)
     (expect 3 :from 3)
     (expect (+ u v) :from (+ u v))
 
-    (expect (+ (:let (x 3) (* x x)) (:let (y 4) (exp y)))
-	    :from
-	    (+ (:let (x 3) (* x x)) (:let (y 4) (exp y))))
+    (with-genvar-counter 8
+      (expect (+ (:let (_8x 3) (* _8x _8x)) (:let (_9y 4) (exp _9y)))
+	      :from
+	      (+ (:let (x 3) (* x x)) (:let (y 4) (exp y)))))
 
-    (expect (+ (:let (x 3) (* x x)) (:let (x1 4) (exp x1)))
-	    :from
-	    (+ (:let (x 3) (* x x)) (:let (x 4) (exp x))))
+    (with-genvar-counter 5
+      (expect (+ (:let (_5x 3) (* _5x _5x)) (:let (_6x 4) (exp _6x)))
+	      :from
+	      (+ (:let (x 3) (* x x)) (:let (x 4) (exp x)))))
 
-    (expect (+ (:let (x 3) (* x x)) (:let (x2 4) (+ x2 x1)))
-	    :from
-	    (+ (:let (x 3) (* x x)) (:let (x 4) (+ x x1))))
+    (with-genvar-counter 31
+      (expect (+ (:let (_31x 3) (* _31x _31x)) (:let (_32x 4) (+ _32x x1)))
+	      :from
+	      (+ (:let (x 3) (* x x)) (:let (x 4) (+ x x1)))))
 
-    (expect (+ (:let (x 3) (* x1 x)) (:let (x2 4) (exp x2)))
-	    :from
-	    (+ (:let (x 3) (* x1 x)) (:let (x 4) (exp x))))
+    (with-genvar-counter 47
+      (expect (+ (:let (_47x 3) (* x1 _47x)) (:let (_48x 4) (exp _48x)))
+	      :from
+	      (+ (:let (x 3) (* x1 x)) (:let (x 4) (exp x)))))
 
-    (expect (+ x (:let (x1 3) x1) (:let (y1 4) y1) y)
-	    :from
-	    (+ x (:let (x 3) x) (:let (y 4) y) y))
+    (with-genvar-counter 4
+      (expect (+ x (:let (_4x 3) _4x) (:let (_5y 4) _5y) y)
+	      :from
+	      (+ x (:let (x 3) x) (:let (y 4) y) y)))
 
-    (expect (+ (:quant qsum i (m n) (@ v i))
-	       (:quant qprod i1 (m n) (< (@ x i1) 3) (@ w i1)))
-	    :from
-            (+ (:quant qsum i (m n) (@ v i))
-	       (:quant qprod i (m n) (< (@ x i) 3) (@ w i)))))
+    (with-genvar-counter 11
+      (expect (+ (:quant qsum _11i (m n) (@ v _11i))
+	         (:quant qprod _12i (m n) (< (@ x _12i) 3) (@ w _12i)))
+	      :from
+              (+ (:quant qsum i (m n) (@ v i))
+	         (:quant qprod i (m n) (< (@ x i) 3) (@ w i))))))
 
   (macrolet ((expect (enew &key ((:from e)))
 	       `(assert-equalp
@@ -3076,46 +3017,52 @@ public void Update_BAZ()
   )
 
   ; integration test
-  (macrolet ((expect (enew &key ((:from lhs)) ((:assigned e)))
+  (macrolet ((expect (enew &key ((:from e)))
 	       `(assert-equalp
                   ,(sexpr->expr enew)
-                  (compile::lift-let-and-quant
-		    ,(sexpr->expr lhs) ,(sexpr->expr e)))))
-    (expect (:let (lhs1 (^2 a))
-              (* u (/ lhs1 b)))
-	    :from lhs :assigned
-	    (* u (:let (lhs (^2 a)) (/ lhs b))))
+                  (compile::lift-let-and-quant ,(sexpr->expr e)))))
+    (with-genvar-counter 16
+      (expect (:let (_16lhs (^2 a))
+                (* u (/ _16lhs b)))
+	      :from
+	      (* u (:let (lhs (^2 a)) (/ lhs b)))))
 
-    (expect (:let (q (:quant qsum j (m n) true (@ a j))) q)
-	    :from lhs :assigned
-	    (:quant qsum j (m n) (@ a j)))
+    (with-genvar-counter 51
+      (expect (:let (_51q (:quant qsum _52j (m n) true (@ a _52j))) _51q)
+	      :from
+	      (:quant qsum j (m n) (@ a j))))
 
-    (expect (:let (a1 (* u i))
-              (:let (i1 (+ a1 j k))
-                (/ a1 i1)))
-	    :from (@ a i) :assigned
-            (:let (a (* u i))
-              (:let (i (+ a j k))
-                (/ a i))))
+    (with-genvar-counter 34
+      (expect (:let (_34a (* u i))
+                (:let (_35i (+ _34a j k))
+                  (/ _34a _35i)))
+	      :from
+              (:let (a (* u i))
+                (:let (i (+ a j k))
+                  (/ a i)))))
 
-    (expect (:let (q1 (:quant qsum i (m n) true
-                        (:let (q2 (:quant qprod j (mm nn) true (@ a i j)))
-                          q2)))
-	    (:let (y1 (:quant qmax i1 (beg end) (@ b i1) (@ p i1)))
-            (:let (q3 (:quant qmin j1 (foo bar) true (+ (@ baz j1) (@ bop j1))))
-            (+ x
-	       (/ q 3)
-	       q1
-	       (* y1 q3)
-	       (^2 y)))))
-	    :from lhs :assigned
-	    (+ x
-	       (/ q 3)
-	       (:quant qsum i (m n)
-		 (:quant qprod j (mm nn) (@ a i j)))
-	       (:let (y (:quant qmax i (beg end) (@ b i) (@ p i)))
+    (with-genvar-counter 21
+      (expect 
+        (:let (_21q (:quant qsum _22i (m n) true
+		      (:let (_23q (:quant qprod _24j (mm nn) true
+                                    (@ a _22i _24j)))
+                        _23q)))
+	  (:let (_25y (:quant qmax _28i (beg end) (@ b _28i) (@ p _28i)))
+            (:let (_26q (:quant qmin _27j (foo bar) true
+                          (+ (@ baz _27j) (@ bop _27j))))
+              (+ x
+	         (/ q 3)
+	         _21q
+	         (* _25y _26q)
+	         (^2 y)))))
+	:from
+	(+ x
+	   (/ q 3)
+	   (:quant qsum i (m n)
+		   (:quant qprod j (mm nn) (@ a i j)))
+	   (:let (y (:quant qmax i (beg end) (@ b i) (@ p i)))
 		 (* y (:quant qmin j (foo bar) (+ (@ baz j) (@ bop j)))))
-	       (^2 y))))
+	   (^2 y)))))
 )
 
 (define-test write-let-assignment-tests
@@ -3132,17 +3079,18 @@ public void Update_BAZ()
     do
     (assert-equal str (compile::bare-type->string typ)))
 
-  (let ((env (assocs->env '((z . #trealxn) (zi . #tinteger)
-			    (x . #trealxn) (xi . #tinteger)
-			    (y . #trealxn) (yi . #tinteger)
-			    (a . #trealxn) (ai . #tinteger)
-			    (b . #trealxn) (bi . #tinteger)
-			    (xvec . #t(realxn 1))
-			    (xivec . #t(integer 1))
-			    (xmat . #t(realxn 2))
-			    (zmat . #t(realxn 2))
-			    (n . #tinteger)
-			    (i . #tinteger) (j . #tinteger)))))
+  (let ((env (assocs->env '((vars::z . #trealxn) (vars::zi . #tinteger)
+			    (vars::x . #trealxn) (vars::xi . #tinteger)
+			    (vars::y . #trealxn) (vars::yi . #tinteger)
+			    (vars::a . #trealxn) (vars::ai . #tinteger)
+			    (vars::b . #trealxn) (vars::bi . #tinteger)
+			    (vars::xvec . #t(realxn 1))
+			    (vars::xivec . #t(integer 1))
+			    (vars::xmat . #t(realxn 2))
+			    (vars::zmat . #t(realxn 2))
+			    (vars::n . #tinteger)
+			    (vars::i . #tinteger)
+			    (vars::j . #tinteger)))))
     (macrolet ((expect (var expr arrow &body strings)
 	         (assert (eq '=> arrow))
 	         `(assert-equal
@@ -3156,180 +3104,260 @@ public void Update_BAZ()
       (expect |_tmp| (+ z (* x y)) =>
 	      "double _tmp = Z + X * Y;")
 
-      (expect bar (+ y (:let (v (+ a b)) (* v v))) =>
+      (with-genvar-counter 3
+        (expect bar (+ y (:let (v (+ a b)) (* v v))) =>
 	      "double BAR;"
 	      "{"
-	      "    double V = A + B;"
-	      "    BAR = Y + V * V;"
-	      "}")
+	      "    double _3V = A + B;"
+	      "    BAR = Y + _3V * _3V;"
+	      "}"))
 
-      (expect baz (+ yi (:let (v (+ ai bi)) (* v v))) =>
+      (with-genvar-counter 8
+        (expect baz (+ yi (:let (v (+ ai bi)) (* v v))) =>
 	      "int BAZ;"
 	      "{"
-	      "    int V = AI + BI;"
-	      "    BAZ = YI + V * V;"
-	      "}")
+	      "    int _8V = AI + BI;"
+	      "    BAZ = YI + _8V * _8V;"
+	      "}"))
 
-      (expect foo (:let (yi (* a b)) (* 2.0 yi)) =>
+      (with-genvar-counter 73
+        (expect foo (:let (yi (* a b)) (* 2.0 yi)) =>
 	      "double FOO;"
 	      "{"
-	      "    double YI = A * B;"
-              "    FOO = 2.0e+0 * YI;"
-              "}")
+	      "    double _73YI = A * B;"
+              "    FOO = 2.0e+0 * _73YI;"
+              "}"))
 
-      (expect bar (:let (i (+ xi 3))
+      (with-genvar-counter 26
+        (expect bar (:let (i (+ xi 3))
                     (:let (j (- yi 2))
 		      (* (@ xmat i i) (@ zmat j j)))) =>
 	     "double BAR;"
 	     "{"
-             "    int I = XI + 3;"
-             "    int J = YI - 2;"
-             "    BAR = XMAT[I - 1, I - 1] * ZMAT[J - 1, J - 1];"
-             "}")
+             "    int _26I = XI + 3;"
+             "    int _27J = YI - 2;"
+             "    BAR = XMAT[_26I - 1, _26I - 1] * ZMAT[_27J - 1, _27J - 1];"
+             "}"))
 
-      (expect baz (:quant qsum idx ((+ ai 1) bi) (@ xivec idx)) =>
-      "int BAZ;"
-      "{"
-      "    int Q = 0;"
-      "    int _last_IDX = BI;"
-      "    for (int IDX = AI + 1; IDX <= _last_IDX; ++IDX) {"
-      "        Q = Q + XIVEC[IDX - 1];"
-      "    }"
-      "    BAZ = Q;"
-      "}")
+      (with-genvar-counter 12
+      	(expect baz (:quant qsum idx ((+ ai 1) bi) (@ xivec idx)) =>
+      	"int BAZ;"
+      	"{"
+      	"    int _12Q = 0;"
+      	"    int _14last = BI;"
+      	"    for (int _13IDX = AI + 1; _13IDX <= _14last; ++_13IDX) {"
+      	"        _12Q = _12Q + XIVEC[_13IDX - 1];"
+      	"    }"
+      	"    BAZ = _12Q;"
+      	"}"))
 
-      (expect foo (:quant qsum idx (ai bi)
-                    (< 0.0 (@ xvec idx)) (@ xivec idx)) =>
-      "int FOO;"
-      "{"
-      "    int Q = 0;"
-      "    int _last_IDX = BI;"
-      "    for (int IDX = AI; IDX <= _last_IDX; ++IDX) {"
-      "        if (0.0e+0 < XVEC[IDX - 1]) {"
-      "            Q = Q + XIVEC[IDX - 1];"
-      "        }"
-      "    }"
-      "    FOO = Q;"
-      "}")
+      (with-genvar-counter 7
+      	(expect foo (:quant qsum idx (ai bi)
+      	              (< 0.0 (@ xvec idx)) (@ xivec idx)) =>
+      	"int FOO;"
+      	"{"
+      	"    int _7Q = 0;"
+      	"    int _9last = BI;"
+      	"    for (int _8IDX = AI; _8IDX <= _9last; ++_8IDX) {"
+      	"        if (0.0e+0 < XVEC[_8IDX - 1]) {"
+      	"            _7Q = _7Q + XIVEC[_8IDX - 1];"
+      	"        }"
+      	"    }"
+      	"    FOO = _7Q;"
+      	"}"))
 
-      (expect bar (:quant qprod idx (1 ai) (@ xvec idx)) =>
-      "double BAR;"
-      "{"
-      "    double Q = 1.0e+0;"
-      "    int _last_IDX = AI;"
-      "    for (int IDX = 1; IDX <= _last_IDX; ++IDX) {"
-      "        Q = Q * XVEC[IDX - 1];"
-      "    }"
-      "    BAR = Q;"
-      "}")
+      (with-genvar-counter 5
+      	(expect bar (:quant qprod idx (1 ai) (@ xvec idx)) =>
+      	"double BAR;"
+      	"{"
+      	"    double _5Q = 1.0e+0;"
+      	"    int _7last = AI;"
+      	"    for (int _6IDX = 1; _6IDX <= _7last; ++_6IDX) {"
+      	"        _5Q = _5Q * XVEC[_6IDX - 1];"
+      	"    }"
+      	"    BAR = _5Q;"
+      	"}"))
 
-      (expect baz (:quant qnum ix (2 bi) (< (@ xvec ix) 0.0)) =>
-      "int BAZ;"
-      "{"
-      "    int Q = 0;"
-      "    int _last_IX = BI;"
-      "    for (int IX = 2; IX <= _last_IX; ++IX) {"
-      "        Q = Q + Convert.ToInt32(XVEC[IX - 1] < 0.0e+0);"
-      "    }"
-      "    BAZ = Q;"
-      "}")
+      (with-genvar-counter 23
+      	(expect baz (:quant qnum ix (2 bi) (< (@ xvec ix) 0.0)) =>
+      	"int BAZ;"
+      	"{"
+      	"    int _23Q = 0;"
+      	"    int _25last = BI;"
+      	"    for (int _24IX = 2; _24IX <= _25last; ++_24IX) {"
+      	"        _23Q = _23Q + Convert.ToInt32(XVEC[_24IX - 1] < 0.0e+0);"
+      	"    }"
+      	"    BAZ = _23Q;"
+      	"}"))
 
-      (expect foo (:quant q@sum ix (1 j) (= 2 (@ xivec ix))
-                    (@ xmat ix :all) :shape (n))
-	      =>
-      "double[] FOO;"
-      "{"
-      "    double[] Q = new double[N];"
-      "    int _last_IX = J;"
-      "    for (int IX = 1; IX <= _last_IX; ++IX) {"
-      "        if (2 == XIVEC[IX - 1]) {"
-      "            Q = BMC.ArrPlus(Q, BMC.ArraySlice(XMAT, IX - 1, BMC.FullRange));"
-      "        }"
-      "    }"
-      "    FOO = Q;"
-      "}")
+      (with-genvar-counter 6
+      	(expect foo (:quant q@sum ix (1 j) (= 2 (@ xivec ix))
+      	              (@ xmat ix :all) :shape (n))
+      		      =>
+      	"double[] FOO;"
+      	"{"
+      	"    double[] _6Q = new double[N];"
+      	"    int _8last = J;"
+      	"    for (int _7IX = 1; _7IX <= _8last; ++_7IX) {"
+      	"        if (2 == XIVEC[_7IX - 1]) {"
+      	"            _6Q = BMC.ArrPlus(_6Q, BMC.ArraySlice(XMAT, _7IX - 1, BMC.FullRange));"
+      	"        }"
+      	"    }"
+      	"    FOO = _6Q;"
+      	"}"))
 
-      (expect bar (:quant qvec idx (j n) (* (real idx) (^2 (@ xvec idx))))
-	      =>
-      "double[] BAR;"
-      "{"
-      "    int _first_IDX = J;"
-      "    int _last_IDX = N;"
-      "    double[] Q = new double[_last_IDX - _first_IDX + 1];"
-      "    for (int IDX = _first_IDX; IDX <= _last_IDX; ++IDX) {"
-      "        Q[IDX - _first_IDX] = Convert.ToDouble(IDX) * BMC.Sqr(XVEC[IDX - 1]);"
-      "    }"
-      "    BAR = Q;"
-      "}")
+      (with-genvar-counter 6
+      	(expect foo (:quant q@sum ix (1 j) (= 2 (@ xivec ix))
+      	              (@ xmat (:range ai bi) :all) :shape (i n))
+      		      =>
+      	"DMatrix FOO;"
+      	"{"
+      	"    DMatrix _6Q = new DMatrix(I, N);"
+      	"    int _8last = J;"
+      	"    for (int _7IX = 1; _7IX <= _8last; ++_7IX) {"
+      	"        if (2 == XIVEC[_7IX - 1]) {"
+      	"            _6Q = BMC.ArrPlus(_6Q, BMC.ArraySlice(XMAT, BMC.Range(AI - 1, BI), BMC.FullRange));"
+      	"        }"
+      	"    }"
+      	"    FOO = _6Q;"
+      	"}"))
+      (setq compile::*fdebug-trace* nil)
 
-      (expect baz
-	      (:let (tmp1 (* x y))
-		(+ (:quant qsum i (1 ai)
-                     (:quant qsum j (xi yi)
-                       (@ xmat i j)))
-		   (:quant qprod i (2 bi)
-		     (:let (tmp1 (@ xvec i))
-		       (* tmp1 tmp1)))
-		   tmp1))
-	      =>
-      "double BAZ;"
-      "{"
-      "    double TMP1 = X * Y;"
-      "    double Q = 0.0e+0;"
-      "    int _last_I = AI;"
-      "    for (int I = 1; I <= _last_I; ++I) {"
-      "        {"
-      "            double Q1 = 0.0e+0;"
-      "            int _last_J = YI;"
-      "            for (int J = XI; J <= _last_J; ++J) {"
-      "                Q1 = Q1 + XMAT[I - 1, J - 1];"
-      "            }"
-      "            Q = Q + Q1;"
-      "        }"
-      "    }"
-      "    double Q2 = 1.0e+0;"
-      "    int _last_I1 = BI;"
-      "    for (int I1 = 2; I1 <= _last_I1; ++I1) {"
-      "        {"
-      "            double TMP11 = XVEC[I1 - 1];"
-      "            Q2 = Q2 * (TMP11 * TMP11);"
-      "        }"
-      "    }"
-      "    BAZ = Q + Q2 + TMP1;"
-      "}")
+      (with-genvar-counter 12
+      	(expect bar (:quant qvec idx (j n) (* (real idx) (^2 (@ xvec idx))))
+      		      =>
+      	"double[] BAR;"
+      	"{"
+      	"    int _14first = J;"
+      	"    int _15last = N;"
+      	"    double[] _12Q = new double[_15last - _14first + 1];"
+      	"    for (int _13IDX = _14first; _13IDX <= _15last; ++_13IDX) {"
+      	"        _12Q[_13IDX - _14first] = Convert.ToDouble(_13IDX) * BMC.Sqr(XVEC[_13IDX - 1]);"
+      	"    }"
+      	"    BAR = _12Q;"
+      	"}"))
+
+      (with-genvar-counter 6
+	(expect foo (:quant qmax idx (1 n) (@ xivec idx))
+		=>
+	"int FOO;"
+	"{"
+	"    int _6Q = Int32.MinValue;"
+	"    int _8last = N;"
+	"    for (int _7IDX = 1; _7IDX <= _8last; ++_7IDX) {"
+	"        _6Q = Math.Max(_6Q, XIVEC[_7IDX - 1]);"
+        "    }"
+	"    FOO = _6Q;"
+        "}"))
+
+      (with-genvar-counter 6
+	(expect foo (:quant qmax idx (1 n) (@ xvec idx))
+		=>
+	"double FOO;"
+	"{"
+	"    double _6Q = double.NegativeInfinity;"
+	"    int _8last = N;"
+	"    for (int _7IDX = 1; _7IDX <= _8last; ++_7IDX) {"
+	"        _6Q = Math.Max(_6Q, XVEC[_7IDX - 1]);"
+        "    }"
+	"    FOO = _6Q;"
+        "}"))
+
+      (with-genvar-counter 6
+	(expect foo (:quant qmin idx (1 n) (@ xivec idx))
+		=>
+	"int FOO;"
+	"{"
+	"    int _6Q = Int32.MaxValue;"
+	"    int _8last = N;"
+	"    for (int _7IDX = 1; _7IDX <= _8last; ++_7IDX) {"
+	"        _6Q = Math.Min(_6Q, XIVEC[_7IDX - 1]);"
+        "    }"
+	"    FOO = _6Q;"
+        "}"))
+
+      (with-genvar-counter 6
+	(expect foo (:quant qmin idx (1 n) (@ xvec idx))
+		=>
+	"double FOO;"
+	"{"
+	"    double _6Q = double.PositiveInfinity;"
+	"    int _8last = N;"
+	"    for (int _7IDX = 1; _7IDX <= _8last; ++_7IDX) {"
+	"        _6Q = Math.Min(_6Q, XVEC[_7IDX - 1]);"
+        "    }"
+	"    FOO = _6Q;"
+        "}"))
+
+      (with-genvar-counter 34
+      	(expect baz
+      		(:let (tmp (* x y))
+      		  (+ (:quant qsum i (1 ai)
+      	               (:quant qsum j (xi yi) (@ xmat i j)))
+      		     (:quant qprod i (2 bi)
+      		       (:let (tmp (@ xvec i))
+      			 (* tmp tmp)))
+      		     tmp))
+      		=>
+      	"double BAZ;"
+      	"{"
+      	"    double _34TMP = X * Y;"
+      	"    double _35Q = 0.0e+0;"
+      	"    int _42last = AI;"
+      	"    for (int _36I = 1; _36I <= _42last; ++_36I) {"
+      	"        {"
+      	"            double _43Q = 0.0e+0;"
+      	"            int _45last = YI;"
+      	"            for (int _44J = XI; _44J <= _45last; ++_44J) {"
+      	"                _43Q = _43Q + XMAT[_36I - 1, _44J - 1];"
+      	"            }"
+      	"            _35Q = _35Q + _43Q;"
+      	"        }"
+      	"    }"
+      	"    double _39Q = 1.0e+0;"
+      	"    int _46last = BI;"
+      	"    for (int _40I = 2; _40I <= _46last; ++_40I) {"
+      	"        {"
+      	"            double _47TMP = XVEC[_40I - 1];"
+      	"            _39Q = _39Q * (_47TMP * _47TMP);"
+      	"        }"
+      	"    }"
+      	"    BAZ = _35Q + _39Q + _34TMP;"
+      	"}"))
 ; TODO: more quantifiers
       ))
 )
 
+;;; *** DID THIS ONE ***
 (define-test initial-environment-tests
   (macrolet ((expect (d arrow a)
 	       (assert (eq '=> arrow))
 	       `(assert-equalp
 		  ',a
 		  (compile::decl->assoc (sexpr->decl ',d)))))
-    (expect (x integer) => (x . #tinteger))
-    (expect (x1 integerp) => (x1 . #tinteger))
-    (expect (x2 integerp0) => (x2 . #tinteger))
+    (expect (x integer) => (vars::x . #tinteger))
+    (expect (x1 integerp) => (vars::x1 . #tinteger))
+    (expect (x2 integerp0) => (vars::x2 . #tinteger))
 
-    (expect (y realxn) => (y . #trealxn))
-    (expect (y1 realx) => (y1 . #trealxn))
-    (expect (y2 real) => (y2 . #trealxn))
-    (expect (y3 realp0) => (y3 . #trealxn))
-    (expect (y4 realp) => (y4 . #trealxn))
+    (expect (y realxn) => (vars::y . #trealxn))
+    (expect (y1 realx) => (vars::y1 . #trealxn))
+    (expect (y2 real) => (vars::y2 . #trealxn))
+    (expect (y3 realp0) => (vars::y3 . #trealxn))
+    (expect (y4 realp) => (vars::y4 . #trealxn))
 
-    (expect (z boolean) => (z . #tboolean))
+    (expect (z boolean) => (vars::z . #tboolean))
 
-    (expect (a (integer k)) => (a . #t(integer 1)))
-    (expect (a1 (integerp k m n)) => (a1 . #t(integer 3)))
-    (expect (a2 (integerp0 m n)) => (a2 . #t(integer 2)))
+    (expect (a (integer k)) => (vars::a . #t(integer 1)))
+    (expect (a1 (integerp k m n)) => (vars::a1 . #t(integer 3)))
+    (expect (a2 (integerp0 m n)) => (vars::a2 . #t(integer 2)))
 
-    (expect (b (realxn 4 n)) => (b . #t(realxn 2)))
-    (expect (b1 (realx 3)) => (b1 . #t(realxn 1)))
-    (expect (b2 (real j k 4)) => (b2 . #t(realxn 3)))
-    (expect (b3 (realp m)) => (b3 . #t(realxn 1)))
-    (expect (b4 (realp0 5 2)) => (b4 . #t(realxn 2)))
+    (expect (b (realxn 4 n)) => (vars::b . #t(realxn 2)))
+    (expect (b1 (realx 3)) => (vars::b1 . #t(realxn 1)))
+    (expect (b2 (real j k 4)) => (vars::b2 . #t(realxn 3)))
+    (expect (b3 (realp m)) => (vars::b3 . #t(realxn 1)))
+    (expect (b4 (realp0 5 2)) => (vars::b4 . #t(realxn 2)))
 
-    (expect (c (boolean m 3 7)) => (c . #t(boolean 3)))
+    (expect (c (boolean m 3 7)) => (vars::c . #t(boolean 3)))
   )
   (macrolet ((model-with-decls (args vars)
 	       `(raw-sexpr->model '(:model (:args ,@args) (:reqs)
@@ -3349,9 +3377,9 @@ public void Update_BAZ()
 	    => ())
     (expect (model-with-decls ((x integer)) ((y realxn)))
 	    (impl-with-parms ((z boolean)))
-	    => ((x . #tinteger)
-		(y . #trealxn)
-		(z . #tboolean)))
+	    => ((vars::x . #tinteger)
+		(vars::y . #trealxn)
+		(vars::z . #tboolean)))
     (expect (model-with-decls ((a (boolean n))
                                (b integerp))
 			      ((c (real m n))
@@ -3360,13 +3388,13 @@ public void Update_BAZ()
                               (f (integer n))
 			      (g (realxn b b))))
 	    =>
-	    ((a . #t(boolean 1))
-	     (b . #tinteger)
-	     (c . #t(realxn 2))
-	     (d . #t(integer 1))
-	     (e . #trealxn)
-	     (f . #t(integer 1))
-	     (g . #t(realxn 2))))
+	    ((vars::a . #t(boolean 1))
+	     (vars::b . #tinteger)
+	     (vars::c . #t(realxn 2))
+	     (vars::d . #t(integer 1))
+	     (vars::e . #trealxn)
+	     (vars::f . #t(integer 1))
+	     (vars::g . #t(realxn 2))))
 )
 )
 

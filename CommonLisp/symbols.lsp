@@ -4,7 +4,8 @@
   (member s '(qand .qand qmin qmax qor .qor qnum qsum qprod qprod! qvec q@sum qmat)))
 
 (defun is-const-symbol (s)
-  (member s '(@-all true false %pi %e %undef %infty+ %infty- %true-pred)))
+  (member s '(@-all true false %pi %e %undef %infty+ %infty- %true-pred
+	      %min-int %max-int)))
 
 (defun is-variable-symbol (s)
   (and (symbolp s) (not (is-const-symbol s))))

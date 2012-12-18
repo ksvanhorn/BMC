@@ -64,7 +64,7 @@
     (destructuring-bind (var typ) x
       (when (is-var-symbol var)
 	(return-from sexpr->decl
-	  (make-decl :var var :typ (sexpr->vtype typ))))))
+	  (make-decl :var (vars-symbol var) :typ (sexpr->vtype typ))))))
   (error "Invalid declaration: ~W." x))
 
 (defun is-var-symbol (x)
@@ -123,7 +123,10 @@
       :log-acceptance-ratio (sexpr->expr sexpr-lar))))
 
 (defun sexpr->lets (se)
-  (mapcar (lambda (x) (cons (first x) (sexpr->expr (second x)))) se))
+  (flet ((sexpr->let (x)
+	   (destructuring-bind (var def) x
+             (cons (vars-symbol var) (sexpr->expr def)))))
+    (mapcar #'sexpr->let se)))
 
 (defun sexpr->acceptmon (se)
   (destructuring-bind (name . args) se
@@ -152,7 +155,7 @@
   (check-let-rel x)
   (destructuring-bind ((var val) body) x
     (make-relation-let
-      :var var
+      :var (vars-symbol var)
       :val (sexpr->expr val)
       :body (sexpr->rel body))))
 
@@ -260,7 +263,7 @@
     (let ((lo (sexpr->expr x-lo))
 	  (hi (sexpr->expr x-hi))
 	  (body (sexpr->rel x-body)))
-      (make-relation-loop :var var :lo lo :hi hi :body body))))
+      (make-relation-loop :var (vars-symbol var) :lo lo :hi hi :body body))))
 
 (defun check-loop-rel (x)
   (unless (and (= 3 (length x))
