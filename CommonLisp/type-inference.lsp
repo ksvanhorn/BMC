@@ -3,6 +3,7 @@
 (defadt bare-type
   (scalar stype)
   (array elem-type num-dims)
+  (pair fst-type snd-type)
   (int-map return-type))
 
 (defun is-base-type-name (x)
@@ -17,6 +18,10 @@
     (let ((rest (cdr se)))
       (make-bare-type-int-map :return-type
 	(sexpr->bare-type (if (null (cdr rest)) (car rest) rest)))))
+   ((eq 'pair (car se))
+    (destructuring-bind (fst snd) (cdr se)
+      (make-bare-type-pair :fst-type (sexpr->bare-type fst)
+			   :snd-type (sexpr->bare-type snd))))
    (t
     (destructuring-bind (typ-se n) se
       (assert (integerp n))
@@ -114,7 +119,21 @@
       (setf (gethash fct ht) (operator-typing-function fct types)))
     (loop for (fct nargs . elem-types) in +lifted-fcts+ do
       (setf (gethash fct ht) (lifted-fct-typing-function fct nargs elem-types)))
+    (setf (gethash 'fst ht) #'fst-typing-function)
+    (setf (gethash 'snd ht) #'snd-typing-function)
     ht))
+
+(defun fst-typing-function (arg-types)
+  (destructuring-bind (arg-type) arg-types
+    (adt-case bare-type arg-type
+      ((pair fst-type snd-type)
+       fst-type))))
+
+(defun snd-typing-function (arg-types)
+  (destructuring-bind (arg-type) arg-types
+    (adt-case bare-type arg-type
+      ((pair fst-type snd-type)
+       snd-type))))
 
 (defun simple-typing-function (fct signatures)
   (alambda (arg-types)
@@ -171,6 +190,7 @@
     (inv-pd (#t(realxn 2) #t(realxn 2)))
     (real-zero-arr (#t(realxn 1) #tinteger)
 		   (#t(realxn 2) #tinteger #tinteger))
+    (eigen (#t(pair (realxn 1) (realxn 2)) #t(realxn 2)))
     (sum (#trealxn #t(realxn 1)))
     (cons (#t(realxn 1) #trealxn #t(realxn 1)))
     (cons-col (#t(realxn 2) #t(realxn 1) #t(realxn 2)))

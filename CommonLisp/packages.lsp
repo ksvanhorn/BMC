@@ -19,8 +19,8 @@
     :realxn :realx :real :realp0 :realp
     :@-all-type :@-rng-type :@-idx-type
 
-    ;; constructor for function types of form integer -> type
-    :int-map
+    ;; type constructors
+    :int-map :pair
 
     ;; predicates for scalar types
     :is-boolean :is-number :is-numberu :is-integeru
@@ -43,7 +43,9 @@
     :^1/2 :^2 :^-1 :^-1/2 :^-2
     :@^1/2 :@^2 :@^-1 :@^-1/2 :@^-2
     :@+ :@- :@* :@/ :$*
+    :fst :snd
     :diag_mat :o* :o^2 :cons :cons-col :cons-row :real-zero-arr
+    :eigen
 
     ;; finite quantifiers and associated constants
     :qand :qor :qmin :qmax :qnum :qsum :qprod :qprod! :qvec :q@sum :qmat
@@ -104,12 +106,15 @@
 (defpackage :type-inference
   (:use :cl :utils :symbols :adt :lazy :expr)
   (:export :bare-type :bare-type-scalar :bare-type-array :bare-type-int-map
-           :is-bare-type 
+           :bare-type-pair :is-bare-type 
 	   :is-bare-type-scalar :is-bare-type-array :is-bare-type-int-map
+	   :is-bare-type-pair
 	   :make-bare-type-scalar :make-bare-type-array :make-bare-type-int-map
+	   :make-bare-type-pair
 	   :bare-type-scalar-stype
 	   :bare-type-array-elem-type :bare-type-array-num-dims
 	   :bare-type-int-map-return-type
+	   :bare-type-pair-fst-type :bare-type-pair-snd-type
 
            :sexpr->bare-type :infer-type
 	   :var-type :no-var-types :add-var-type :assocs->env))

@@ -10,6 +10,10 @@
 	 (@-all-type . #s(bare-type-scalar :stype @-all-type))
 	 (@-rng-type . #s(bare-type-scalar :stype @-rng-type))
 	 (@-idx-type . #s(bare-type-scalar :stype @-idx-type))
+
+	 ((pair integer boolean) .
+	  #s(bare-type-pair :fst-type #s(bare-type-scalar :stype integer)
+			    :snd-type #s(bare-type-scalar :stype boolean)))
      
 	 ((realxn 1) . #s(bare-type-array
 			   :elem-type #s(bare-type-scalar :stype realxn)
@@ -56,6 +60,7 @@
   (loop for (literal . sexp) in
 	'((#trealxn . realxn)
 	  (#t(integer 2) . (integer 2))
+	  (#t(pair realxn integer) . (pair realxn integer))
 	  (#t(int-map boolean) . (int-map boolean))
 	  (#t(int-map realxn 1) . (int-map realxn 1)))
 	do
@@ -188,6 +193,9 @@
 	    (#e(inv-pd xmat) . #t(realxn 2))
 	    (#e(vec r) . #t(realxn 1))
 	    (#e(vec r s) . #t(realxn 1))
+	    (#e(eigen xmat) . #t(pair (realxn 1) (realxn 2)))
+	    (#e(fst (eigen xmat)) . #t(realxn 1))
+	    (#e(snd (eigen xmat)) . #t(realxn 2))
 	    (#e(vec r s 2.7) . #t(realxn 1))
 	    (#e(vec xvec yvec zvec) . #t((realxn 1) 1))
 	    (#e(vec xmat ymat zmat) . #t((realxn 2) 1))

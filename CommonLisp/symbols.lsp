@@ -30,7 +30,8 @@
     ^1/2 ^2 ^-1 ^-1/2 ^-2
     @^1/2 @^2 @^-1 @^-1/2 @^-2
     @+ @- @* @/ $*
-    diag_mat o* o^2 cons cons-col cons-row real-zero-arr
+    fst snd
+    diag_mat o* o^2 cons cons-col cons-row real-zero-arr eigen
     ddirch-density dcat-density dinterval-density
     dnorm-density dmvnorm-density dgamma-density dwishart-density
     ddirch-log-density dcat-log-density dinterval-log-density

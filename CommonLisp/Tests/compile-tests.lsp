@@ -288,38 +288,88 @@
 (defun cexpr->string (e) (compile::expr->string e))
 
 (define-test compile-expression-test
-  (assert-equal "x" (cexpr->string #e|x|))
-  (assert-equal "5" (cexpr->string #e5))
-  (assert-equal "-3.25e+0" (cexpr->string #e-3.25))
-  (assert-equal "true" (cexpr->string #etrue))
-  (assert-equal "false" (cexpr->string #efalse))
+  (macrolet ((expect (input arrow string)
+	       (assert (eq '=> arrow))
+	       `(assert-equal ,string (cexpr->string (sexpr->expr ',input)))))
 
-  (assert-equal "x[i - 1]" (cexpr->string #e(@ |x| |i|)))
-  (assert-equal "y[i + 2 - 1, j - 1 - 1]"
-		(cexpr->string #e(@ |y| (+ |i| 2) (- |j| 1))))
-  (assert-equal
-    "BMC.ArraySlice(x, i - 1, BMC.Range(lo - 1, hi), BMC.FullRange)"
-    (cexpr->string #e(@ |x| |i| (:range |lo| |hi|) :all)))
+    (expect x => "X")
+    (expect 5 => "5")
+    (expect -3.25 => "-3.25e+0")
+    (expect true => "true")
+    (expect false => "false")
 
-  (assert-equal "Math.Sqrt(x)" (cexpr->string #e(^1/2 |x|)))
-  (assert-equal "BMC.MatrixInverse(x)" (cexpr->string #e(inv |x|)))
-  (assert-equal "Math.Exp(x / 2)" (cexpr->string #e(exp (/ |x| 2))))
-  (assert-equal "Math.Tanh(y)" (cexpr->string #e(tanh |y|)))
-  (assert-equal "BMC.Vec(x, y, 0.0e+0)" (cexpr->string #e(vec |x| |y| 0.0)))
-  (assert-equal "BMC.Vec(x, y)"	(cexpr->string #e(vec |x| |y|)))
-  (assert-equal "x - y" (cexpr->string #e(- |x| |y|)))
-  (assert-equal "-(X) * Y + -(Z)" (cexpr->string #e(+ (* (neg x) y) (neg z))))
-  (assert-equal "BMC.QSum(M, N, (I => X[I - 1]))"
-    (cexpr->string #e(:quant qsum i (m n) (@ x i))))
-  (assert-equal "BMC.QSum(M, N, (I => X[I - 1]))"
-    (cexpr->string #e(:quant qsum i (m n) true (@ x i))))
-  (assert-equal "BMC.QSum(M, N, (I => W[I - 1] < X[I - 1]), (I => Y[I - 1]))"
-    (cexpr->string #e(:quant qsum i (m n) (< (@ w i) (@ x i)) (@ y i))))
-  (assert-equal "(x < y ? a + b : a * b)"
-    (cexpr->string #e(if-then-else (< |x| |y|) (+ |a| |b|) (* |a| |b|))))
-  (assert-equal "BMC.Let(y * y, (x => c * x))"
-    (cexpr->string #e(:let (|x| (* |y| |y|)) (* |c| |x|))))
+    (expect (@ |x| |i|) => "x[i - 1]")
+    (expect (@ |y| (+ |i| 2) (- |j| 1)) => "y[i + 2 - 1, j - 1 - 1]")
+    (expect (@ |x| |i| (:range |lo| |hi|) :all) =>
+	    "BMC.ArraySlice(x, i - 1, BMC.Range(lo - 1, hi), BMC.FullRange)")
+
+    (expect (^1/2 |x|) => "Math.Sqrt(x)")
+    (expect (inv |x|) => "BMC.MatrixInverse(x)")
+    (expect (exp (/ |x| 2)) => "Math.Exp(x / 2)")
+    (expect (tanh |y|) => "Math.Tanh(y)")
+    (expect (- |x| |y|) => "x - y")
+    (expect (+ (* (neg x) y) (neg z)) => "-(X) * Y + -(Z)")
+    (expect (:quant qsum i (m n) (@ x i)) =>
+	    "BMC.QSum(M, N, (I => X[I - 1]))")
+    (expect (:quant qsum i (m n) true (@ x i)) =>
+	    "BMC.QSum(M, N, (I => X[I - 1]))")
+    (expect (:quant qsum i (m n) (< (@ w i) (@ x i)) (@ y i)) =>
+	    "BMC.QSum(M, N, (I => W[I - 1] < X[I - 1]), (I => Y[I - 1]))")
+    (expect (if-then-else (< |x| |y|) (+ |a| |b|) (* |a| |b|)) =>
+	    "(x < y ? a + b : a * b)")
+    (expect (:let (|x| (* |y| |y|)) (* |c| |x|)) =>
+	    "BMC.Let(y * y, (x => c * x))")
+
+    (expect (vec |x| |y| 0.0) => "BMC.Vec(x, y, 0.0e+0)")
+    (expect (vec |x| |y|) => "BMC.Vec(x, y)")
+    (expect (sum (vec |x| |y|)) => "BMC.Sum(BMC.Vec(x, y))")
+    (expect (vec (vec |x| |y|) (vec |z|)) =>
+	    "BMC.Vec(BMC.Vec(x, y), BMC.Vec(z))"))
 )
+
+(define-test aliases-test
+  (macrolet ((expect (input arrow vars)
+	       (assert (eq '=> arrow))
+		 `(assert-equal (mapcar #'vars-symbol ',vars)
+				(compile::aliases (sexpr->expr ',input)))))
+
+    (expect x => (x))
+    (expect 5 => ())
+    (expect -3.25 => ())
+    (expect true => ())
+    (expect false => ())
+
+    (expect (@ |x| |i|) => ())
+    (expect (@ |y| (+ |i| 2) (- |j| 1)) => ())
+    (expect (@ |x| |i| (:range |lo| |hi|) :all) => ())
+
+    (expect (^1/2 |x|) => ())
+    (expect (inv |x|) => ())
+    (expect (exp (/ |x| 2)) => ())
+    (expect (tanh |y|) => ())
+    (expect (- |x| |y|) => ())
+    (expect (+ (* (neg x) y) (neg z)) => ())
+    (expect (:quant qsum i (m n) (@ x i)) => ())
+    (expect (:quant qsum i (m n) true (@ x i)) => ())
+    (expect (:quant qsum i (m n) (< (@ w i) (@ x i)) (@ y i)) => ())
+    (expect (if-then-else (< |x| |y|) (+ |a| |b|) (* |a| |b|)) => ())
+    (expect (:let (|x| (* |y| |y|)) (* |c| |x|)) => ())
+
+    (expect (if-then-else (< a b) x y) => (x y))
+    (expect (if-then-else (< a 4) x (@ y (:range i j))) => (x))
+    (expect (if-then-else (< a 4) (@ y (:range i j)) x) => (x))
+
+    (expect (vec x y (@ z (:range j k))) => (x y))
+    (expect (vec x y) => (x y))
+    (expect (sum (vec x y)) => ())
+    (expect (vec (vec x y) (vec z)) => (x y z))
+
+    (expect (:let (a 4) b) => (b))
+    (expect (:let (x (@ y (:range j k))) x) => ())
+    (expect (:let (x y) x) => (y))
+    (expect (:let (a 4) (vec y z)) => (y z))
+    (expect (:let (y x) (vec y z)) => (x z))
+))
 
 (define-test compile-ljd-tests
   (let-test-macros
@@ -615,7 +665,7 @@ else {
      =>
 "double _ljdold = _x.LogJointDensity();
 var _old_P = BMC.Copy(_x.P);
-BMC.DrawDirichlet(_x.P, _x.A);
+_x.P = BMC.DrawDirichlet(_x.A);
 double _lar = 0.0;
 var _new_P = BMC.Copy(_x.P);
 double _ljdnew = _x.LogJointDensity();
@@ -994,7 +1044,7 @@ if (!BMC.Accept(_lar)) {
 "double _ljdold = _x.LogJointDensity();
 var _old_Y = BMC.Copy(_x.Y);
 var _old_V = BMC.Copy(_x.V);
-BMC.DrawMVNorm(_x.Y, _x.MU_Y, _x.SIGMA_Y);
+_x.Y = BMC.DrawMVNorm(_x.MU_Y, _x.SIGMA_Y);
 for (int I = 1; I <= N; ++I) {
     if (1 == Z[I - 1]) {
         var M = BMC.Dot(_x.MU_V, BMC.ArraySlice(_x.U, I - 1, BMC.FullRange));
@@ -1054,8 +1104,8 @@ var _62save_W = BMC.Copy(_x.W);
 
 {
     var W0 = BMC.Copy(_x.W);
-    BMC.DrawMVNorm(_x.Y, _x.M, SIGMAY);
-    BMC.DrawMVNorm(_x.W, W0, SIGMAW);
+    _x.Y = BMC.DrawMVNorm(_x.M, SIGMAY);
+    _x.W = BMC.DrawMVNorm(W0, SIGMAW);
 }
 double _lar = BMC.Dot(_x.Y, Y0);
 var _new_Y = BMC.Copy(_x.Y);
@@ -1402,7 +1452,7 @@ for (int _16idx = 0; _16idx < _assigned_p.Length; ++_16idx) {
     Assert.IsFalse(_assigned_p[_16idx], \"p[{0}] assigned\", _16idx);
     _assigned_p[_16idx] = true;
 }
-BMC.DrawDirichlet(_x.p, _x.alpha_p);
+_x.p = BMC.DrawDirichlet(_x.alpha_p);
 "
       :outer-lets '()
       :rel '(:metropolis-hastings
@@ -1461,7 +1511,7 @@ for (int _9idx = 0; _9idx < _assigned_V.Length; ++_9idx) {
     Assert.IsFalse(_assigned_V[_9idx], \"V[{0}] assigned\", _9idx);
     _assigned_V[_9idx] = true;
 }
-BMC.DrawMVNorm(_x.V, MU, _x.SIGMA);
+_x.V = BMC.DrawMVNorm(MU, _x.SIGMA);
 "
     :outer-lets '()
     :rel '(:metropolis-hastings
@@ -1480,7 +1530,7 @@ for (int _34idx = 0; _34idx < _assigned_Lambda.NBRows; ++_34idx) {
         _assigned_Lambda[_34idx, _35idx] = true;
     }
 }
-BMC.DrawWishart(_x.Lambda, _x.nu + 3, V);
+_x.Lambda = BMC.DrawWishart(_x.nu + 3, V);
 "
     :outer-lets '()
     :rel '(:metropolis-hastings
@@ -1549,12 +1599,12 @@ var Z0 = BMC.Copy(_x.Z);
         Assert.IsFalse(_assigned_Z[_12idx], \"Z[{0}] assigned\", _12idx);
         _assigned_Z[_12idx] = true;
     }
-    BMC.DrawMVNorm(_x.Z, Z0, SIGMAZ);
+    _x.Z = BMC.DrawMVNorm(Z0, SIGMAZ);
     for (int _13idx = 0; _13idx < _assigned_Y.Length; ++_13idx) {
         Assert.IsFalse(_assigned_Y[_13idx], \"Y[{0}] assigned\", _13idx);
         _assigned_Y[_13idx] = true;
     }
-    BMC.DrawMVNorm(_x.Y, Y0, SIGMAY);
+    _x.Y = BMC.DrawMVNorm(Y0, SIGMAY);
 }
 "
     :outer-lets '()
@@ -2148,7 +2198,7 @@ protected virtual void AcceptanceMonitorBAZ(bool _accepted) { }
 
 (define-test rel-draw-tests
   (assert-equal
-"BMC.DrawDirichlet(p, alpha_p);
+"p = BMC.DrawDirichlet(alpha_p);
 "
     (ppstr (compile::write-rel-draw
 	    (sexpr->rel '(~ |p| (ddirch |alpha_p|)))
@@ -2174,13 +2224,13 @@ protected virtual void AcceptanceMonitorBAZ(bool _accepted) { }
 	     (sexpr->rel '(~ x (dgamma (* a c) (/ b d)))))))
 
    (assert-equal
-    "BMC.DrawMVNorm(V, MU, SIGMA);
+    "V = BMC.DrawMVNorm(MU, SIGMA);
 "
     (ppstr (compile::write-rel-draw
 	     (sexpr->rel '(~ v (dmvnorm mu sigma))))))
 
   (assert-equal
-    "BMC.DrawWishart(Lambda, nu + 3, V);
+    "Lambda = BMC.DrawWishart(nu + 3, V);
 "
     (ppstr (compile::write-rel-draw
 	     (sexpr->rel '(~ |Lambda| (dwishart (+ |nu| 3) V))))))
@@ -2197,8 +2247,7 @@ protected virtual void AcceptanceMonitorBAZ(bool _accepted) { }
       "{"
       "    var _44lo = M + 1;"
       "    var _45hi = 2 * N;"
-      "    var _46buf = BMC.Buffer(V, BMC.Range(_44lo - 1, _45hi));"
-      "    BMC.DrawMVNorm(_46buf, M, S);"
+      "    var _46buf = BMC.DrawMVNorm(M, S);"
       "    BMC.CopyInto(V, BMC.Range(_44lo - 1, _45hi), _46buf);"
       "}")
     (ppstr (compile::write-rel-draw
@@ -2209,8 +2258,7 @@ protected virtual void AcceptanceMonitorBAZ(bool _accepted) { }
     (strcat-lines
       "{"
       "    var _7idx = I;"
-      "    var _8buf = BMC.Buffer(V, _7idx - 1, BMC.FullRange);"
-      "    BMC.DrawMVNorm(_8buf, M, S);"
+      "    var _8buf = BMC.DrawMVNorm(M, S);"
       "    BMC.CopyInto(V, _7idx - 1, BMC.FullRange, _8buf);"
       "}")
     (ppstr (compile::write-rel-draw
@@ -2222,8 +2270,7 @@ protected virtual void AcceptanceMonitorBAZ(bool _accepted) { }
       "{"
       "    var _14lo = LO;"
       "    var _15hi = HI;"
-      "    var _16buf = BMC.Buffer(X, BMC.FullRange, BMC.Range(_14lo - 1, _15hi));"
-      "    BMC.DrawWishart(_16buf, NU, W);"
+      "    var _16buf = BMC.DrawWishart(NU, W);"
       "    BMC.CopyInto(X, BMC.FullRange, BMC.Range(_14lo - 1, _15hi), _16buf);"
       "}")
     (ppstr (compile::write-rel-draw
@@ -2257,7 +2304,7 @@ protected virtual void AcceptanceMonitorBAZ(bool _accepted) { }
   (assert-equal
     (strcat-lines
       "var Y0 = BMC.Copy(Y);"
-      "BMC.DrawMVNorm(Y, Y0, SIGMAY);")
+      "Y = BMC.DrawMVNorm(Y0, SIGMAY);")
     (ppstr (compile::write-rel-draw
 	     (sexpr->rel '(:let (y0 y) (~ y (dmvnorm y0 sigmay))))
 	     nil)))
@@ -2531,8 +2578,8 @@ X = BMC.DrawNorm(MU, SIGMA);
 "var Y0 = BMC.Copy(Y);
 {
     var W0 = BMC.Copy(W);
-    BMC.DrawMVNorm(Y, Y0, SIGMAY);
-    BMC.DrawMVNorm(W, W0, SIGMAW);
+    Y = BMC.DrawMVNorm(Y0, SIGMAY);
+    W = BMC.DrawMVNorm(W0, SIGMAW);
 }
 "
     (ppstr
@@ -2554,8 +2601,8 @@ var _30save_W = BMC.Copy(W);
 
 {
     var W0 = BMC.Copy(W);
-    BMC.DrawMVNorm(Y, Y0, SIGMAY);
-    BMC.DrawMVNorm(W, W0, SIGMAW);
+    Y = BMC.DrawMVNorm(Y0, SIGMAY);
+    W = BMC.DrawMVNorm(W0, SIGMAW);
 }
 double _lar = BMC.Dot(Y, Y0);
 
@@ -2655,8 +2702,7 @@ if (!BMC.Accept(_lar)) {
       "if (!_omit_Y) {"
       "    {"
       "        var _86idx = I;"
-      "        var _87buf = BMC.Buffer(Y, _86idx - 1, BMC.FullRange);"
-      "        BMC.DrawMVNorm(_87buf, MU, SIGMA);"
+      "        var _87buf = BMC.DrawMVNorm(MU, SIGMA);"
       "        BMC.CopyInto(Y, _86idx - 1, BMC.FullRange, _87buf);"
       "    }"
       "}")
@@ -3075,7 +3121,9 @@ public void Update_BAZ()
 	  (#t(integer 2) . "IMatrix")
 	  (#tboolean . "bool")
 	  (#t(boolean 1) . "bool[]")
-	  (#t(boolean 2) . "BMatrix"))
+	  (#t(boolean 2) . "BMatrix")
+	  (#t(pair integer (boolean 1)) . "Tuple<int, bool[]>")
+	  (#t(pair (realxn 1) (realxn 2)) . "Tuple<double[], DMatrix>"))
     do
     (assert-equal str (compile::bare-type->string typ)))
 
@@ -3328,7 +3376,6 @@ public void Update_BAZ()
       ))
 )
 
-;;; *** DID THIS ONE ***
 (define-test initial-environment-tests
   (macrolet ((expect (d arrow a)
 	       (assert (eq '=> arrow))
@@ -3399,6 +3446,7 @@ public void Update_BAZ()
 )
 
 
+
 ; TODO: write and test code to verify DAG
 ; TODO: test for case when model language name and C# name for function
 ;   are different, or where there is no C# operator corresponding to
@@ -3406,3 +3454,4 @@ public void Update_BAZ()
 ; TODO: Extend loading of model arguments to allow use of defaults.
 ; TODO: Extend loading of model arguments so that some integer parameters
 ;   can be obtained from the dimensions of the data.
+ 

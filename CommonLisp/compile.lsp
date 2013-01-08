@@ -322,7 +322,9 @@
     (diag_mat . "BMC.DiagonalMatrix")
     (dmvnorm-density . "BMC.DensityMVNorm")
     (dot . "BMC.Dot")
+    (eigen . "BMC.Eigen")
     (exp . "Math.Exp")
+    (fst . "BMC.Fst")
     (identity . "BMC.Copy")
     (inv . "BMC.MatrixInverse")
     (inv-pd . "BMC.MatrixInversePD")
@@ -349,6 +351,7 @@
     (qsum . "BMC.QSum")
     (qvec . "BMC.QVec")
     (rmat . "BMC.RowMatrix")
+    (snd . "BMC.Snd")
     (sum . "BMC.Sum")
     (tanh . "Math.Tanh")
     (vec . "BMC.Vec")
@@ -1338,9 +1341,9 @@
        (mapcar #'expr->string distr-args)))
 
 (defun write-rel-draw-stoch-multivariate (lhs distr-name distr-args)
-  (fmt "~a(~a~{, ~a~});"
-       (csharp-distr-draw-name distr-name)
+  (fmt "~a = ~a(~{~a~^, ~});"
        (crellhs->string lhs)
+       (csharp-distr-draw-name distr-name)
        (mapcar #'expr->string distr-args)))
 
 (defun write-rel-draw-stoch-array-slice (lhs distr-name distr-args)
@@ -1354,10 +1357,9 @@
 	        (mapcar #'expr->string (mapcar #'slice-dec-expr xformed-idxs)))
 	      (var-str (variable->string var))
 	      (buf (new-var "buf")))
-	  (fmt "var ~a = BMC.Buffer(~a~{, ~a~});" buf var-str xformed-idx-strs)
-	  (fmt "~a(~a~{, ~a~});"
-	       (csharp-distr-draw-name distr-name)
+	  (fmt "var ~a = ~a(~{~a~^, ~});"
 	       buf
+	       (csharp-distr-draw-name distr-name)
 	       (mapcar #'expr->string distr-args))
 	  (fmt "BMC.CopyInto(~a~{, ~a~}, ~a);"
 	       var-str xformed-idx-strs buf))))))
@@ -1812,6 +1814,8 @@
   (adt-case bare-type typ
     ((scalar stype)
      (bare-scalar-type-symbol->string stype))
+    ((pair fst-type snd-type)
+     (format nil "Tuple<~a, ~a>" (bt->string fst-type) (bt->string snd-type)))
     ((array elem-type num-dims)
      (case num-dims
        (1 (strcat (bare-type->string elem-type) "[]"))
@@ -1996,6 +2000,35 @@
 	 (make-bare-type-array
 	   :elem-type (make-bare-type-scalar :stype (base-type elem-type))
 	   :num-dims (length dims)))))))
+
+(defun aliases (e)
+  (adt-case expr e
+    ((const name)
+     '())
+    ((variable symbol)
+     (list symbol))
+    ((lambda var body)
+     '())
+    ((apply fct args)
+     (fct-app-aliases fct args))))
+
+(defun fct-app-aliases (fct args)
+  (case fct
+    (vec
+      (append-mapcar #'aliases args))
+    (if-then-else
+      (destructuring-bind (test true-branch false-branch) args
+	(append (aliases true-branch) (aliases false-branch))))
+    (!
+      (fct-app-aliases :let (reverse args)))
+    (:let
+      (destructuring-bind (val lambda-expr) args
+	(match-adt1 (expr-lambda var body) lambda-expr
+	  (let ((var-aliases (aliases val)))
+	    (append-mapcar
+	      (lambda (s) (if (eq var s) var-aliases (list s)))
+	      (aliases body))))))
+    (otherwise '())))
 
 ;;; END
 
