@@ -35,7 +35,7 @@
     :.= :.!= :.< :.<= :.> :.>= :.is-symm-pd
     
     ;; functions
-    :identity :int #| real |#
+    :copy :int #| real |#
     :@ :@-slice :@-rng :@-idx :vec :rmat :array-length :num-dims
     :abs-det :mv-gamma-fct :trace :quad :fac
     :+ :- :* :*! :/ :^ :neg :exp :log :tanh :max :min :vmax
@@ -48,7 +48,7 @@
     :eigen
 
     ;; finite quantifiers and associated constants
-    :qand :qor :qmin :qmax :qnum :qsum :qprod :qprod! :qvec :q@sum :qmat
+    :qand :qor :qmin :qmax :qnum :qsum :qprod :qprod! :qvec :q@sum
     :.qand :.qor
 
     ;; distributions
@@ -189,5 +189,5 @@
 (defpackage :compile
   (:use :cl :mcimpl :model :variables :variables :expr :utils :adt :symbols :type-inference)
   (:shadow :expr->string)
-  (:export :compile-to-csharp :write-test-file :write-test-updates))
+  (:export :compile-to-csharp :write-test-file :write-test-updates :de-alias-impl))
 

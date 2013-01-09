@@ -121,6 +121,7 @@
       (setf (gethash fct ht) (lifted-fct-typing-function fct nargs elem-types)))
     (setf (gethash 'fst ht) #'fst-typing-function)
     (setf (gethash 'snd ht) #'snd-typing-function)
+    (setf (gethash 'copy ht) #'copy-typing-function)
     ht))
 
 (defun fst-typing-function (arg-types)
@@ -134,6 +135,10 @@
     (adt-case bare-type arg-type
       ((pair fst-type snd-type)
        snd-type))))
+
+(defun copy-typing-function (arg-types)
+  (destructuring-bind (arg-type) arg-types
+    arg-type))
 
 (defun simple-typing-function (fct signatures)
   (alambda (arg-types)

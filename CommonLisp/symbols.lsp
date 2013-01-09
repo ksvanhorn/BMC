@@ -1,7 +1,7 @@
 (in-package :symbols)
 
 (defun is-fquant-symbol (s)
-  (member s '(qand .qand qmin qmax qor .qor qnum qsum qprod qprod! qvec q@sum qmat)))
+  (member s '(qand .qand qmin qmax qor .qor qnum qsum qprod qprod! qvec q@sum)))
 
 (defun is-const-symbol (s)
   (member s '(@-all true false %pi %e %undef %infty+ %infty- %true-pred
@@ -24,6 +24,7 @@
     = != < <= > >= is-symm-pd
     .= .!= .< .<= .> .>= .is-symm-pd quad fac
     @ @-slice @-rng @-idx int real
+    copy
     vec rmat array-length num-dims abs-det mv-gamma-fct trace
     + - * *! / ^ neg exp log tanh max min vmax
     sum dot inv inv-pd if-then-else ! gamma-fct length

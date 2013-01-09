@@ -1,29 +1,5 @@
 (in-package :compile)
 
-;;; Structural symbols for model and impl: KEYWORD namespace
-;;; Function symbols: FUNCT namespace
-;;; Constant symbols: CONST namespace
-;;; Type symbols: TYPE namespace
-;;; Variables: VAR namespace
-
-;;; sexpr->expr, etc. take care of making sure everything is in the correct
-;;; namespace.
-
-;;; New scheme:
-;;; - Temp vars with fixed names have form _<ident>, where <ident> does not
-;;;   end in a digit.
-;;; - Generated temp vars have form _<ident><num>
-;;; - Temp vars, generated vars, and vars appearing in model or impl
-;;;   are all in same package.
-; _N
-; _expectations
-; _x
-; _dirpath
-;_last_<varname>
-;_first_<varname>
-
-;;; Main function
-
 (defconstant lar-var (special-var "lar")) ; log acceptance ratio
 (defconstant ljd-var (special-var "ljd")) ; log joint density
 (defconstant ljd-old-var (special-var "ljdold"))
@@ -40,6 +16,8 @@
 (defun lo-var (var) (special-var "lo" var))
 (defun hi-var (var) (special-var "hi" var))
 (defun omit-var (var) (special-var "omit" var))
+
+;;; Main function
 
 (defun compile-to-csharp (csharp-name-space class-name mdl impl)
 #|
@@ -146,7 +124,7 @@
 
 (defun assignable-expr (e)
   (if (is-expr-variable e)
-    (expr-call 'identity e)
+    (expr-call 'copy e)
     e))
 
 (defun expr->string (e &optional (lprec -1) (rprec -1))
@@ -325,7 +303,7 @@
     (eigen . "BMC.Eigen")
     (exp . "Math.Exp")
     (fst . "BMC.Fst")
-    (identity . "BMC.Copy")
+    (copy . "BMC.Copy")
     (inv . "BMC.MatrixInverse")
     (inv-pd . "BMC.MatrixInversePD")
     (is-integerp . "BMC.IsIntegerp")
@@ -347,7 +325,6 @@
     (qmax . "BMC.QMax")
     (qmin . "BMC.QMin")
     (qnum . "BMC.Count")
-    (qmat . "BMC.QMatrix")
     (qsum . "BMC.QSum")
     (qvec . "BMC.QVec")
     (rmat . "BMC.RowMatrix")
@@ -394,6 +371,64 @@
 ))
 
 ;;; End printing expressions
+
+(defun de-alias-impl (mdl impl)
+  (let ((dont-alias (dont-alias-predicate mdl)))
+    (flet ((xform-upd (upd)
+	     (cons (car upd) (de-alias-relation dont-alias (cdr upd)))))
+      (match-adt1 (mcimpl parameters acceptmons expectations updates) impl
+        (make-mcimpl :parameters parameters
+		     :acceptmons acceptmons
+		     :expectations expectations
+		     :updates (mapcar #'xform-upd updates))))))
+
+(defun de-alias-relation (dont-alias rel0)
+  (flet*
+    ((copy-val (e) (expr-call 'copy e))
+     (de-alias-let (var-val)
+       (destructuring-bind (var . val) var-val
+         (if (some dont-alias (aliases val))
+	     (cons var (copy-val val))
+	   var-val)))
+     (de-alias (rel)
+       (adt-case relation rel
+         ((stochastic lhs rhs)
+	  rel)
+         ((let var val body)
+	  (let ((new-val (if (some dont-alias (aliases val))
+			     (copy-val val)
+			   val)))
+	    (make-relation-let :var var :val new-val :body (de-alias body))))
+         ((mh lets proposal-distribution acceptmon log-acceptance-ratio)
+	  (make-relation-mh
+	   :lets (mapcar #'de-alias-let lets)
+	   :proposal-distribution (de-alias proposal-distribution)
+	   :acceptmon acceptmon
+	   :log-acceptance-ratio log-acceptance-ratio))
+	 ((block members)
+	  (make-relation-block :members (mapcar #'de-alias members)))
+	 ((if condition true-branch false-branch)
+	  (make-relation-if
+	    :condition condition
+	    :true-branch (de-alias true-branch)
+	    :false-branch (de-alias false-branch)))
+	 ((skip)
+	  rel)
+	 ((loop var lo hi body)
+	  (make-relation-loop :var var
+			      :lo lo
+			      :hi hi
+			      :body (de-alias body)))
+      )))
+    (de-alias rel0)))
+
+(defun dont-alias-predicate (mdl)
+  (let ((dont-alias-vars '()))
+    (dolist (d (model-vars mdl))
+      (let ((var-typ (decl->assoc d)))
+	(unless (is-bare-type-scalar (cdr var-typ))
+	  (push (car var-typ) dont-alias-vars))))
+    (lambda (v) (member v dont-alias-vars))))
 
 (defun class-vars-from (mdl impl)
   (append (params-names impl) (args-vars-names mdl)))
@@ -1079,8 +1114,8 @@
   (let ((*variable->string* (var2str-cv "_x." is-class-var))
 	(*ljd-visitor-before*
 	  (fn (lhs-str lhs)
-	    (fmt "~a = BMC.Copy(~a);"
-		 lhs-str (lhs-xformed->string lhs var-xform))))
+	    (let ((rhs (expr-call 'copy (rellhs->expr (lhs-xformed lhs var-xform)))))
+	      (fmt "~a = ~a;" lhs-str (expr->string rhs)))))
 	(*ljd-accum* lpd-var))
     (write-ljd-acc-rel rel t)))
 
@@ -1099,8 +1134,8 @@
     ((array-slice var indices)
      (make-rellhs-array-slice :var new-var :indices indices))))
 
-(defun lhs-xformed->string (lhs var-xform)
-  (crellhs->string (replace-lhs-var lhs (funcall var-xform (lhs-var lhs)))))
+(defun lhs-xformed (lhs var-xform)
+  (replace-lhs-var lhs (funcall var-xform (lhs-var lhs))))
 
 (defun write-test-acceptance-ratio
        (class-name upd-name rel is-class-var dim-fct &optional
@@ -2019,6 +2054,9 @@
     (if-then-else
       (destructuring-bind (test true-branch false-branch) args
 	(append (aliases true-branch) (aliases false-branch))))
+    (qvec
+      (destructuring-bind (lo hi filter int-map . maybe-shape) args
+        (aliases (expr-lambda-body int-map))))
     (!
       (fct-app-aliases :let (reverse args)))
     (:let

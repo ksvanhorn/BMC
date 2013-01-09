@@ -35,7 +35,7 @@
       (assert (stringp class-name))
       (assert (stringp csharp-namespace))
       (setf mdl (read-model ifname))
-      (setf impl (read-mcimpl implfname))
+      (setf impl (de-alias-impl mdl (read-mcimpl implfname)))
       (with-open-file (ostrm (strcat ofname-base ".cs") :direction :output)
 	(let ((*indent-amount* 4)
 	      (*fmt-ostream* ostrm))

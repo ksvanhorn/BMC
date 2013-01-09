@@ -364,12 +364,144 @@
     (expect (sum (vec x y)) => ())
     (expect (vec (vec x y) (vec z)) => (x y z))
 
+    (expect (:quant qvec i (m n) (@ a i)) => ())
+    (expect (:quant qvec i (m n) a) => (a))
+    (expect (:quant qvec i (m n) (vec x y)) => (x y))
+
     (expect (:let (a 4) b) => (b))
     (expect (:let (x (@ y (:range j k))) x) => ())
     (expect (:let (x y) x) => (y))
     (expect (:let (a 4) (vec y z)) => (y z))
     (expect (:let (y x) (vec y z)) => (x z))
 ))
+
+(define-test de-alias-relation-tests
+  (macrolet ((expect (dont-alias-vars rel-inp arrow rel-out)
+	       (assert (eq '=> arrow))
+	       `(let* ((relinp (sexpr->rel ',rel-inp))
+		       (relout (sexpr->rel ',rel-out))
+		       (davars (mapcar #'vars-symbol ',dont-alias-vars))
+		       (dont-alias (lambda (v) (member v davars))))
+		  (assert-equalp relout (compile::de-alias-relation dont-alias relinp)))))
+
+    (expect (x y)
+	    (~ x (dnorm y s)) =>
+	    (~ x (dnorm y s)))
+    (expect (u v)
+	    (:let (a 3) (~ s (dgamma 1 a))) =>
+	    (:let (a 3) (~ s (dgamma 1 a))))
+    (expect (u v)
+	    (:let (a v) (~ s (ddirch a))) =>
+	    (:let (a (copy v)) (~ s (ddirch a))))
+    (expect (u v)
+	    (:let (a (vec u v)) (~ s (ddirch (@ a 1)))) =>
+	    (:let (a (copy (vec u v))) (~ s (ddirch (@ a 1)))))
+    (expect (u v)
+	    (:let (a (vec u y))
+	      (:let (b v)
+		(~ x (dcat (@+ b (@ a 1))))))
+	    =>
+	    (:let (a (copy (vec u y)))
+	      (:let (b (copy v))
+		(~ x (dcat (@+ b (@ a 1)))))))
+    (expect (a c)
+	    (:metropolis-hastings
+	      :lets ((x (vec a b c))
+		     (y (vec d e)))
+	      :proposal-distribution (~ z (dmvnorm (@ x 1) (@ y 2)))
+	      :acceptmon (foo (@ x 2) (@ y 1))
+	      :log-acceptance-ratio (+ (sum (@ x 3)) (sum (@ y 2))))
+	    =>
+	    (:metropolis-hastings
+	      :lets ((x (copy (vec a b c)))
+		     (y (vec d e)))
+	      :proposal-distribution (~ z (dmvnorm (@ x 1) (@ y 2)))
+	      :acceptmon (foo (@ x 2) (@ y 1))
+	      :log-acceptance-ratio (+ (sum (@ x 3)) (sum (@ y 2)))))
+    (expect (a c)
+	    (:metropolis-hastings
+	      :lets ()
+	      :proposal-distribution (:let (aa a) (~ z (dmvnorm aa s)))
+	      :log-acceptance-ratio (+ (sum c) (sum e)))
+	    =>
+	    (:metropolis-hastings
+	      :lets ()
+	      :proposal-distribution (:let (aa (copy a)) (~ z (dmvnorm aa s)))
+	      :log-acceptance-ratio (+ (sum c) (sum e))))
+    (expect (w)
+	    (:block (~ x (dcat p))
+		    (:let (z (if-then-else (< m n) v w))
+		      (~ y (dnorm m s))))
+	    =>
+	    (:block (~ x (dcat p))
+		    (:let (z (copy (if-then-else (< m n) v w)))
+		      (~ y (dnorm m s)))))
+    (expect (b c)
+	    (:if (< c d)
+	      (:let (m b) (~ x (dmvnorm m s)))
+	      (:let (v c) (~ y (dwishart nu v))))
+	    =>
+	    (:if (< c d)
+	      (:let (m (copy b)) (~ x (dmvnorm m s)))
+	      (:let (v (copy c)) (~ y (dwishart nu v)))))
+    (expect (b c)
+	    (:if (< c d)
+	      (:let (m b) (~ x (dmvnorm m s))))
+	    =>
+	    (:if (< c d)
+	      (:let (m (copy b)) (~ x (dmvnorm m s)))))
+    (expect (m p q)
+	    (:for j (a b) (:let (mm m) (~ (@ x j) (dmvnorm mm Sigma)))) =>
+	    (:for j (a b) (:let (mm (copy m)) (~ (@ x j) (dmvnorm mm Sigma))))))
+
+  (let ((mdl (sexpr->model
+	       '(:model (:args (m integer) (n integer) (sig (real m m)))
+			(:reqs)
+			(:vars (a real)
+			       (b (real m))
+			       (c (real m m)))
+			(:invs)
+			(:body)))))
+
+    ; Test compile::dont-alias-predicate
+    (flet ((true-bool (x) (not (not x)))) 
+      (let ((predicate (compile::dont-alias-predicate mdl)))
+        (dolist (v '(a b c m n foo bar))
+	  (let ((vv (vars-symbol v)))
+	    (assert-eql (true-bool (member v '(b c)))
+			(true-bool (funcall predicate vv)))))))
+
+    ; Integration test -- compile::de-alias-impl
+    (let* ((impl (sexpr->mcimpl
+		   '(:mcimpl
+		      (:parameters (pa real) (pb integer))
+		      (:acceptmons (mon1) (mon2 (i integer)) (mon3))
+		      (:expectations (foo real (* a (sum b))))
+		      (:updates a-upd
+				(~ a (dnorm pa (* pa pa)))
+				b-upd
+				(:let (cc c) (~ b (dmvnorm b cc)))
+				c-upd
+				(:let (bb b)
+				  (:for i (1 m)
+				    (:for j (1 m)
+				      (~ (@ c i j) (dnorm (@ bb i) a)))))))))
+	   (expected (sexpr->mcimpl
+		      '(:mcimpl
+			 (:parameters (pa real) (pb integer))
+			 (:acceptmons (mon1) (mon2 (i integer)) (mon3))
+			 (:expectations (foo real (* a (sum b))))
+			 (:updates a-upd
+				   (~ a (dnorm pa (* pa pa)))
+				   b-upd
+				   (:let (cc (copy c)) (~ b (dmvnorm b cc)))
+				   c-upd
+				   (:let (bb (copy b))
+				     (:for i (1 m)
+				       (:for j (1 m)
+					 (~ (@ c i j) (dnorm (@ bb i) a))))))))))
+      (assert-equalp expected (compile::de-alias-impl mdl impl))))
+)
 
 (define-test compile-ljd-tests
   (let-test-macros
