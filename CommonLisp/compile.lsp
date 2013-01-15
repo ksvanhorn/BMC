@@ -1,15 +1,15 @@
 (in-package :compile)
 
-(defconstant lar-var (special-var "lar")) ; log acceptance ratio
-(defconstant ljd-var (special-var "ljd")) ; log joint density
-(defconstant ljd-old-var (special-var "ljdold"))
-(defconstant ljd-new-var (special-var "ljdnew"))
-(defconstant lpd-var (special-var "lpd")) ; log proposal density
-(defconstant lpd-old-var (special-var "lpdold"))
-(defconstant lpd-new-var (special-var "lpdnew"))
-(defconstant tol-var (special-var "tol")) ; tolerance
-(defconstant accepted-var (special-var "accepted")) ; M-H proposal accepted?
-(defconstant omit-param (special-var "omit"))
+(defparameter lar-var (special-var "lar")) ; log acceptance ratio
+(defparameter ljd-var (special-var "ljd")) ; log joint density
+(defparameter ljd-old-var (special-var "ljdold"))
+(defparameter ljd-new-var (special-var "ljdnew"))
+(defparameter lpd-var (special-var "lpd")) ; log proposal density
+(defparameter lpd-old-var (special-var "lpdold"))
+(defparameter lpd-new-var (special-var "lpdnew"))
+(defparameter tol-var (special-var "tol")) ; tolerance
+(defparameter accepted-var (special-var "accepted")) ; M-H proposal accepted?
+(defparameter omit-param (special-var "omit"))
 (defun old-val-var (var) (special-var "old" var))
 (defun new-val-var (var) (special-var "new" var))
 (defun assigned-var (var) (special-var "assigned" var))
@@ -275,7 +275,7 @@
 
 (defun is-binop (x) (assoc x +precedences+))
 
-(defconstant +precedences+
+(defparameter +precedences+
   '((<  50 . 50) (<= 50 . 50) (= 50 . 50) (!= 50 . 50) (> 50 . 50) (>= 50 . 50)
     (.<  50 . 50) (.<= 50 . 50) (.= 50 . 50) (.!= 50 . 50) (.> 50 . 50) (.>= 50 . 50)
     (and 40 . 41) (or 30 . 31)
@@ -288,7 +288,7 @@
       (error "Don't know C# name of function ~a." op))
     (cdr a)))
 
-(defconstant +oper-names+
+(defparameter +oper-names+
   '(
     (and . "&&")
     (array-length . "BMC.Length")
@@ -624,7 +624,7 @@
 (defun base-type (stype)
   (assoc-lookup stype +base-types-from-scalar-types+))
 
-(defconstant +base-types-from-scalar-types+
+(defparameter +base-types-from-scalar-types+
   '((boolean . boolean)
     (integer . integer) (integerp0 . integer) (integerp . integer)
     (realxn . realxn) (realx . realxn) (real . realxn)
@@ -633,7 +633,7 @@
 (defun csharp-scalar-type-name (stype)
   (assoc-lookup (base-type stype) +csharp-names-for-base-types+))
 
-(defconstant +csharp-names-for-base-types+
+(defparameter +csharp-names-for-base-types+
   '((boolean . "bool") (integer . "int") (realxn . "double")))
 
 (defun csharp-arr-type-name (etype ndim)
@@ -646,7 +646,7 @@
 (defun csharp-matrix-type-name (typ)
   (assoc-lookup (base-type typ) +csharp-names-for-base-matrix-types+))
 
-(defconstant +csharp-names-for-base-matrix-types+
+(defparameter +csharp-names-for-base-matrix-types+
   '((boolean . "BMatrix") (integer . "IMatrix") (realxn . "DMatrix")))
 
 (defun write-csharp-allocate-vars (var-decls)
@@ -723,7 +723,7 @@
 (defun csharp-load-scalar-type-name (stype)
   (assoc-lookup (base-type stype) +csharp-load-type-names+))
 
-(defconstant +csharp-load-type-names+
+(defparameter +csharp-load-type-names+
   '((boolean . "Boolean") (integer . "Integer") (realxn . "Real")))
 
 (defun write-csharp-validate-arguments (mdl)
@@ -826,7 +826,7 @@
       '()
       (list (apply-template (cdr x) expr)))))
 
-(defconstant +scalar-base-type-checks+
+(defparameter +scalar-base-type-checks+
   '((integerp0 <= 0) (integerp < 0) (realx is-realx)
     (real is-real) (realp0 is-realp0) (realp is-realp)))
 
@@ -1258,7 +1258,7 @@
   (strcat
     "BMC.LogDensity" (assoc-lookup distr-symbol +csharp-distr-name-assoc+)))
 
-(defconstant +csharp-distr-name-assoc+
+(defparameter +csharp-distr-name-assoc+
   '((ddirch . "Dirichlet")
     (dcat . "Cat")
     (dgamma . "Gamma")
@@ -1417,7 +1417,7 @@
 (defun is-scalar-distr (symbol)
   (member symbol +scalar-distributions+))
 
-(defconstant +scalar-distributions+
+(defparameter +scalar-distributions+
   '(dcat dnorm dgamma dinterval dnorm-trunc dgamma-trunc))
 
 (defun csharp-distr-draw-name (symbol)

@@ -172,6 +172,7 @@
 
 (defpackage :prove
   (:use :cl :adt :expr :utils :variables :symbols)
+  (:import-from :alexandria :define-constant)
   (:export :is-provable :also-assume :*prover* :can-prove :assuming
 	   :assuming-se :subst-expr))
 

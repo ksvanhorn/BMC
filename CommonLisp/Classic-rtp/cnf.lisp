@@ -111,8 +111,8 @@
 
 ;;;; Utility Predicates and Accessors
 
-(defconstant +logical-connectives+ '(and or not => <=>))
-(defconstant +logical-quantifiers+ '(all exi))
+(defparameter +logical-connectives+ '(and or not => <=>))
+(defparameter +logical-quantifiers+ '(all exi))
 
 (defun atomic-clause? (sentence)
   (not (or (member (op sentence) +logical-connectives+)

@@ -1,6 +1,6 @@
 (defpackage :testing-utilities
-  (:use :cl :compile :utils)
-  (:export :ppstr :with-genvar-counter :let-test-macros))
+  (:use :cl :compile :utils :symbols)
+  (:export :ppstr :with-genvar-counter :let-test-macros :=> :=>-KEY))
 
 (in-package :testing-utilities)
 
@@ -29,16 +29,14 @@
        (cond
 	 ((null parameters)
 	  (values nil nil))
-	 ((eq (intern "=>") (car parameters))
-	  (let ((arrow-key (intern "=>-KEY")))
-	    (values (cons arrow-key (cdr parameters))
-		    `((assert (eq (intern "=>") ,arrow-key))))))
+	 ((eq '=> (car parameters))
+	  (values (cons '=>-KEY (cdr parameters))
+		  '((assert (eq '=> =>-KEY)))))
 	 (t
 	   (destructuring-bind (parm1 . parms-rest) parameters
 	     (multiple-value-bind (expanded checks) (expand parms-rest)
-               (let* ((parm1-name (symbol-name parm1))
-		      (parm1-kw-parm (intern (strcat parm1-name "-KEY")))
-		      (parm1-keyword (intern parm1-name "KEYWORD")))
+               (let* ((parm1-kw-parm (compound-symbol parm1 "KEY"))
+		      (parm1-keyword (intern (symbol-name parm1) "KEYWORD")))
 		 (values (list* parm1-kw-parm parm1 expanded)
 			 (cons `(assert (eq ,parm1-keyword ,parm1-kw-parm))
 			       checks)))))))))

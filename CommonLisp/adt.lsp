@@ -1,7 +1,7 @@
 (in-package :adt)
 ; Algebraic data types
 
-(defun pred-name (x) (intern (format nil "IS-~a" x)))
+(defun pred-name (x) (intern (format nil "IS-~a" x) (symbol-package x)))
 
 (defun field-decl (x) `(,x nil :read-only t))
 

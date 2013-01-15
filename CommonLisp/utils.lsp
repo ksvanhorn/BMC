@@ -76,7 +76,7 @@
 (defun bmc-symb (s) (intern s))
 
 (defun compound-symbol (x y)
-  (intern (format nil "~a-~a" x y)))
+  (intern (format nil "~a-~a" x y) (symbol-package x)))
 
 ; Indented output utils
 

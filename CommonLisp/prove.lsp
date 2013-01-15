@@ -75,7 +75,7 @@
     ((lambda var body)
      (pat-match-lambda var body e pat))))
 
-(defconstant +no-match+ (cons nil nil))
+(defparameter +no-match+ (cons nil nil))
 
 (defun pat-match-const (name e pat)
   (if (equalp e pat)
@@ -148,7 +148,7 @@
 (defun eliminate-extraneous-ops (e)
   (funcall +eliminate-extraneous-ops+ e))
 
-(defconstant +eliminate-extraneous-ops-patterns+
+(defparameter +eliminate-extraneous-ops-patterns+
   '(((neg ?x) . (* -1 ?x))
     ((/ ?x ?y) . (* ?x (^ ?y -1)))
     ((- ?x ?y) . (+ ?x (* -1 ?y)))
@@ -156,7 +156,7 @@
     ((^1/2 ?x) . (^ ?x 1/2))
     ((^2 ?x) . (^ ?x 2))))
 
-(defconstant +eliminate-extraneous-ops+
+(defparameter +eliminate-extraneous-ops+
   (let* ((xforms (mapcar #'se-pattern-xform
 			 +eliminate-extraneous-ops-patterns+)))
     (recurse (apply #'compose-xforms xforms))))
@@ -185,7 +185,7 @@
 	    (b (rename-var var v body)))
        (expr-lam v b)))))
 
-(defconstant +expand-density-patterns+
+(defparameter +expand-density-patterns+
   `(((dnorm-density ?x ?mu ?sigma) .
      (* (/ 1 (* (^1/2 (* 2 %pi)) ?sigma))
         (exp (* -1/2 (^2 (- ?x ?mu))))))
@@ -227,7 +227,7 @@
 	  (exp (* -1/2 (quad (inv ?S) (@- ?x ?m)))))))
    ))
 
-(defconstant +expand-densities-fct+
+(defparameter +expand-densities-fct+
   (let* ((xforms (mapcar #'se-pattern-xform +expand-density-patterns+)))
     (recurse (apply #'compose-xforms xforms))))
 
@@ -423,7 +423,7 @@
 (defun are-reals (args)
   (every #'realp args))
 
-(defconstant +function-interps+
+(defparameter +function-interps+
   '((neg is-single-number . -)
     (* are-reals . *)
     (+ are-reals . +)
@@ -471,7 +471,7 @@
 	   (first new-args))
 	  (t (expr-app '+ new-args)))))))
 
-(defconstant +simplify-xforms+
+(defparameter +simplify-xforms+
   (list
     (se-pattern-xform '((+) . 0))
     (se-pattern-xform '((+ ?x) . ?x))

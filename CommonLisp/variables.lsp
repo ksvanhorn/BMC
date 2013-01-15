@@ -6,7 +6,7 @@
 ;;; special-var: _[a-zA-Z]+(_<simple-ident>)?
 ;;; simple-ident: [a-zA-Z][a-zA-Z0-9_]*
 
-(defconstant +vars-package+ (find-package :variables))
+(defparameter +vars-package+ (find-package :variables))
 
 (defun vars-symbol (s)
   (if (eq +vars-package+ (symbol-package s))

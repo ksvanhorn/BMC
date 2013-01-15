@@ -93,7 +93,7 @@
 	  (or (gethash name ht)
 	      (error "No type known for const name ~a." name))))))
 
-(defconstant +literal-types+
+(defparameter +literal-types+
   '((true . #tboolean)
     (false . #tboolean)
     (%pi . #trealxn)
@@ -147,7 +147,7 @@
 	(return-from self (car sig))))
     (infer-type-error fct arg-types)))
 
-(defconstant +simple-function-signatures+
+(defparameter +simple-function-signatures+
   '((<= (#tboolean #tinteger #tinteger))
     (< (#tboolean #trealxn #trealxn))
     (= (#tboolean #tinteger #tinteger)
@@ -242,7 +242,7 @@
 	(return-from self typ)))
     (infer-type-error fct arg-types)))
 
-(defconstant +operator-signatures+
+(defparameter +operator-signatures+
   '((- #tinteger #trealxn)
     (+ #tinteger #trealxn)
     (* #tinteger #trealxn)
@@ -277,7 +277,7 @@
 	  (return-from self arg1-type))))
     (infer-type-error fct arg-types)))
 
-(defconstant +lifted-fcts+
+(defparameter +lifted-fcts+
   '((@^-2 1 #trealxn)
     (@^2 1 #trealxn)
     (@^-1 1 #trealxn)

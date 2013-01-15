@@ -11,9 +11,9 @@
 
 ;;;; Constants
 
-(defconstant +fail+ nil "Indicates unification failure")
+(defparameter +fail+ nil "Indicates unification failure")
 
-(defconstant +no-bindings+ '((nil))
+(defparameter +no-bindings+ '((nil))
   "Indicates unification success, with no variables.")
 
 ;;;; Top Level Functions

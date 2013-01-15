@@ -43,7 +43,7 @@
     (beta (real (- nvars 1)))
     (mu_x_form (real (- nvars 1)))
     (Lambda_x_form (real (- nvars 1) (- nvars 1)))
-    (ksi (real nresp))
+    (ksi (real nresp (- nvars 1)))
     (mu_x_halo (real nvars))
     (gamma (real nvars))
     (lambda_x_halo (realp nvars))

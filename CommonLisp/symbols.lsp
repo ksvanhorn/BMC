@@ -13,7 +13,7 @@
 (defun is-fct-symbol (s)
   (or (member s +fct-symbols+) (is-fquant-symbol s)))
 
-(defconstant +fct-symbols+
+(defparameter +fct-symbols+
   '(and or not => <=>
     .and .or .not .=> .<=>
     is-number is-numberu is-integeru
@@ -42,11 +42,11 @@
 (defun is-scalar-type-symbol (x)
   (member x +scalar-type-symbols+))
 
-(defconstant +scalar-type-symbols+
+(defparameter +scalar-type-symbols+
   '(boolean integer integerp0 integerp realxn realx real realp0 realp))
 
 (defun is-distr-symbol (x)
   (member x +distr-symbols+))
 
-(defconstant +distr-symbols+
+(defparameter +distr-symbols+
   '(ddirch dcat dinterval dnorm dmvnorm dgamma dwishart dnorm-trunc))

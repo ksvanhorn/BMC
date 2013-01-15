@@ -304,7 +304,7 @@
 
 (defun is-binop (x) (assoc x +precedences+))
 
-(defconstant +precedences+
+(defparameter +precedences+
   '((<  50 . 50) (<= 50 . 50) (= 50 . 50) (!= 50 . 50) (> 50 . 50) (>= 50 . 50)
     (.<  50 . 50) (.<= 50 . 50) (.= 50 . 50) (.!= 50 . 50) (.> 50 . 50) (.>= 50 . 50)
     (and 40 . 41) (or 30 . 31) (=> 20 . 21)  (<=> 10 . 11)
@@ -316,10 +316,10 @@
 
 (defun convert-function-symbol (s)
   (if (and *convert-boolean-functions* (member s +boolean-functions+))
-      (bmc-symb (strcat "." (symbol-name s)))
+      (intern (strcat "." (symbol-name s)) "SYMBOLS")
       s))
 (defparameter *convert-boolean-functions* nil)
-(defconstant +boolean-functions+
+(defparameter +boolean-functions+
   '(= != < <= > >= and or not => <=> qand qor is-symm-pd
     is-boolean is-integer is-integerp0 is-integerp
     is-realxn is-realx is-real is-realp0 is-realp))
