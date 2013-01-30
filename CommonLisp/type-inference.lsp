@@ -4,6 +4,7 @@
   (scalar stype)
   (array elem-type num-dims)
   (pair fst-type snd-type)
+  (triple fst-type snd-type thd-type)
   (int-map return-type))
 
 (defun is-base-type-name (x)
@@ -22,6 +23,11 @@
     (destructuring-bind (fst snd) (cdr se)
       (make-bare-type-pair :fst-type (sexpr->bare-type fst)
 			   :snd-type (sexpr->bare-type snd))))
+   ((eq 'triple (car se))
+    (destructuring-bind (fst snd thd) (cdr se)
+      (make-bare-type-triple :fst-type (sexpr->bare-type fst)
+			     :snd-type (sexpr->bare-type snd)
+			     :thd-type (sexpr->bare-type thd))))
    (t
     (destructuring-bind (typ-se n) se
       (assert (integerp n))
@@ -121,6 +127,8 @@
       (setf (gethash fct ht) (lifted-fct-typing-function fct nargs elem-types)))
     (setf (gethash 'fst ht) #'fst-typing-function)
     (setf (gethash 'snd ht) #'snd-typing-function)
+    (setf (gethash 'thd ht) #'thd-typing-function)
+    (setf (gethash 'tuple ht) #'tuple-typing-function)
     (setf (gethash 'copy ht) #'copy-typing-function)
     ht))
 
@@ -128,13 +136,30 @@
   (destructuring-bind (arg-type) arg-types
     (adt-case bare-type arg-type
       ((pair fst-type snd-type)
+       fst-type)
+      ((triple fst-type snd-type thd-type)
        fst-type))))
 
 (defun snd-typing-function (arg-types)
   (destructuring-bind (arg-type) arg-types
     (adt-case bare-type arg-type
       ((pair fst-type snd-type)
+       snd-type)
+      ((triple fst-type snd-type thd-type)
        snd-type))))
+
+(defun thd-typing-function (arg-types)
+  (destructuring-bind (arg-type) arg-types
+    (adt-case bare-type arg-type
+      ((triple fst-type snd-type thd-type)
+       thd-type))))
+
+(defun tuple-typing-function (arg-types)
+  (case (length arg-types)
+    (2 (destructuring-bind (t1 t2) arg-types
+	 (make-bare-type-pair :fst-type t1 :snd-type t2)))
+    (3 (destructuring-bind (t1 t2 t3) arg-types
+	 (make-bare-type-triple :fst-type t1 :snd-type t2 :thd-type t3)))))
 
 (defun copy-typing-function (arg-types)
   (destructuring-bind (arg-type) arg-types
@@ -155,6 +180,7 @@
     (!= (#tboolean #tinteger #tinteger))
     (int (#tinteger #tboolean))
     (dot (#trealxn #t(realxn 1) #t(realxn 1))
+         (#trealxn #t(realxn 1) #t(realxn 2) #t(realxn 1))
 	 (#t(realxn 1) #t(realxn 2) #t(realxn 1))
 	 (#t(realxn 1) #t(realxn 1) #t(realxn 2))
 	 (#t(realxn 2) #t(realxn 2) #t(realxn 2))
@@ -195,11 +221,22 @@
     (inv-pd (#t(realxn 2) #t(realxn 2)))
     (real-zero-arr (#t(realxn 1) #tinteger)
 		   (#t(realxn 2) #tinteger #tinteger))
+    (const-array (#t(realxn 1) #trealxn #tinteger))
     (eigen (#t(pair (realxn 1) (realxn 2)) #t(realxn 2)))
+    (mu-form (#t(realxn 1) #trealxn #t(realxn 1) #t(realxn 1)))
+    (form-covariance-decomp
+      (#t(triple (realxn 1) (realxn 1) (realxn 2)) #trealxn #t(realxn 1) #t(realxn 2)))
+    (ksi-mean-coeffs-cov-decomp (#t(realxn 2) #t(triple (realxn 1) (realxn 1) (realxn 2))))
+    (covariance-decomp 
+      (#t(triple (realxn 1) (realxn 1) (realxn 2)) #t(realxn 2)))
+    (x-mean-coeffs-cov-decomp (#t(realxn 2) #t(triple (realxn 1) (realxn 1) (realxn 2))))
+    (log-pnorm-interval (#trealxn #trealxn #trealxn #trealxn #trealxn))
+    (sigma-form (#t(realxn 2) #trealxn #t(realxn 1) #t(realxn 2)))
     (sum (#trealxn #t(realxn 1)))
     (cons (#t(realxn 1) #trealxn #t(realxn 1)))
     (cons-col (#t(realxn 2) #t(realxn 1) #t(realxn 2)))
     (cons-row (#t(realxn 2) #t(realxn 1) #t(realxn 2)))
+    (rmat (#t(realxn 2) #t(realxn 1) #t(realxn 1)))
     (vec (#t(realxn 1) #trealxn)
          (#t(realxn 1) #trealxn #trealxn)
          (#t(realxn 1) #trealxn #trealxn #trealxn)
@@ -232,8 +269,8 @@
 	   (#t(realxn 2)
             #tinteger #tinteger #t(int-map boolean) #t(int-map realxn 2)
             #tinteger #tinteger))
-    (if-then-else (#trealxn #tboolean #trealxn #trealxn))
-))
+    (if-then-else (#trealxn #tboolean #trealxn #trealxn)
+                  (#t(realxn 1) #tboolean #t(realxn 1) #t(realxn 1)))))
 
 (defun operator-typing-function (fct types)
   (alambda (arg-types)
@@ -281,6 +318,8 @@
   '((@^-2 1 #trealxn)
     (@^2 1 #trealxn)
     (@^-1 1 #trealxn)
+    (@^1/2 1 #trealxn)
+    (@^-1/2 1 #trealxn)
     (@+ * #trealxn)
     (@* * #trealxn)
     (@- 2 #trealxn)

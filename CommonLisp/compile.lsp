@@ -297,11 +297,14 @@
     (cons . "BMC.Cons")
     (cons-col . "BMC.ConsCol")
     (cons-row . "BMC.ConsRow")
+    (const-array . "BMC.ConstArray")
+    (covariance-decomp . "BMC.CovarianceDecomposition")
     (diag_mat . "BMC.DiagonalMatrix")
     (dmvnorm-density . "BMC.DensityMVNorm")
     (dot . "BMC.Dot")
     (eigen . "BMC.Eigen")
     (exp . "Math.Exp")
+    (form-covariance-decomp . "BMC.FormCovDecomp")
     (fst . "BMC.Fst")
     (copy . "BMC.Copy")
     (inv . "BMC.MatrixInverse")
@@ -313,10 +316,14 @@
     (is-realp0 . "BMC.IsRealp0")
     (is-realx . "BMC.IsRealx")
     (is-symm-pd . "BMC.IsSymmetricPositiveDefinite")
+    (ksi-mean-coeffs-cov-decomp . "BMC.KsiMeanCoeffsCovDecomp")
+    (x-mean-coeffs-cov-decomp . "BMC.XMeanCoeffsCovDecomp")
     (:let . "BMC.Let")
     (log . "Math.Log")
+    (log-pnorm-interval . "BMC.LogProbNormInterval")
     (max . "Math.Max")
     (min . "Math.Min")
+    (mu-form . "BMC.MuForm")
     (neg . "-")
     (or . "||")
     (o^2 . "BMC.SelfOuterProduct")
@@ -328,9 +335,12 @@
     (qsum . "BMC.QSum")
     (qvec . "BMC.QVec")
     (rmat . "BMC.RowMatrix")
+    (sigma-form . "BMC.SigmaForm")
     (snd . "BMC.Snd")
     (sum . "BMC.Sum")
     (tanh . "Math.Tanh")
+    (thd . "BMC.Thd")
+    (tuple . "BMC.Tuple")
     (vec . "BMC.Vec")
     (vmax . "BMC.VMax")
 
@@ -354,7 +364,9 @@
     (@-rng . "BMC.Range")
     (@-slice . "BMC.ArraySlice")
     (@^-1 . "BMC.ArrInv")
+    (@^-1/2 . "BMC.ArrInvSqrt")
     (@^-2 . "BMC.ArrInvSqr")
+    (@^1/2 . "BMC.ArrSqrt")
     (@^2 . "BMC.ArrSqr")
     (^ . "Math.Pow")
     (^-1 . "BMC.Inv")
@@ -364,6 +376,7 @@
     (^2 . "BMC.Sqr")
 
     (.= . "==")
+    (.!= . "!=")
     (.<= . "<=")
     (.< . "<")
     (.> . ">")
@@ -865,23 +878,25 @@
 			    (expr-const '%true-pred) (expr-lam idxvar ch)))))
     ch))
 
-(defun model-variables-assigned-in (rel)
-  (adt-case relation rel
-    ((stochastic lhs)
-     (model-vars-assigned-in-rellhs lhs))
-    ((block members)
-     (append-mapcar #'model-variables-assigned-in members))
-    ((if condition true-branch false-branch)
-     (append (model-variables-assigned-in true-branch)
-	     (model-variables-assigned-in false-branch)))
-    ((loop var lo hi body)
-     (model-variables-assigned-in body))
-    ((let var val body)
-     (model-variables-assigned-in body))
-    ((skip)
-     '())
-    ((mh lets proposal-distribution log-acceptance-ratio)
-     (model-variables-assigned-in proposal-distribution))))
+(defun model-variables-assigned-in (rel0)
+  (flet* ((mvai (rel)
+	    (adt-case relation rel
+	      ((stochastic lhs)
+	       (model-vars-assigned-in-rellhs lhs))
+	      ((block members)
+	       (append-mapcar #'mvai members))
+	      ((if condition true-branch false-branch)
+	       (append (mvai true-branch)
+		       (mvai false-branch)))
+	      ((loop var lo hi body)
+	       (mvai body))
+	      ((let var val body)
+	       (mvai body))
+	      ((skip)
+	       '())
+	      ((mh lets proposal-distribution log-acceptance-ratio)
+	       (mvai proposal-distribution)))))
+    (remove-duplicates (mvai rel0))))
 
 (defun model-vars-assigned-in-rellhs (lhs)
   (adt-case rellhs lhs
@@ -899,7 +914,29 @@
     ((array-elt var indices)
      (write-assigned-test-rellhs-array-elt var indices dim-fct))
     ((array-slice var indices)
-     (error "Unimplemented case in compile::write-assigned-test."))))
+     (write-assigned-test-rellhs-array-slice var indices dim-fct))))
+
+
+(defun write-assigned-test-rellhs-array-slice (var indices dim-fct)
+  (let ((n (funcall dim-fct var))
+	(avar (assigned-var var))
+	(idx1 (car indices))
+	(idx2 (cadr indices)))
+    (unless (= n (length indices))
+      (error "Wrong number of indices in LHS of update: ~a."
+	     (make-rellhs-array-slice :var var :indices indices)))
+    (unless (and (= 2 n) (is-array-slice-index-all idx2)
+		 (is-array-slice-index-scalar idx1))
+      (error "Unimplemented case in compile::write-assigned-test-rellhs-array-slice: ~a."
+	     indices))
+    (let ((idx1-str (index-expr->string (array-slice-index-scalar-value idx1)))
+	  (idx2-var (new-var "idx")))
+      (fmt "for (int ~a = 0; ~a < ~a.NBCols; ++~a) {"
+	   idx2-var idx2-var avar idx2-var)
+      (bracket-end
+        (fmt "Assert.IsFalse(~a[~a, ~a], \"~a[{0}, {1}] assigned\", ~a, ~a);"
+	     avar idx1-str idx2-var var idx1-str idx2-var)
+	(fmt "~a[~a, ~a] = true;" avar idx1-str idx2-var)))))
 
 (defun write-assigned-test-rellhs-array-elt (var indices dim-fct)
   (let ((n (funcall dim-fct var))
@@ -1111,12 +1148,25 @@
     (error "Symbol ~a used both as a class variable and as a let variable" v)))
 
 (defun write-log-proposal-density (var-xform is-class-var rel)
-  (let ((*variable->string* (var2str-cv "_x." is-class-var))
-	(*ljd-visitor-before*
+  (let ((*ljd-visitor-before*
 	  (fn (lhs-str lhs)
-	    (let ((rhs (expr-call 'copy (rellhs->expr (lhs-xformed lhs var-xform)))))
-	      (fmt "~a = ~a;" lhs-str (expr->string rhs)))))
+	    (adt-case rellhs lhs
+	      ((array-slice var indices)
+	       (let ((idxstrs
+		      (mapcar (fn (x) (expr->string (slice-dec-expr (xform-slice-arg x))))
+			      indices)))
+		 (fmt "BMC.CopyInto(~a~{, ~a~}, BMC.ArraySlice(~a~{, ~a~}));"
+		      (variable->string var)
+		      idxstrs
+		      (variable->string (funcall var-xform var))
+		      idxstrs)))
+	      (otherwise
+	       (let ((rhs (rellhs->expr (lhs-xformed lhs var-xform))))
+		 (fmt "~a = ~a;" lhs-str (expr->string (expr-call 'copy rhs))))))))
+
+	(*variable->string* (var2str-cv "_x." is-class-var))
 	(*ljd-accum* lpd-var))
+
     (write-ljd-acc-rel rel t)))
 
 (defun lhs-var (lhs)
@@ -1264,6 +1314,8 @@
     (dgamma . "Gamma")
     (dnorm . "Norm")
     (dnorm-trunc . "NormTruncated")
+    (dnormvec . "NormVec")
+    (dnormvec-trunc . "NormVecTruncated")
     (dwishart . "Wishart")
     (dmvnorm . "MVNorm")
     (dinterval . "Interval")))
@@ -1384,20 +1436,17 @@
 (defun write-rel-draw-stoch-array-slice (lhs distr-name distr-args)
   (bracket
     (match-adt1 (rellhs-array-slice var indices) lhs
-      (let ((xformed-idxs '()))
-	(dolist (x indices)
-	  (push (xform-slice-arg x) xformed-idxs))
-	(setf xformed-idxs (reverse xformed-idxs))
-	(let ((xformed-idx-strs
-	        (mapcar #'expr->string (mapcar #'slice-dec-expr xformed-idxs)))
-	      (var-str (variable->string var))
-	      (buf (new-var "buf")))
-	  (fmt "var ~a = ~a(~{~a~^, ~});"
-	       buf
-	       (csharp-distr-draw-name distr-name)
-	       (mapcar #'expr->string distr-args))
-	  (fmt "BMC.CopyInto(~a~{, ~a~}, ~a);"
-	       var-str xformed-idx-strs buf))))))
+      (let ((xformed-idx-strs
+	      (mapcar (fn (x) (expr->string (slice-dec-expr (xform-slice-arg x))))
+		      indices))
+	    (var-str (variable->string var))
+	    (buf (new-var "buf")))
+	(fmt "var ~a = ~a(~{~a~^, ~});"
+	     buf
+	     (csharp-distr-draw-name distr-name)
+	     (mapcar #'expr->string distr-args))
+	(fmt "BMC.CopyInto(~a~{, ~a~}, ~a);"
+	     var-str xformed-idx-strs buf)))))
 
 (defun xform-slice-arg (idx)
   (adt-case array-slice-index idx
@@ -1496,14 +1545,29 @@
     (fmt "double ~a = ~a;" lar-var (expr->string log-acc-ratio))))
 
 (defun write-mh-saves (prop-distr ht)
-  (flet ((f (lhs-str sav-var)
-	   (fmt "var ~a = BMC.Copy(~a);" sav-var lhs-str)))
+  (flet ((f (lhs sav-var)
+	   (let ((lhs-str (crellhs->string lhs))
+		 (fmt-str (if (is-rellhs-array-slice lhs)
+			      "var ~a = ~a;"
+			      "var ~a = BMC.Copy(~a);")))
+	     (fmt fmt-str sav-var lhs-str))))
     (write-mh-saves-restores
       prop-distr (list ht "write-mh-saves" #'f) '())))
 
 (defun write-mh-restores (prop-distr ht)
-  (flet ((f (lhs-str sav-var)
-	   (fmt "~a = ~a;" lhs-str sav-var)))
+  (flet* ((idx-rellhs->string (x)
+	    (expr->string (slice-dec-expr (idx-rellhs->expr x))))
+
+	  (f (lhs sav-var)
+	    (adt-case rellhs lhs
+	      ((array-slice var indices)
+	       (fmt "BMC.CopyInto(~a~{, ~a~}, ~a);"
+		    (variable->string var)
+		    (mapcar #'idx-rellhs->string indices)
+		    sav-var))
+	      (otherwise
+	        (fmt "~a = ~a;" (crellhs->string lhs) sav-var)))))
+
     (write-mh-saves-restores
       prop-distr (list ht "write-mh-restores" #'f) '())))
 
@@ -1515,7 +1579,7 @@
 	 (dolist (v let-vars)
 	   (when (member v fv)
 	     (error "Unimplemented (problematic) case in ~a" fct-name))))
-       (funcall write-assignment-fct (crellhs->string lhs) (save-var lhs ht))))
+       (funcall write-assignment-fct lhs (save-var lhs ht))))
     ((block members)
      (dolist (r members)
        (write-mh-saves-restores r x let-vars)))
@@ -1851,6 +1915,9 @@
      (bare-scalar-type-symbol->string stype))
     ((pair fst-type snd-type)
      (format nil "Tuple<~a, ~a>" (bt->string fst-type) (bt->string snd-type)))
+    ((triple fst-type snd-type thd-type)
+     (format nil "Tuple<~a, ~a, ~a>"
+	     (bt->string fst-type) (bt->string snd-type) (bt->string thd-type)))
     ((array elem-type num-dims)
      (case num-dims
        (1 (strcat (bare-type->string elem-type) "[]"))

@@ -85,6 +85,18 @@
       '(:let (x (+ v 1))
 	 (* x x))))
 
+  (assert-equalp
+    (sexpr->expr '(dot u v))
+    (sexpr->expr '(:let (dot u v))))
+  (assert-equalp
+    (sexpr->expr '(:let (a 1)
+		    (:let (b (/ u v))
+		      (:let (c (dot x y)) (+ a b c)))))
+    (sexpr->expr '(:let (a 1)
+			(b (/ u v))
+			(c (dot x y))
+		    (+ a b c))))
+
   ;; recursive structure
 
   (assert-equalp
@@ -195,8 +207,8 @@
   (assert-error 'error (sexpr->expr '(@)))
   (assert-error 'error (sexpr->expr '(@ x)))
   (assert-error 'error (sexpr->expr '(:let)))
-  (assert-error 'error (sexpr->expr '(:let v)))
-  (assert-error 'error (sexpr->expr '(:let (v x))))
+  ;(assert-error 'error (sexpr->expr '(:let v)))
+  ;(assert-error 'error (sexpr->expr '(:let (v x))))
   (assert-error 'error (sexpr->expr '(:let (v) (+ v 1))))
   (assert-error 'error (sexpr->expr '(:let (v x 2) (+ v 1))))
   (assert-error 'error (sexpr->expr '(:let ((+ x 2) y) (+ x y))))

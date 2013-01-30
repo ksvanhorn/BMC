@@ -43,23 +43,25 @@
     :^1/2 :^2 :^-1 :^-1/2 :^-2
     :@^1/2 :@^2 :@^-1 :@^-1/2 :@^-2
     :@+ :@- :@* :@/ :$*
-    :fst :snd
-    :diag_mat :o* :o^2 :cons :cons-col :cons-row :real-zero-arr
-    :eigen
+    :fst :snd :thd
+    :tuple
+    :diag_mat :o* :o^2 :cons :cons-col :cons-row :real-zero-arr :const-array
+    :eigen :mu-form :form-covariance-decomp :ksi-mean-coeffs-cov-decomp :sigma-form
+    :covariance-decomp :x-mean-coeffs-cov-decomp :log-pnorm-interval
 
     ;; finite quantifiers and associated constants
     :qand :qor :qmin :qmax :qnum :qsum :qprod :qprod! :qvec :q@sum
     :.qand :.qor
 
     ;; distributions
-    :ddirch :dcat :dinterval :dnorm :dmvnorm :dgamma :dwishart
-    :dnorm-trunc
+    :ddirch :dcat :dinterval :dnorm :dmvnorm :dgamma :dwishart :dnormvec
+    :dnorm-trunc :dnormvec-trunc
     ;; densities
     :ddirch-density :dcat-density :dinterval-density
     :dnorm-density :dmvnorm-density :dgamma-density :dwishart-density
     ;; log densities
     :ddirch-log-density :dcat-log-density :dinterval-log-density
-    :dnorm-log-density :dmvnorm-log-density :dgamma-log-density
+    :dnorm-log-density :dmvnorm-log-density :dgamma-log-density :dnormvec-log-density
     :dwishart-log-density
 
     ;; model symbols
@@ -92,6 +94,7 @@
 
 (defpackage :expr
   (:use :cl :symbols :adt :utils :variables)
+  (:import-from :alexandria :proper-list-p)
   (:export
    :free-vars-in-expr :occurs-free :rename-var
    :sexpr->expr :expr->string :is-scalar-index :is-slice-all :is-slice-range
@@ -125,7 +128,7 @@
    :read-model :sexpr->model :raw-sexpr->model
    :sexpr->vtype :sexpr->decl :sexpr->decls :sexpr->distr
    :sexpr->rellhs :sexpr->rel
-   :vtype->string :distr->string :rellhs->expr :rellhs->string
+   :vtype->string :distr->string :rellhs->expr :idx-rellhs->expr :rellhs->string
    :pp-decl :pp-rel :pp-model
    :vars-names :args-vars-names
    :is-update :is-pure-rel

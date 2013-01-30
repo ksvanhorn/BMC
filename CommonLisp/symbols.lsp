@@ -31,12 +31,14 @@
     ^1/2 ^2 ^-1 ^-1/2 ^-2
     @^1/2 @^2 @^-1 @^-1/2 @^-2
     @+ @- @* @/ $*
-    fst snd
-    diag_mat o* o^2 cons cons-col cons-row real-zero-arr eigen
+    fst snd thd tuple
+    diag_mat o* o^2 cons cons-col cons-row real-zero-arr const-array
+    eigen mu-form form-covariance-decomp ksi-mean-coeffs-cov-decomp sigma-form
+    covariance-decomp x-mean-coeffs-cov-decomp log-pnorm-interval
     ddirch-density dcat-density dinterval-density
     dnorm-density dmvnorm-density dgamma-density dwishart-density
     ddirch-log-density dcat-log-density dinterval-log-density
-    dnorm-log-density dmvnorm-log-density dgamma-log-density
+    dnorm-log-density dmvnorm-log-density dgamma-log-density dnormvec-log-density
     dwishart-log-density))
 
 (defun is-scalar-type-symbol (x)
@@ -49,4 +51,4 @@
   (member x +distr-symbols+))
 
 (defparameter +distr-symbols+
-  '(ddirch dcat dinterval dnorm dmvnorm dgamma dwishart dnorm-trunc))
+  '(ddirch dcat dinterval dnorm dmvnorm dgamma dwishart dnorm-trunc dnormvec dnormvec-trunc))

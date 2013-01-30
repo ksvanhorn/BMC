@@ -151,6 +151,7 @@
     (error "Invalid Metropolis-Hastings update: ~W."
 	   (cons :metropolis-hastings x))))
 
+#|
 (defun sexpr->let-rel (x)
   (check-let-rel x)
   (destructuring-bind ((var val) body) x
@@ -158,12 +159,22 @@
       :var (vars-symbol var)
       :val (sexpr->expr val)
       :body (sexpr->rel body))))
+|#
 
-(defun check-let-rel (x)
-  (unless (and (consp x) (= 2 (length x))
-	       (consp (first x)) (= 2 (length (first x)))
-	       (symbolp (first (first x))))
-    (error "Invalid let relation ~W." (cons :let x))))
+(defun sexpr->let-rel (x)
+  (cond
+    ((null x)
+     (error "Malformed let relation: no body."))
+    ((null (cdr x))
+     (sexpr->rel (car x)))
+    (t
+     (destructuring-bind ((var val) . rest) x
+       (unless (is-variable-symbol var)
+	 (error "Invalid variable symbol in let relation binding: ~a" (list var val)))
+       (make-relation-let
+	 :var (vars-symbol var)
+	 :val (sexpr->expr val)
+	 :body (sexpr->let-rel rest))))))
 
 (defun sexpr->stoch-rel (x)
   (check-stoch-rel x)

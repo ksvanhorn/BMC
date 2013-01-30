@@ -80,6 +80,19 @@
     (sexpr->rel '(:let (x (+ y z)) (~ v (dnorm x 1)))))
 
   (assert-equalp
+    (sexpr->rel '(~ x (dgamma a b)))
+    (sexpr->rel '(:let (~ x (dgamma a b)))))
+  (assert-equalp
+    (sexpr->rel '(:let (a 1)
+		   (:let (b (* u v))
+		     (:let (c (dot x y))
+		       (~ lambda (dgamma alph beta))))))
+    (sexpr->rel '(:let (a 1)
+		       (b (* u v))
+		       (c (dot x y))
+		       (~ lambda (dgamma alph beta)))))
+
+  (assert-equalp
     (make-relation-stochastic
       :lhs (sexpr->rellhs '(@ x i))
       :rhs (sexpr->distr '(dnorm (+ y z) 2)))

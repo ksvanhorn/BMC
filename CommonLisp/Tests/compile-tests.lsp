@@ -715,6 +715,16 @@ else {
       "_lpd += BMC.LogDensityInterval(_x.U, _x.Y, C);")
 
     (expect
+      :rel (~ (@ u i :all) (dmvnorm mu sigma))
+      :xform-pfx new
+      :class-vars (u mu)
+      :genvar-counter 3
+      =>
+      "var _3idx = I;"
+      "BMC.CopyInto(_x.U, _3idx - 1, BMC.FullRange, BMC.ArraySlice(_new_U, _3idx - 1, BMC.FullRange));"
+      "_lpd += BMC.LogDensityMVNorm(BMC.ArraySlice(_x.U, I - 1, BMC.FullRange), _x.MU, SIGMA);")
+
+    (expect
       :rel (:let (sigma (/ 1 (^1/2 lambda)))
              (~ y (dnorm 0 sigma)))
       :xform-pfx old
@@ -1269,9 +1279,51 @@ if (!BMC.Accept(_lar)) {
     _x.Y = _61save_Y;
     _x.W = _62save_W;
 }")
-  )
 
-)
+  (expect
+    :outer-lets ()
+    :rel
+    (:metropolis-hastings
+      :lets ()
+      :proposal-distribution
+      (:if (< w 3) (~ y (dmvnorm m sigmay)) (~ y (dmvnorm w0 sigmaw)))
+      :log-acceptance-ratio 0.0)
+    :class-vars (y w m)
+    :genvar-counter 36
+    =>
+    "double _ljdold = _x.LogJointDensity();
+var _old_Y = BMC.Copy(_x.Y);
+if (_x.W < 3) {
+    _x.Y = BMC.DrawMVNorm(_x.M, SIGMAY);
+}
+else {
+    _x.Y = BMC.DrawMVNorm(W0, SIGMAW);
+}
+double _lar = 0.0;
+var _new_Y = BMC.Copy(_x.Y);
+double _ljdnew = _x.LogJointDensity();
+double _lpd = 0.0;
+if (_x.W < 3) {
+    _x.Y = BMC.Copy(_old_Y);
+    _lpd += BMC.LogDensityMVNorm(_x.Y, _x.M, SIGMAY);
+}
+else {
+    _x.Y = BMC.Copy(_old_Y);
+    _lpd += BMC.LogDensityMVNorm(_x.Y, W0, SIGMAW);
+}
+double _lpdnew = _lpd;
+Assert.IsTrue(BMC.Equal(_x.Y, _old_Y), \"Proposal must be reversible\");
+_lpd = 0.0;
+if (_x.W < 3) {
+    _x.Y = BMC.Copy(_new_Y);
+    _lpd += BMC.LogDensityMVNorm(_x.Y, _x.M, SIGMAY);
+}
+else {
+    _x.Y = BMC.Copy(_new_Y);
+    _lpd += BMC.LogDensityMVNorm(_x.Y, W0, SIGMAW);
+}
+double _lpdold = _lpd;
+Assert.AreEqual(_lar, (_ljdnew - _ljdold) + (_lpdnew - _lpdold), _tol, \"Log acceptance ratio\");")))
 
 (defun cvar2str (s) (compile::variable->string s))
 
@@ -1363,6 +1415,12 @@ if (!BMC.Accept(_lar)) {
       (expect :lhs (@ x2 j k) :gvc 105 =>
        "Assert.IsFalse(_assigned_X2[J - 1, K - 1], \"X2[{0}, {1}] assigned\", J - 1, K - 1);"
        "_assigned_X2[J - 1, K - 1] = true;")
+
+      (expect :lhs (@ x2 j :all) :gvc 92 =>
+       "for (int _92idx = 0; _92idx < _assigned_X2.NBCols; ++_92idx) {"
+       "    Assert.IsFalse(_assigned_X2[J - 1, _92idx], \"X2[{0}, {1}] assigned\", J - 1, _92idx);"
+       "    _assigned_X2[J - 1, _92idx] = true;"
+       "}")
     ))
 
   ;; Outer part (write-test-is-valid-update)
@@ -2538,6 +2596,12 @@ protected virtual void AcceptanceMonitorBAZ(bool _accepted) { }
 	    =>
 	    ("var _5save_X = BMC.Copy(X);")
 	    ("X = _5save_X;"))
+
+    (expect :rel (~ (@ x r :all) (dmvnorm mu sigma))
+	    :gvc 13
+	    =>
+	    ("var _13save_X = BMC.ArraySlice(X, R - 1, BMC.FullRange);")
+	    ("BMC.CopyInto(X, R - 1, BMC.FullRange, _13save_X);"))
 
     (expect :rel (:block (~ (@ y j) (dgamma a b)) (~ x (dnorm m s)))
 	    :gvc 2

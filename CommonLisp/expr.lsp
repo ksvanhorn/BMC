@@ -95,14 +95,16 @@
      (error "Unrecognized expression type: ~W" x))))
 
 (defun sexpr->expr-let (args)
-  (destructuring-bind ((var val) body) args
-    (unless (is-variable-symbol var)
-      (error "Invalid variable symbol in ~W." (cons :let args)))
-    (make-expr-apply
-      :fct '!
-      :args (list (make-expr-lambda :var (vars-symbol var)
-				    :body (sexpr->expr body))
-		  (sexpr->expr val)))))
+  (cond
+    ((null args)
+     (error "Malformed let expression: no body."))
+    ((null (cdr args))
+     (sexpr->expr (car args)))
+    (t
+     (destructuring-bind ((var val) . rest) args
+       (unless (is-variable-symbol var)
+	 (error "Invalid variable symbol in let binding: ~a" (list var val)))
+       (sexpr->expr `(! (:lambda ,var (:let ,@rest)) ,val))))))
 
 (defun sexpr->expr-lambda (args)
   (destructuring-bind (var body) args

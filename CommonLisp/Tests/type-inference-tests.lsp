@@ -196,6 +196,8 @@
 	    (#e(eigen xmat) . #t(pair (realxn 1) (realxn 2)))
 	    (#e(fst (eigen xmat)) . #t(realxn 1))
 	    (#e(snd (eigen xmat)) . #t(realxn 2))
+	    (#e(thd (tuple 1 (vec 2.3) xmat)) . #t(realxn 2))
+	    (#e(thd (tuple (vec 2.3) xmat 1)) . #tinteger)
 	    (#e(vec r s 2.7) . #t(realxn 1))
 	    (#e(vec xvec yvec zvec) . #t((realxn 1) 1))
 	    (#e(vec xmat ymat zmat) . #t((realxn 2) 1))

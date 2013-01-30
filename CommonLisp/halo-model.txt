@@ -62,8 +62,11 @@
     (:for r (1 nresp)
       (~ (@ segment r) (dcat p_segment)))
 
-    (:for r (1 nresp) 
-      (~ (@ ksi r) (dnorm 0 1)))
+    ; ksi for halo and garbage segments
+    (:for r (1 nresp)
+      (:if (!= 1 (@ segment r))
+	(:for k (1 (- nvars 1))
+	  (~ (@ ksi r k) (dnorm 0.0 1.0)))))
 
     ; formers
     (~ lambda_y_form (dgamma alpha_lambda_y_form beta_lambda_y_form))
@@ -73,14 +76,22 @@
       (:block
         (~ (@ beta k) (dnorm 0 (@ sigma_beta k)))
         (~ (@ mu_x_form k) (dnorm 0 (@ sigma_mu_x_form k)))))
-    (:for r (1 nresp)
-      (:if (= 1 (@ segment r))
-        (:block
-          (~ (@ x r (:range 2 nvars))
-             (dmvnorm mu_x_form (inv-pd Lambda_x_form)))
-	  (:let (sigma (^-1/2 lambda_y_form))
-          (:let (mu (+ mu_y_form (dot (@ x r (:range 2 nvars)) beta)))
-            (~ (@ x r 1) (dnorm mu sigma)))))))
+    (:let (mu_form (mu-form mu_y_form mu_x_form beta))
+      	  (cd (form-covariance-decomp lambda_y_form beta Lambda_x_form))
+	  (G (ksi-mean-coeffs-cov-decomp cd))
+	  (del (snd cd))
+      (:for r (1 nresp)
+        (:if (= 1 (@ segment r))
+          (:block
+            (~ (@ x r (:range 2 nvars))
+               (dmvnorm mu_x_form (inv-pd Lambda_x_form)))
+	    (:let (sigma (^-1/2 lambda_y_form))
+                  (mu (+ mu_y_form (dot (@ x r (:range 2 nvars)) beta)))
+              (~ (@ x r 1) (dnorm mu sigma)))
+	    (:let (mu_ksi (dot G (@- (@ x r :all) mu_form)))
+	      (:for k (1 (- nvars 1))
+		(~ (@ ksi r k) (dnorm (@ mu_ksi k)
+				      (^-1/2 (+ 1.0 (@ del k)))))))))))
 
     ; haloers
     (:for k (1 nvars)
@@ -95,8 +106,8 @@
       (:if (= 2 (@ segment r))
         (:for k (1 nvars)
           (:let (sigma (^-1/2 (@ lambda_x_halo k)))
-	  (:let (mu (+ (@ mu_x_halo k) (* (@ gamma k) (@ ksi r))))
-            (~ (@ x r k) (dnorm mu sigma)))))))
+	        (mu (+ (@ mu_x_halo k) (* (@ gamma k) (@ ksi r 1))))
+            (~ (@ x r k) (dnorm mu sigma))))))
 
     ; garbage
     (:for k (1 nvars)
@@ -115,17 +126,15 @@
       (~ (@ nu h) (dnorm (@ mu_nu h) (@ sigma_nu h))))
     (:let (sig_1_2 (* (exp (* 1/2 (+ (@ nu 1) (@ nu 2))))
 	                (tanh (@ nu 3))))
-    (:let (Sigma (rmat (vec (exp (@ nu 1)) sig_1_2)
+          (Sigma (rmat (vec (exp (@ nu 1)) sig_1_2)
                        (vec sig_1_2 (exp (@ nu 2)))))
-    (:let (mu (vec 0 (* -1/2 (@ Sigma 2 2))))
+          (mu (vec 0 (* -1/2 (@ Sigma 2 2))))
       (:for r (1 nresp)
         (:block
           (~ (@ dls r :all) (dmvnorm mu Sigma))
 	  (:let (delta (@ dls r 1))
-          (:let (scale (exp (@ dls r 2)))
+                (scale (exp (@ dls r 2)))
 	    (:for k (1 nvars)
               (:let (cp (:quant qvec lvl (1 (- (@ nlevels k) 1))
                           (/ (- (@ ucp k lvl) delta) scale)))
-                (~ (@ v r k) (dinterval (@ x r k) cp)))))))))))))
-
-
+                (~ (@ v r k) (dinterval (@ x r k) cp))))))))))
