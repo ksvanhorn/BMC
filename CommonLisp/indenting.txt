@@ -1,0 +1,48 @@
+
+; (put 'if 'lisp-indent-function nil) creates this behavior:
+(if (= 2 3)
+    47
+    12)
+
+; (put 'when 'lisp-indent-function 1) creates this behavior:
+(when (= 2 3)
+  (error "foo"))
+
+; (put 'do 'lisp-indent-function 2) creates this behavior:
+(do ((i 1 (1+ i))
+     (j 3 (* 2 j)))
+    ((= j 0) i)
+  (error "foo"))
+
+; nil
+(foo (= 2 3)
+     47
+     12
+     13)
+
+; 1
+(bar (= 2 3)
+  (foo)
+  (baz))
+
+(baz ((i 1 1)
+      (j 2 2))
+    (bump)
+    (bar))
+
+(lambda (x
+	 y
+	 z)
+  
+    
+
+; (swank:print-indentation-lossage) -- find out which symbols have indentation collisions
+; common-lisp-indent-function property
+; M-x slime-update-indentation -- force all symbols to be scanned for indentation
+; Slime indents macros that have &body arguments by indenting everything up to
+;  the body by 4, and then indenting the body lines by 2.
+; ^H F common-lisp-indent-function
+
+  
+
+  
