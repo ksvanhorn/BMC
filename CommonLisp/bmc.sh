@@ -4,3 +4,4 @@
 (let ((*standard-output* (make-broadcast-stream)))
   (ql:quickload "alexandria"))
 (load "bmc.lsp")
+ 
