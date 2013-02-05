@@ -1,5 +1,5 @@
 #!/usr/bin/env clisp
-
+ 
 (load "packages")
 (load "symbols")
 (load "adt")
