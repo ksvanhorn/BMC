@@ -1,3 +1,8 @@
+(defpackage simplify
+  (:use :cl :alexandria :adt :expr :utils :symbols :prove)
+  (:shadowing-import-from :symbols :array-length)
+  (:export :simplify-expr))
+
 (in-package :simplify)
 
 (defun is-one (x) (and (is-expr-const x) (eql 1 (expr-const-name x))))
@@ -177,7 +182,7 @@
 	   (if (and (is-expr-apply x) (eq '* (expr-apply-fct x)))
 	       (expr-apply-args x)
 	     (list x))))
-    (setf args (append-mapcar #'expand-prod args)))
+    (setf args (mappend #'expand-prod args)))
   (if (every (lambda (x) (and (is-expr-const x) (numberp (expr-const-name x))))
 	     args)
     (list (expr-const (apply #'* (mapcar #'expr-const-name args))))

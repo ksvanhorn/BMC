@@ -1,3 +1,9 @@
+(defpackage :prove
+  (:use :cl :adt :expr :utils :variables :symbols)
+  (:import-from :alexandria :define-constant :mappend)
+  (:export :is-provable :also-assume :*prover* :can-prove :assuming
+	   :assuming-se :subst-expr))
+
 (in-package :prove)
 
 (load "Classic-rtp/unify")
@@ -261,7 +267,7 @@
     ((apply fct args)
      (cond
        ((eq '* fct)
-	(append-mapcar #'expand-to-factors args))
+	(mappend #'expand-to-factors args))
        ((and (eq '^ fct) (= 2 (length args)))
 	(expand-power-to-factors args))
        ((eq 'qprod fct)
@@ -305,7 +311,7 @@
       ((apply fct args)
        (when (eq '+ fct)  ; e1 ^ (e2_1 + ... + e2_n)
 	 (return-from expand-power-to-factors
-	   (append-mapcar (lambda (x) (expand-power-to-factors (list e1 x)))
+	   (mappend (lambda (x) (expand-power-to-factors (list e1 x)))
 			  args))))
       (otherwise nil))
     (adt-case expr e1
@@ -331,9 +337,9 @@
 
 ;;; (e1_1 * ... * e1_n) ^ e2 ==> e1_1 ^ e2 * ... * e1_n ^ e2
 (defun expand-power-prod-to-factors (prod-args expt)
-  (append-mapcar
+  (mappend
     (lambda (x) (expand-to-factors (expr-call '^ x expt)))
-    (append-mapcar #'expand-to-factors prod-args)))
+    (mappend #'expand-to-factors prod-args)))
 
 ;;; qprod(i, lo, hi, filter, f(i)) ^ e2 ==> qprod(i, lo, hi, filter, f(i) ^ e2)
 (defun expand-power-qprod-to-factors (lo hi filter f e2)
@@ -360,7 +366,7 @@
    ((apply fct args)
     (cond
       ((eq '+ fct)  ; a1 + ... + an
-       (append-mapcar #'expand-quadratic-terms args))
+       (mappend #'expand-quadratic-terms args))
       ((and (eq '^ fct) (= 2 (length args)))
        (destructuring-bind (a1 a2) args   ; a1 ^ a2
 	 (let ((n (expr-const-name a2)))
@@ -598,7 +604,7 @@
     (reverse pats)))
 
 (defun expand-array-lengths (var-dims-list)
-  (let ((patterns (append-mapcar #'var-dims-pats (reverse var-dims-list))))
+  (let ((patterns (mappend #'var-dims-pats (reverse var-dims-list))))
     (recurse
       (apply #'compose-xforms (mapcar #'pattern-xform patterns)))))
 

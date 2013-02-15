@@ -1,3 +1,17 @@
+(defpackage :expr
+  (:use :cl :symbols :adt :utils :variables)
+  (:import-from :alexandria :proper-list-p :starts-with :sequence-of-length-p :mappend)
+  (:export
+   :free-vars-in-expr :occurs-free :rename-var
+   :sexpr->expr :expr->string
+   :*convert-boolean-functions* :is-let-expr :is-quant-expr
+   :expr-call :expr-app :expr-var :expr-const :expr-lam
+   :is-expr
+   :is-expr-const :make-expr-const :expr-const-name
+   :is-expr-variable :make-expr-variable :expr-variable-symbol
+   :is-expr-apply :make-expr-apply :expr-apply-fct :expr-apply-args
+   :is-expr-lambda :make-expr-lambda :expr-lambda-var :expr-lambda-body))
+
 (in-package :expr)
 
 (defadt expr
@@ -28,7 +42,7 @@
     ((lambda var body)
      (remove var (free-vars-in-expr body)))
     ((apply fct args)
-     (append-mapcar #'free-vars-in-expr args))))
+     (mappend #'free-vars-in-expr args))))
 
 (defun occurs-free (var-symbol e)
   (adt-case expr e
@@ -330,7 +344,7 @@
   (and (is-expr-apply e)
        (eq '! (expr-apply-fct e))
        (let ((args (expr-apply-args e)))
-	 (and (is-list-of-length 2 args)
+	 (and (sequence-of-length-p args 2)
 	      (destructuring-bind (f val) args
                 (and (is-expr-lambda f)
 		     (list (expr-lambda-var f) val (expr-lambda-body f))))))))

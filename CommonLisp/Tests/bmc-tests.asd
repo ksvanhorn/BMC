@@ -2,11 +2,23 @@
 
 (asdf:defsystem #:bmc-tests
   :serial t
-  :description "Describe bmc-tests here"
+  :description "Unit tests for system bmc"
   :author "Kevin S. Van Horn"
-  :license "GPL v2"
+  :license "GPL version 2"
   :depends-on (#:bmc
-               #:lisp-unit)
-  :components ((:file "package")
+               #:lisp-unit
+	       #:iterate)
+  :components ((:file "testing-utilities")
+	       (:file "utils-tests")
+	       (:file "symbols-tests")
+	       (:file "variables-tests")
+	       (:file "adt-tests")
+	       (:file "expr-tests")
+	       (:file "type-inference-tests")
+	       (:file "model-tests")
+	       (:file "mcimpl-tests")
+	       (:file "simplify-tests")
+	       (:file "prove-tests")
+	       (:file "compile-tests")
                (:file "bmc-tests")))
 

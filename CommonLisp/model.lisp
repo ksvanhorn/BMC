@@ -1,3 +1,55 @@
+(defpackage :model
+  (:use :cl :symbols :adt :utils :expr :variables :alexandria)
+  (:shadowing-import-from :symbols :array-length)
+  (:export
+   :read-model :sexpr->model :raw-sexpr->model
+   :sexpr->vtype :sexpr->decl :sexpr->decls :sexpr->distr
+   :sexpr->rellhs :sexpr->rel
+   :vtype->string :distr->string :rellhs->expr :idx-rellhs->expr :rellhs->string
+   :pp-decl :pp-rel :pp-model
+   :vars-names :args-vars-names
+   :is-update :is-pure-rel
+
+   :is-model :make-model :model-args :model-reqs :model-vars :model-body
+
+   :is-decl :make-decl :decl-var :decl-typ :args-vars-dims :decl-dims
+
+   :is-vtype
+   :is-vtype-scalar :make-vtype-scalar :vtype-scalar-stype
+   :is-vtype-array :make-vtype-array :vtype-array-elem-type :vtype-array-dims
+
+   :is-distribution :make-distribution :distribution-name :distribution-args
+
+   :is-relation
+   :is-relation-stochastic :make-relation-stochastic
+   :relation-stochastic-lhs :relation-stochastic-rhs
+   :is-relation-block :make-relation-block :relation-block-members
+   :is-relation-if :make-relation-if
+   :relation-if-condition 
+   :relation-if-true-branch :relation-if-false-branch
+   :is-relation-loop :make-relation-loop :relation-loop-var
+   :relation-loop-lo :relation-loop-hi :relation-loop-body
+   :is-relation-let :make-relation-let
+   :relation-let-var :relation-let-val :relation-let-body
+   :is-relation-mh :make-relation-mh :relation-mh-lets
+   :relation-mh-proposal-distribution :relation-mh-acceptmon
+   :relation-mh-log-acceptance-ratio
+   :is-relation-skip :make-relation-skip
+
+   :is-rellhs
+   :is-rellhs-simple :make-rellhs-simple :rellhs-simple-var
+   :is-rellhs-array-elt :make-rellhs-array-elt
+   :rellhs-array-elt-var :rellhs-array-elt-indices
+   :is-rellhs-array-slice :make-rellhs-array-slice
+   :rellhs-array-slice-var :rellhs-array-slice-indices
+
+   :is-array-slice-index
+   :is-array-slice-index-scalar :make-array-slice-index-scalar
+   :array-slice-index-scalar-value
+   :is-array-slice-index-range :make-array-slice-index-range
+   :array-slice-index-range-lo :array-slice-index-range-hi
+   :is-array-slice-index-all :make-array-slice-index-all))
+
 (in-package :model)
 
 (defadt1 model args reqs vars invs body)
@@ -389,12 +441,12 @@
   (adt-case vtype typ
     ((scalar stype) '())
     ((array elem-type dims)
-     (append-mapcar #'free-vars-in-expr dims))))
+     (mappend #'free-vars-in-expr dims))))
 
 (defun vars-used-in-dims (mdl)
   (let* ((vars (mapcar #'decl-var (model-vars mdl)))
 	 (typs (mapcar #'decl-typ (model-vars mdl)))
-	 (used (append-mapcar #'vars-in-type typs))
+	 (used (mappend #'vars-in-type typs))
 	 (result nil))
     (dolist (v vars)
       (when (member v used)
@@ -423,7 +475,7 @@
 
 (defun bad-rel-vars (mdl)
   (let ((declared-vars (vars-names mdl))
-	(defined-vars (append-mapcar #'rel-vars (model-body mdl)))
+	(defined-vars (mappend #'rel-vars (model-body mdl)))
 	(bad nil))
     (dolist (x defined-vars)
       (if (not (member x declared-vars))
@@ -435,7 +487,7 @@
     ((stochastic lhs rhs)
      (lhs-var lhs))
     ((block members)
-     (append-mapcar #'rel-vars members))
+     (mappend #'rel-vars members))
     ((if condition true-branch false-branch)
      (append (rel-vars true-branch) (rel-vars false-branch)))
     ((loop var lo hi body)
@@ -459,7 +511,7 @@
 	    (shadowing-vars-rels (model-body mdl) names))))
 
 (defun shadowing-vars-decls (decls names)
-  (append-mapcar (lambda (d) (shadowing-vars-decl d names)) decls))
+  (mappend (lambda (d) (shadowing-vars-decl d names)) decls))
 
 (defun shadowing-vars-decl (d names)
   (shadowing-vars-vtype (decl-typ d) names))
@@ -472,7 +524,7 @@
      (shadowing-vars-exprs dims names))))
 
 (defun shadowing-vars-rels (rels names)
-  (append-mapcar (lambda (r) (shadowing-vars-rel r names)) rels))
+  (mappend (lambda (r) (shadowing-vars-rel r names)) rels))
 
 (defun shadowing-vars-rel (r names)
   (adt-case relation r
@@ -536,7 +588,7 @@
 	    (shadowing-vars-rel body new-names))))
 
 (defun shadowing-vars-exprs (exprs names)
-  (append-mapcar (lambda (x) (shadowing-vars-expr x names)) exprs))
+  (mappend (lambda (x) (shadowing-vars-expr x names)) exprs))
 
 (defun shadowing-vars-expr (x names)
   (adt-case expr x
@@ -569,13 +621,13 @@
     ((array elem-type dims) (length dims))))
 
 (defun bad-numdims-exprs (elist)
-  (append-mapcar #'bad-numdims-expr elist))
+  (mappend #'bad-numdims-expr elist))
 
 (defun bad-numdims-vtypes (tlist)
-  (append-mapcar #'bad-numdims-vtype tlist))
+  (mappend #'bad-numdims-vtype tlist))
 
 (defun bad-numdims-rels (rlist)
-  (append-mapcar #'bad-numdims-rel rlist))
+  (mappend #'bad-numdims-rel rlist))
 
 (defun bad-numdims-vtype (typ)
   (adt-case vtype typ

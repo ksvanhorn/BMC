@@ -1,3 +1,11 @@
+(defpackage :compile
+  (:use :cl :iterate :alexandria 
+	:mcimpl :model :variables :expr :utils :adt :symbols :type-inference)
+  (:shadowing-import-from :symbols :sum :array-length)
+  (:shadow :expr->string)
+  (:export :compile-to-csharp :write-test-file :de-alias-impl))
+
+
 (in-package :compile)
 
 (defparameter lar-var (special-var "lar")) ; log acceptance ratio
@@ -462,14 +470,14 @@
      (cons var (vars-in-expr body)))))
 
 (defun vars-in-expr-list (xlist)
-  (append-mapcar #'vars-in-expr xlist))
+  (mappend #'vars-in-expr xlist))
 
 (defun vars-in-model (mdl)
   (match-adt1 (model args reqs vars body) mdl
-    (append (append-mapcar #'vars-in-decl args)
-	    (append-mapcar #'vars-in-expr reqs)
-	    (append-mapcar #'vars-in-decl vars)
-	    (append-mapcar #'vars-in-rel body))))
+    (append (mappend #'vars-in-decl args)
+	    (mappend #'vars-in-expr reqs)
+	    (mappend #'vars-in-decl vars)
+	    (mappend #'vars-in-rel body))))
 
 (defun vars-in-decl (d)
   (match-adt1 (decl var typ) d
@@ -488,7 +496,7 @@
      (append (vars-in-rellhs lhs)
 	     (vars-in-distr rhs)))
     ((block members)
-     (append-mapcar #'vars-in-rel members))
+     (mappend #'vars-in-rel members))
     ((if condition true-branch false-branch)
      (append (vars-in-expr condition)
 	     (vars-in-rel true-branch)
@@ -510,7 +518,7 @@
     ((array-elt var indices)
      (cons var (vars-in-expr-list indices)))
     ((array-slice var indices)
-     (cons var (append-mapcar #'vars-in-arr-slice-idx indices)))))
+     (cons var (mappend #'vars-in-arr-slice-idx indices)))))
 
 (defun vars-in-arr-slice-idx (x)
   (adt-case array-slice-index x
@@ -798,7 +806,7 @@
 	     (remove-duplicates (args-checks-raw mdl) :test #'equalp)))
 
 (defun params-checks (impl)
-  (let ((checks0 (append-mapcar #'decl-checks (mcimpl-parameters impl))))
+  (let ((checks0 (mappend #'decl-checks (mcimpl-parameters impl))))
     (remove-if #'is-trivially-true (remove-duplicates checks0))))
 
 (defun is-trivially-true (e)
@@ -817,9 +825,9 @@
 	 (otherwise nil))))
 
 (defun args-checks-raw (mdl)
-  (append (append-mapcar #'decl-checks (model-args mdl))
+  (append (mappend #'decl-checks (model-args mdl))
 	  (model-reqs mdl)
-	  (append-mapcar #'dim-checks (model-vars mdl))))
+	  (mappend #'dim-checks (model-vars mdl))))
 
 (defun dim-checks (d)
   (adt-case vtype (decl-typ d)
@@ -854,11 +862,11 @@
 
 (defun array-length-checks (var-sym dims)
   (let ((vexpr (expr-var var-sym)))
-    (mapcar (lambda (n d)
-	      (expr-call '=
-		(expr-call 'array-length (expr-const n) vexpr)
-		d))
-	    (int-range 1 (length dims)) dims)))
+    (iter (for d in dims)
+	  (for n upfrom 1)
+	  (collect (expr-call '=
+		     (expr-call 'array-length (expr-const n) vexpr)
+		     d)))))
 
 (defun array-element-checks (var-sym etype-sym dims)
   (let* ((idxvar-symbols (n-new-vars (length dims) "i"))
@@ -884,7 +892,7 @@
 	      ((stochastic lhs)
 	       (model-vars-assigned-in-rellhs lhs))
 	      ((block members)
-	       (append-mapcar #'mvai members))
+	       (mappend #'mvai members))
 	      ((if condition true-branch false-branch)
 	       (append (mvai true-branch)
 		       (mvai false-branch)))
@@ -1007,9 +1015,10 @@
         (dolist (update-name update-names)
           (fmt "TestUpdate_~a(x, tol);" update-name)))
       (fmt-blank-line)
-      (dolist-inter (update-name update-names)
-	(funcall write-test-update-fct update-name)
-	(fmt-blank-line)))))
+      (iter (for update-name in update-names)
+	(unless (first-time-p)
+	  (fmt-blank-line))
+	(funcall write-test-update-fct update-name)))))
 
 (defun make-write-test-update-fct (class-name mdl impl)
   (let ((is-class-var (class-var-pred-from mdl impl))
@@ -1757,7 +1766,7 @@
 
 (defun check-lift-let (lets e)
   (let ((let-vars (mapcar #'car lets)))
-    (when (has-duplicates let-vars)
+    (when (has-duplicate-names let-vars)
       (error "Bad argument to lift-let: ~
                 multiple bound vars with same name."))
     (if (not (null let-vars))
@@ -1941,7 +1950,7 @@
 (defun write-let-assignment-to-lhs (lhs-str expr env predeclared)
   (flet
     ((write-assn (let-expansion e)
-       (loop while let-expansion do
+       (iter (while let-expansion)
          (destructuring-bind (v val body) let-expansion
 	   (let ((val-type (infer-type val env)))
 	     (write-let val-type v val env)
@@ -2117,7 +2126,7 @@
 (defun fct-app-aliases (fct args)
   (case fct
     (vec
-      (append-mapcar #'aliases args))
+      (mappend #'aliases args))
     (if-then-else
       (destructuring-bind (test true-branch false-branch) args
 	(append (aliases true-branch) (aliases false-branch))))
@@ -2130,7 +2139,7 @@
       (destructuring-bind (val lambda-expr) args
 	(match-adt1 (expr-lambda var body) lambda-expr
 	  (let ((var-aliases (aliases val)))
-	    (append-mapcar
+	    (mappend
 	      (lambda (s) (if (eq var s) var-aliases (list s)))
 	      (aliases body))))))
     (otherwise '())))
@@ -2184,7 +2193,7 @@
 
 (defun normalize-decls (decls)
   (let* ((xdecls (mapcar #'normalize-decl decls))
-	 (axioms (append-mapcar #'car xdecls))
+	 (axioms (mappend #'car xdecls))
 	 (ndecls (mapcar #'cdr xdecls)))
     (cons axioms ndecls)))
 
@@ -2209,7 +2218,7 @@
 
 (defun normalize-rels (rels)
   (let* ((xrels (mapcar #'normalize-rel rels))
-	 (axioms (append-mapcar #'car xrels))
+	 (axioms (mappend #'car xrels))
 	 (nrels (mapcar #'cdr xrels)))
     (cons axioms nrels)))
 

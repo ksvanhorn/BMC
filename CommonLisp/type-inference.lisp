@@ -1,4 +1,23 @@
+(defpackage :type-inference
+  (:use :cl :utils :symbols :adt :expr)
+  (:import-from :alexandria :named-lambda)
+  (:export :bare-type :bare-type-scalar :bare-type-array :bare-type-int-map
+           :bare-type-pair :is-bare-type 
+	   :is-bare-type-scalar :is-bare-type-array :is-bare-type-int-map
+	   :is-bare-type-pair
+	   :make-bare-type-scalar :make-bare-type-array :make-bare-type-int-map
+	   :make-bare-type-pair
+	   :bare-type-scalar-stype
+	   :bare-type-array-elem-type :bare-type-array-num-dims
+	   :bare-type-int-map-return-type
+	   :bare-type-pair-fst-type :bare-type-pair-snd-type
+
+           :sexpr->bare-type :infer-type
+	   :var-type :no-var-types :add-var-type :assocs->env))
+
 (in-package :type-inference)
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
 
 (defadt bare-type
   (scalar stype)
@@ -39,7 +58,7 @@
   (let ((se (read stream t)))
     (sexpr->bare-type se)))
 
-(set-dispatch-macro-character #\# #\t #'xformer-sexpr->bare-type)
+  (set-dispatch-macro-character #\# #\t #'xformer-sexpr->bare-type))
 
 (defun no-var-types () nil)
 
@@ -166,7 +185,7 @@
     arg-type))
 
 (defun simple-typing-function (fct signatures)
-  (alambda (arg-types)
+  (named-lambda self (arg-types)
     (dolist (sig signatures)
       (when (equalp arg-types (cdr sig))
 	(return-from self (car sig))))
@@ -273,7 +292,7 @@
                   (#t(realxn 1) #tboolean #t(realxn 1) #t(realxn 1)))))
 
 (defun operator-typing-function (fct types)
-  (alambda (arg-types)
+  (named-lambda self (arg-types)
     (dolist (typ types)
       (when (every (lambda (argt) (equalp typ argt)) arg-types)
 	(return-from self typ)))
@@ -302,7 +321,7 @@
 			       :num-dims (+ nrng nall)))))))
 
 (defun lifted-fct-typing-function (fct nargs elem-types)
-  (alambda (arg-types)
+  (named-lambda self (arg-types)
     (when arg-types
       (destructuring-bind (arg1-type . rest-arg-types) arg-types
         (when (and (or (eq '* nargs)

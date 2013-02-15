@@ -1,3 +1,8 @@
+(defpackage variables
+  (:nicknames :vars)
+  (:use :cl :utils :iterate)
+  (:export :vars-symbol :special-var :new-var :n-new-vars))
+
 (in-package :variables)
 
 ;;; Scheme for variable names:
@@ -46,7 +51,7 @@
        s)
       (t
        (incf beg) ; skip past initial underscore
-       (while (and (< beg len) (digit-char-p (char s beg)))
+       (iter (while (and (< beg len) (digit-char-p (char s beg))))
 	 (incf beg))
        (when (= 1 beg) ; digit does not follow #\_
 	 (error "Invalid name passed to new-var: ~a." s))

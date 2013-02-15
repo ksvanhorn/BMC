@@ -1,3 +1,11 @@
+(defpackage :mcimpl
+  (:use :cl :model :expr :model :utils :symbols :adt #|:prove|# :alexandria)
+  (:shadowing-import-from :symbols :array-length)
+  (:export :make-mcimpl :is-mcimpl :mcimpl-parameters
+	   :mcimpl-updates :mcimpl-expectations :mcimpl-acceptmons
+	   :free-vars-in-rellhs
+	   :sexpr->mcimpl :read-mcimpl :params-names))
+
 (in-package :mcimpl)
 
 (defadt1 mcimpl
@@ -10,7 +18,7 @@
   (sexpr->mcimpl (read-file ifname)))
 
 (defun sexpr->mcimpl (se)
-  (unless (and (starts-with :mcimpl se) (is-list-of-length 5 se))
+  (unless (and (starts-with :mcimpl se) (sequence-of-length-p se 5))
     (error "mcimpl object should have form (:mcimpl parameters acceptmons expectations updates)."))
   (destructuring-bind (se-parameters se-acceptmons se-expectations se-updates)
                       (cdr se)
@@ -68,7 +76,7 @@
 	   (destructuring-bind (name . expr) x
 	     (check-is-symbol name)
              (cons name (sexpr->rel expr)))))
-    (mapcar #'sexpr->upd (list->pair-list (rest se)))))
+    (mapcar #'sexpr->upd (plist-alist (rest se)))))
 
 (defun check-parameters-section (se)
   (unless (starts-with ':parameters se)
@@ -87,9 +95,9 @@
     ((simple var)
      (list var))
     ((array-elt var indices)
-     (cons var (append-mapcar #'free-vars-in-expr indices)))
+     (cons var (mappend #'free-vars-in-expr indices)))
     ((array-slice var indices)
-     (cons var (append-mapcar #'free-vars-in-array-slice-index indices)))))
+     (cons var (mappend #'free-vars-in-array-slice-index indices)))))
 
 (defun free-vars-in-array-slice-index (idx)
   (adt-case array-slice-index idx

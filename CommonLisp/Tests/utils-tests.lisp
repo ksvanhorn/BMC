@@ -3,23 +3,13 @@
 (in-package :utils-tests)
 
 (define-test utils-tests
-  (assert-true (starts-with 'a '(a)))
-  (assert-true (starts-with 'b '(b 1 c)))
-  (assert-false (starts-with 'c '()))
-  (assert-false (starts-with 'c 'c))
-  (assert-false (starts-with 'c 'a))
-
   (assert-equal 3 (assoc-lookup 'b '((a . 1) (b . 3) (c . 0))))
   (assert-error 'error (assoc-lookup 'd '((a . 1) (b . 2))))
 
-  (assert-true (is-list-of-length 0 '()))
-  (assert-true (is-list-of-length 1 '(a)))
-  (assert-true (is-list-of-length 2 '(a b)))
-  (assert-false (is-list-of-length 0 'a))
-  (assert-false (is-list-of-length 1 'a))
-  (assert-false (is-list-of-length 1 '(a . b)))
-  (assert-false (is-list-of-length 2 '(a . b)))
-
+  (assert-true (has-duplicate-names '(g d a c a b f e)))
+  (assert-true (has-duplicate-names '(g d b c a b f e)))
+  (assert-false (has-duplicate-names '(g d c a b f e)))
+  (assert-error 'error (has-duplicate-names '(c m 2 f a)))
 
   (assert-equal '((a 1) (b 2) (c 3))
 		(zip '(a b c) '(1 2 3)))
@@ -58,20 +48,12 @@ ind-f
 	    (*fmt-ostream* s))
 	(fmt-blank-line))))
 
-  (assert-equal '(3 4 5) (int-range 3 5))
-  (assert-equal '(5) (int-range 5 5))
-  (assert-equal '() (int-range 4 3))
-
   (assert-equal "abeesead" (strcat "a" "bee" "sea" "d"))
   (assert-equal "foo
 bar
 baz
 "
     (strcat-lines "foo" "bar" "baz"))
-
-  (assert-equal '() (list->pair-list '()))
-  (assert-equal '((a . 2)) (list->pair-list '(a 2)))
-  (assert-equal '((a . b) (c . d) (5 . 3)) (list->pair-list '(a b c d 5 3)))
 
   (assert-equal
     '(macrolet

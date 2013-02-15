@@ -1,6 +1,25 @@
 ;;;; bmc.lisp
-
+(defpackage #:bmc
+  (:export :compile-model)
+  (:use #:cl #:symbols #:utils #:model #:mcimpl #:compile))
 (in-package #:bmc)
 
-;;; "bmc" goes here. Hacks and glory await!
-
+(defun compile-model (ifname implfname ofname-base class-name)
+  (let ((csharp-namespace "Estimation.Samplers")
+	(mdl)
+	(impl))
+    (assert (stringp ifname))
+    (assert (stringp ofname-base))
+    (assert (stringp implfname))
+    (assert (stringp class-name))
+    (setf mdl (read-model ifname))
+    (setf impl (de-alias-impl mdl (read-mcimpl implfname)))
+    (with-open-file (ostrm (strcat ofname-base ".cs") :direction :output)
+      (let ((*indent-amount* 4)
+	    (*fmt-ostream* ostrm))
+	(compile-to-csharp csharp-namespace class-name mdl impl)))
+    (with-open-file (ostrm (strcat ofname-base "-tests.cs")
+			   :direction :output)
+      (let ((*indent-amount* 4)
+	    (*fmt-ostream* ostrm))
+	(write-test-file class-name mdl impl)))))

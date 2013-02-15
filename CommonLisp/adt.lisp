@@ -1,3 +1,8 @@
+(defpackage :adt
+  (:use :cl :utils)
+  (:import-from :alexandria :sequence-of-length-p)
+  (:export :defadt :defadt1 :adt-case :match-adt1))
+
 (in-package :adt)
 ; Algebraic data types
 
@@ -9,7 +14,7 @@
   (unless (and (consp x) (every #'symbolp x))
     (error "In (defadt ~W ... ~W ...): ~
             subtype form must be nonempty list of symbols." base-type x))
-  (unless (has-no-duplicates x)
+  (when (has-duplicate-names x)
     (error "In (defadt ~W ... ~W ...): ~
             subtype form must not have duplicate symbols." base-type x)))
 
@@ -28,7 +33,7 @@
             clause form must begin with a list of symbols." base-type clause)))
 
 (defun is-otherwise-clause (clause)
-  (and (is-list-of-length 2 clause) (member (first clause) '(t otherwise))))
+  (and (sequence-of-length-p clause 2) (member (first clause) '(t otherwise))))
 
 (defun expand-clause (base-type clause)
   (when (is-otherwise-clause clause)
@@ -93,7 +98,7 @@
   (flet ((get-subtype (x)
 	   (if (consp x) (car x) nil)))
   (let ((subtypes (remove nil (mapcar #'get-subtype subtype-forms))))
-    (unless (has-no-duplicates subtypes)
+    (when (has-duplicate-names subtypes)
       (error "In (defadt ~W~{ ~S~}): duplicate subtypes not allowed"
 	     base-type subtype-forms))
   (let* ((pname (pred-name base-type))
@@ -106,7 +111,7 @@
   (unless (and (symbolp typ) (every #'symbolp args))
     (error "In (defadt1 ~W ~{~W~^ ~}): ~
             arguments must be nonempty list of symbols." typ args))
-  (unless (has-no-duplicates (cons typ args))
+  (when (has-duplicate-names (cons typ args))
     (error "In (defadt1 ~W ~{~W~^ ~}): ~
             argument list must not have duplicate symbols." typ args)))
 
