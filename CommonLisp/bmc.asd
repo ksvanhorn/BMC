@@ -7,8 +7,10 @@
   :license "GPL version 2"
   :depends-on (#:alexandria
 	       #:iterate
-               #:cl-fad)
+               #:cl-fad
+	       #:paiprolog)
   :components ((:file "utils")
+	       (:file "deduction")
 	       (:file "symbols")
 	       (:file "variables")
 	       (:file "adt")

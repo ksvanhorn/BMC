@@ -1,0 +1,52 @@
+Tokens:
+  ~ : ; = [ ] ( ) { } , |
+  if then elif else end for in do let when shape of
+  ARGS REQS VARS INVS RELS DONE
+  <scalar type names>
+  <binary operators>
+  <unary operators>
+  <identifiers>
+  <float literal>
+  <int literal>
+
+Relation := StochasticRel | BlockRel | IfRel | ForRel | LetRel
+
+StochasticRel := RelLHS '~' Distribution
+IfRel := 'if' BooleanExpr 'then' Relation*
+         (('elif' BooleanExpr 'then' Relation)*
+	  ('else' Relation))?
+	 'end'
+ForRel := 'for' Var 'in' Range 'do' Relation* 'end'
+Range := IntegerExpr (':' | ';') IntegerExpr
+LetRel := ('let' (Var '=' Expr) 'in')+ Relation* 'end'
+
+RelLHS := Var | Var '[' IndexOrSliceList ']'
+IndexOrSliceList := <empty> | IndexOrSlice (',' IndexOrSlice)*
+IndexOrSlice := Index | Slice
+Index := IntegerExpr
+Slice := Range | ':'
+
+Distribution ::= DistrName '(' ExprList ')'
+ExprList ::= <empty> | Expr (',' Expr)*
+
+Expr ::= IntegerLiteral | FloatLiteral | FuncName '(' ExprList ')' |
+         Expr BinaryOp Expr | Var | Var '[' IndexOrSliceList ']' | Constant |
+         'if' '(' Expr 'then' Expr 'else' Expr ')' |
+         QuantName '{' Var 'in' Range
+                      ('when' BooleanExpr)? ('shape' IntegerExprList)?
+                      '|' Expr '}'
+
+DeclList ::= <empty> | Decl (',' Decl)*
+Decl ::= Var 'of' Type
+Type ::= ScalarType | ArrayType
+ScalarType ::= 'integerp' | 'integernn' | 'integer' |
+               'realxn' | 'realx' | 'real' | 'realnn' | 'realp' |
+               'boolean'
+ArrayType ::= '[' IntegerExprList ']' Type
+
+Model ::= Args Reqs Vars Invs Rels 'DONE'
+Args ::= 'ARGS' DeclList
+Reqs ::= 'REQS' BooleanExprList
+Vars ::= 'VARS' DeclList
+Invs ::= 'INVS' BooleanExprList
+Rels ::= 'RELS' Relation*

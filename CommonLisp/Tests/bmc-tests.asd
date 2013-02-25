@@ -10,6 +10,7 @@
 	       #:iterate)
   :components ((:file "testing-utilities")
 	       (:file "utils-tests")
+	       (:file "deduction-tests")
 	       (:file "symbols-tests")
 	       (:file "variables-tests")
 	       (:file "adt-tests")
